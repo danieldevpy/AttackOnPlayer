@@ -34,7 +34,7 @@
 **Contexto:** docs/mechanics/combat.md · packages/server/src/rooms/ArenaRoom.ts · packages/server/src/systems/effects.ts · packages/shared/src/constants.ts · packages/client/src/main.ts
 **Aceite:** bot atinge bot e a vida cai; projétil respeita alcance; zona safe bloqueia dano.
 
-## T-006 — Morte, respawn e perda de nível 〔M〕 · depende: T-005
+## T-006 — Morte, respawn e perda de nível 〔M〕 ✅ (PROMPT-0010) · depende: T-005
 **Objetivo:** vida 0 → morte, respawn em zona safe, perda de nível por curva que escala com o nível (piso 1–3, cresce depois — ver progression.md) + flag `fullResetOnDeath` (por room/default global), kill dá XP escalado pelo nível da vítima.
 **Contexto:** docs/mechanics/progression.md · docs/mechanics/growth.md · packages/server/src/rooms/ArenaRoom.ts
 **Aceite:** morrer aplica a curva de perda (baixo nível quase não perde, alto nível perde muito); toggle de reset total funciona por room; métricas de kill/death.

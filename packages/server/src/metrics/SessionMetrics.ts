@@ -12,6 +12,8 @@ export interface PlayerSession {
   distance: number;
   pickups: number;
   pickupsByKind: Record<string, number>; // xp_orb/speed_up/coin_buff/farm_event/box (T-004)
+  kills: number;
+  deaths: number;
   levelStart: number;
   levelEnd?: number;
 }
@@ -32,6 +34,8 @@ export class MetricsRecorder {
       distance: 0,
       pickups: 0,
       pickupsByKind: {},
+      kills: 0,
+      deaths: 0,
       levelStart: level,
     });
   }
@@ -46,6 +50,16 @@ export class MetricsRecorder {
     if (!s) return;
     s.pickups += 1;
     s.pickupsByKind[kind] = (s.pickupsByKind[kind] ?? 0) + 1;
+  }
+
+  addKill(playerId: string) {
+    const s = this.sessions.get(playerId);
+    if (s) s.kills += 1;
+  }
+
+  addDeath(playerId: string) {
+    const s = this.sessions.get(playerId);
+    if (s) s.deaths += 1;
   }
 
   end(playerId: string, levelEnd: number) {
@@ -79,6 +93,8 @@ export function summarize(): Record<string, unknown> {
       avgDurationS: avg((s) => s.durationS ?? 0),
       avgDistance: avg((s) => s.distance),
       avgPickups: avg((s) => s.pickups),
+      avgKills: avg((s) => s.kills ?? 0),
+      avgDeaths: avg((s) => s.deaths ?? 0),
       avgLevelEnd: avg((s) => s.levelEnd ?? 1),
     };
   } catch {

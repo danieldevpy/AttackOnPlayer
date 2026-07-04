@@ -4,8 +4,15 @@ import { LAUNCHERS, isWall, zoneAt, GameMap } from "@aop/shared";
 // Generate unique IDs for projectiles
 let _projId = 0;
 
+export interface KillEvent {
+  victimId: string;
+  killerId: string;
+}
+
 export class ProjectileSystem {
-  tick(state: ArenaState, map: GameMap, dt: number, now: number) {
+  tick(state: ArenaState, map: GameMap, dt: number, now: number): KillEvent[] {
+    const kills: KillEvent[] = [];
+    
     // 1. Process player fire input
     state.players.forEach((p, id) => {
       if (p.fireDirX === 0 && p.fireDirZ === 0) return;
@@ -97,7 +104,9 @@ export class ProjectileSystem {
           const damage = launcher.damage * strength;
           
           target.hp -= damage;
-          // clamping HP just in case, though it can go to 0 or below to trigger death logic
+          if (target.hp <= 0) {
+            kills.push({ victimId: targetId, killerId: proj.ownerId });
+          }
           hitPlayer = true;
         }
       });
@@ -109,5 +118,7 @@ export class ProjectileSystem {
     });
 
     toRemove.forEach((pid) => state.projectiles.delete(pid));
+    
+    return kills;
   }
 }

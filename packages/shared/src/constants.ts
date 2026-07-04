@@ -77,6 +77,18 @@ export function xpToNext(level: number): number {
   return Math.round(XP_BASE * Math.pow(level, XP_EXP));
 }
 
+// Progressão e Morte (T-006)
+export const XP_PER_KILL_PER_LEVEL = 15;
+export const MAX_LEVEL_LOSS_FRACTION = 0.6; // teto de perda (60% do nível em níveis altos)
+export const MIN_LOSS_FRACTION = 0.1; // piso (10% do nível)
+
+/** Fração do nível atual que o jogador perde ao morrer. (T-006) */
+export function lossFraction(level: number): number {
+  if (level <= 3) return MIN_LOSS_FRACTION;
+  // escala linear a partir do nível 4 até o teto
+  return Math.min(MAX_LEVEL_LOSS_FRACTION, MIN_LOSS_FRACTION + (level - 3) * 0.05);
+}
+
 // Efeitos (ADR-009)
 export const SPEED_BOOST_MULT = 1.5;
 export const SPEED_BOOST_MS = 8000;

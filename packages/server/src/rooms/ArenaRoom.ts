@@ -39,6 +39,8 @@ import {
   COIN_BUFF_AMOUNT,
   BOX_ATTR_BONUS_EACH,
   COIN_REROLL_COST,
+  lossFraction,
+  XP_PER_KILL_PER_LEVEL,
 } from "@aop/shared";
 
 export class ArenaRoom extends Room<ArenaState> {
@@ -129,7 +131,44 @@ export class ArenaRoom extends Room<ArenaState> {
     this.effects.tick(this.state.players, now);
 
     // projéteis (T-005)
-    this.projectiles.tick(this.state, this.map, dt, now);
+    const kills = this.projectiles.tick(this.state, this.map, dt, now);
+
+    // Morte e respawn (T-006)
+    kills.forEach((kill) => {
+      const victim = this.state.players.get(kill.victimId);
+      const killer = this.state.players.get(kill.killerId);
+      if (victim && killer) {
+        this.metrics.addKill(kill.killerId);
+        this.grantXp(kill.killerId, killer, XP_PER_KILL_PER_LEVEL * victim.level);
+      }
+    });
+
+    this.state.players.forEach((p, id) => {
+      if (p.hp <= 0) {
+        this.metrics.addDeath(id);
+        
+        // Perda de nível
+        const fullResetOnDeath = false; // flag por room (default global)
+        if (fullResetOnDeath) {
+          p.level = 1;
+        } else {
+          const loss = Math.floor(p.level * lossFraction(p.level));
+          p.level = Math.max(1, p.level - loss);
+        }
+        
+        p.xp = 0;
+        this.effects.resetAttrToLevel(id, p, p.level);
+        
+        // Respawn em zona safe
+        const spawns = spawnPoints(this.map.w, this.map.h);
+        const spawn = spawns[Math.floor(Math.random() * spawns.length)];
+        p.x = spawn.x;
+        p.z = spawn.z;
+        p.hp = p.maxHp;
+        
+        console.log(`[arena] ${p.name} morreu. Respawn no nível ${p.level}.`);
+      }
+    });
 
     // movimento autoritativo (velocidade = base × multiplicador do EffectSystem)
     this.state.players.forEach((p, id) => {

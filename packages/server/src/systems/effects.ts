@@ -77,6 +77,14 @@ export class EffectSystem {
     this.recompute(player, s);
   }
 
+  /** Reseta atributos para o padrão do nível (T-006: morte). Perde customizações (rerolls) do round. */
+  resetAttrToLevel(playerId: string, player: Player, level: number) {
+    const s = this.stateFor(playerId);
+    const points = (level - 1) * ATTR_POINTS_PER_LEVEL_EACH;
+    s.attr = { velocidade: points, forca: points, vitalidade: points };
+    this.recompute(player, s);
+  }
+
   /** Expira efeitos vencidos. Chamar a cada tick. */
   tick(players: { forEach(cb: (p: Player, id: string) => void): void }, now: number) {
     players.forEach((p, id) => {
