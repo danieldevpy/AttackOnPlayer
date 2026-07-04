@@ -48,8 +48,11 @@ describe("ProjectileSystem (T-008)", () => {
     expect(target.hp).toBeLessThanOrEqual(0);
     expect(kill).not.toBeNull();
     expect(kill.killerId).toBe("A");
-    // vida 100 e dano 10 => são necessários ~10 acertos
-    expect(totalHits).toBeGreaterThanOrEqual(10);
+    // T-014: acertos necessários derivados dos dados reais (vida 100, dano do basic_shot)
+    // — o teste acompanha passes de balance futuros sem reescrita (TTK alvo: 5 tiros).
+    const expectedHits = Math.ceil(100 / LAUNCHERS.basic_shot.damage);
+    expect(totalHits).toBeGreaterThanOrEqual(expectedHits);
+    expect(expectedHits).toBe(5); // guarda do TTK alvo da SPEC-0004 — mudou? atualizar spec/ADR-013
   });
 
   it("zona safe bloqueia o dano (projétil consumido, sem morte)", () => {

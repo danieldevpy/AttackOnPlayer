@@ -37,7 +37,9 @@ export const LAUNCHERS: Record<string, LauncherDef> = {
       cooldownMs: 600,
       pattern: "straight",
     },
-    damage: 10,
+    // T-014 (SPEC-0004/ADR-013): 10 → 20. TTK alvo = 5 tiros em níveis iguais sem
+    // especialização (antes eram 10 — TTK constante, confronto nunca fechava em 2–3 min).
+    damage: 20,
     onHitEffects: [],
   },
   // T-012: lançador de teste (dev-only, ver ArenaRoom `dev_launcher`) — valida o
@@ -54,7 +56,7 @@ export const LAUNCHERS: Record<string, LauncherDef> = {
       cooldownMs: 900,
       pattern: "straight",
     },
-    damage: 14,
+    damage: 28, // T-014: mantém a proporção 1.4× do basic_shot após o rebalance de TTK
     onHitEffects: [],
     movement: {
       selfSlowFactor: 0.5,
