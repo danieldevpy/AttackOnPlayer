@@ -13,6 +13,7 @@ atributo efetivo = base × efeitos ativos (com teto)
 | Kind | Fonte | Efeito | Duração | Regra |
 |---|---|---|---|---|
 | `speed_up` | coletável ciano | velocidade ×1.5 | 8s | pegar de novo renova; teto global 2× |
+| `launcher_slow` | disparo de um lançador com `movement.selfSlowFactor` (T-012) | velocidade × fator do lançador | vem do `LauncherDef`, não é fixa | único efeito com **magnitude dinâmica** (`ActiveEffect.magnitude`) — cada lançador define seu próprio fator/duração; `basic_shot` não tem, então nunca aplica |
 
 ## Como criar uma skill nova (receita)
 1. Adicionar o `EffectKind` e constantes em `shared/constants.ts`.

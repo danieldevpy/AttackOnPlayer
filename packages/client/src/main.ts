@@ -172,7 +172,7 @@ if (!playerToken) {
 
 async function connect() {
   try {
-    room = await client.joinOrCreate(ROOM_NAME, { 
+    room = await client.joinOrCreate(ROOM_NAME, {
       name: `web-${Math.floor(Math.random() * 999)}`,
       token: playerToken
     });

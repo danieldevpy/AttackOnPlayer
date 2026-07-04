@@ -41,6 +41,7 @@ import {
   COIN_REROLL_COST,
   lossFraction,
   XP_PER_KILL_PER_LEVEL,
+  LAUNCHERS,
 } from "@aop/shared";
 
 export const activeRooms = new Map<string, ArenaRoom>();
@@ -107,6 +108,15 @@ export class ArenaRoom extends Room<ArenaState> {
       this.effects.rerollAttrPoints(client.sessionId, p);
     });
 
+    // T-012: troca de lançador atrás de flag DEV — só existe para validar manualmente
+    // os ganchos de mobilidade (ex.: heavy_shot_dev); nunca disponível em produção.
+    this.onMessage("dev_launcher", (client, launcherId: string) => {
+      if (process.env.DEBUG !== "1") return;
+      const p = this.state.players.get(client.sessionId);
+      if (!p || !LAUNCHERS[launcherId]) return;
+      p.launcher = launcherId;
+    });
+
     this.setSimulationInterval((dt) => this.update(dt / 1000), 1000 / TICK_RATE);
     console.log(
       `[arena] sala ${this.roomId}: mapa ${size.w}x${size.h} seed ${seed}, orçamento ${this.budget} coletáveis`
@@ -150,7 +160,7 @@ export class ArenaRoom extends Room<ArenaState> {
     this.effects.tick(this.state.players, now);
 
     // projéteis (T-005/T-006)
-    const projectileHits = this.projectiles.tick(this.state, this.map, dt, now);
+    const projectileHits = this.projectiles.tick(this.state, this.map, dt, now, this.effects);
     const killerByVictim = new Map<string, string>();
 
     // Morte e respawn (T-006)

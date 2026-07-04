@@ -1,6 +1,6 @@
 # SPEC-0003 — Facing, mira desacoplada e gatilhos de disparo
 
-**Status:** aprovada · **Marco:** M1 · **Data:** 2026-07-04
+**Status:** implementada (T-009..T-013 ✅) — pendente veredito do CD e merge · **Marco:** M1 · **Data:** 2026-07-04
 
 ## Problema / objetivo
 Hoje o player não tem direção: ninguém vê para onde os outros olham, e o tiro depende de segurar o mouse (mira e gatilho acoplados no mesmo campo `fx/fz` do input). Queremos que **todo player tenha facing sincronizado**, que o tiro **saia na direção do facing**, que o disparo tenha **múltiplos acionáveis** (espaço, clique do mouse) e que a mecânica **acompanhe bem o movimento** — com ganchos ajustáveis para lançadores futuros interferirem na mobilidade (ex.: projétil pesado que reduz velocidade).
@@ -49,7 +49,7 @@ Aprovada (Daniel, 2026-07-04): facing híbrido (mouse com fallback para moviment
 **Objetivo:** rotação do grupo visual de todos os players com interpolação; indicador placeholder de direção; facing no debug overlay (F3).
 **Aceite:** dois clientes abertos — cada um vê o outro girar; critério 6.
 
-### T-012 — Ganchos de mobilidade no LauncherDef 〔M〕 · depende: T-010
+### T-012 — Ganchos de mobilidade no LauncherDef 〔M〕 ✅ (PROMPT-0018) · depende: T-010
 **Objetivo:** campos opcionais em `LauncherDef` (ex.: `movement: { selfSlowFactor?, selfSlowMs?, inheritVelocityFactor? }`, defaults neutros) aplicados pelo servidor via `EffectSystem` no momento do disparo. Lançador de teste atrás de flag/DEV para validar.
 **Aceite:** critério 5.
 

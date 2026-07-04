@@ -4,30 +4,34 @@
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
 **Atualizado em:** 2026-07-04
-**Branch:** `movimento_e_direcao` (SPEC-0003 em execução, sobre o que já tinha T-001..T-008 mergeado). Merge para `main` continua pendente (checklist em `QA.md`).
-**Marco:** M1 — combate base pronto (T-001..T-008); SPEC-0003 quase completa (falta só T-012).
+**Branch:** `movimento_e_direcao` (SPEC-0003 completa, sobre o que já tinha T-001..T-008 mergeado). Merge para `main` continua pendente (checklist em `QA.md`).
+**Marco:** M1 — combate base pronto (T-001..T-008); **SPEC-0003 (facing/mira/gatilhos) implementada por completo (T-009..T-013)**.
 
 ---
 
 ## Onde paramos
 
-Última entrega fechada:
+`specs/SPEC-0003-facing-mira-gatilhos.md` está com as 5 tasks ✅:
 
-- **T-013** — bots migrados para `{x, z, aimX?, aimZ?, fire?}`: miram continuamente no alvo engajado, gatilho só liga dentro do alcance do launcher. Confirmado ao vivo: tiros voltaram (200+ por bot em sessões de combate) e uma morte/respawn completa apareceu no log do servidor.
-- Antes: **T-011** (facing visível + bugfix crítico do `.js` órfão que sombreava `.ts` no Vite — ver `PROMPT-0016.md`), **T-010** (gatilhos desacoplados) e **T-009** (`Player.dir` sincronizado).
-- **Nenhum efeito colateral conhecido pendente agora** — bots voltaram a atirar/matar como antes da T-010.
+- **T-009** — `Player.dir` sincronizado, facing híbrido (mira > movimento > mantém o último).
+- **T-010** — protocolo `{x,z,aimX?,aimZ?,fire?}`; tiro sempre sai do facing, nunca do input.
+- **T-011** — nariz placeholder visível + rotação interpolada no cliente.
+- **T-013** — bots migrados pro protocolo novo (mira contínua + gatilho); voltaram a atirar/matar.
+- **T-012** — ganchos de mobilidade em `LauncherDef` (`movement?`), `EffectSystem` ganhou efeito de magnitude dinâmica (`launcher_slow`), lançador de teste `heavy_shot_dev` atrás de `dev_launcher` + `DEBUG=1`.
 
-Detalhe completo: `docs/prompts/PROMPT-0014.md` (T-009), `0015.md` (T-010), `0016.md` (T-011 + bugfix), `0017.md` (T-013).
+**Bugfix crítico no meio do caminho (T-011):** `.js` compilados obsoletos sentados do lado de `.ts` em `client/shared/bots` venciam silenciosamente os `.ts` reais na resolução de módulo do Vite. Removidos; `npm run test` corrigido de "10/10" (5 testes em dobro) para **5/5** real. Guarda automática em `QA.md`.
+
+Detalhe completo por task: `docs/prompts/PROMPT-0014.md` a `PROMPT-0018.md`.
 
 ## Próximo passo sugerido
 
-Só falta uma task para fechar `specs/SPEC-0003-facing-mira-gatilhos.md` por completo:
+A spec está tecnicamente fechada. Falta decisão do Creative Director, não código:
 
-- **T-012** — ganchos de mobilidade em `LauncherDef` (ex.: `movement: { selfSlowFactor?, selfSlowMs?, inheritVelocityFactor? }`, defaults neutros) aplicados pelo servidor via `EffectSystem` no momento do disparo. Lançador de teste atrás de flag/DEV para validar (critério de aceite 5: reduz velocidade ao disparar e expira sozinho; `basic_shot` inalterado). Depende de T-010 (pronta).
+1. **Veredito do CD** nos fluxos marcados como pendente nos PROMPTs (facing por mouse/teclado/parado, disparo espaço/clique, nariz girando, `heavy_shot_dev` reduzindo velocidade) — testar ao vivo no browser.
+2. **Merge `movimento_e_direcao` → `main`** — checklist em `docs/QA.md` (gates automáticos já rodados e limpos nesta sessão).
+3. Se quiser continuar construindo: próxima spec nova (nada da SPEC-0003 ficou pendente) ou `T-OPTIONAL 1` do `BACKLOG.md` (balance/métricas).
 
-Depois de T-012: revisar os 6 critérios de aceite da spec inteira e pedir veredito geral do CD (browser + headless), então considerar merge para `main`.
-
-Prompt típico: `Executar T-012 da SPEC-0003`
+Prompt típico: `Testar SPEC-0003 no browser e dar veredito` ou `Preparar merge de movimento_e_direcao para main`
 
 ## Veredito do Creative Director
 
@@ -37,21 +41,23 @@ Prompt típico: `Executar T-012 da SPEC-0003`
 | Disparo por espaço/clique idênticos (T-010) | ⬜ pendente teste do CD | verificado por IA via preview no browser |
 | Nariz visível girando (T-011) | ⬜ pendente teste do CD | verificado por IA via preview no browser |
 | Bots atirando/matando de novo (T-013) | ✅ verificado (headless) | `bot-4 morreu` confirmado no log |
-| Merge para `main` | ⬜ pendente | checklist em `QA.md`; aguardando T-012 |
+| `heavy_shot_dev` reduz velocidade e expira sozinho (T-012) | ✅ verificado (teste unitário determinístico) | janela de 700ms não capturada em screenshot (preview throttled); teste é a prova mais confiável |
+| Merge para `main` | ⬜ pendente | checklist em `QA.md` — gates locais já limpos |
 
 ## Comandos úteis agora
 
 ```bash
 npm run test                        # 5/5
-npm run dev:server                  # DEBUG=1 opcional (feed F3 e /debug/rooms)
+npm run dev:server                  # DEBUG=1 habilita feed F3, /debug/rooms e dev_launcher
 npm run dev:client
-BOT_SKILL=forte npm run bots -- 6 30   # combate completo (tiro/dano/morte) já volta a funcionar
+npm run bots -- 3 30                # combate completo (tiro/dano/morte) funcionando
 ```
 
 ## Leituras se a sessão nova for só conversa
 
-- Spec ativa → `specs/SPEC-0003-facing-mira-gatilhos.md`
+- Spec ativa (fechada, aguardando veredito) → `specs/SPEC-0003-facing-mira-gatilhos.md`
 - Facing/movimento → `docs/mechanics/movement.md`
-- Mira/gatilho/combate → `docs/mechanics/combat.md`
+- Mira/gatilho/combate/ganchos de mobilidade → `docs/mechanics/combat.md`
+- Efeitos (inclui `launcher_slow`) → `docs/mechanics/skills.md`
 - Bots / combate → `docs/ai/bots.md`
 - Testes / merge → `docs/QA.md` (tem a guarda contra `.js` órfão)

@@ -1,5 +1,6 @@
 import { Player, Projectile, ArenaState } from "../state/ArenaState";
-import { LAUNCHERS, isWall, zoneAt, GameMap, PLAYER_RADIUS } from "@aop/shared";
+import { LAUNCHERS, isWall, zoneAt, GameMap, PLAYER_RADIUS, PLAYER_SPEED } from "@aop/shared";
+import { EffectSystem } from "./effects";
 
 // Generate unique IDs for projectiles
 let _projId = 0;
@@ -13,9 +14,9 @@ export interface ProjectileHitEvent {
 }
 
 export class ProjectileSystem {
-  tick(state: ArenaState, map: GameMap, dt: number, now: number): ProjectileHitEvent[] {
+  tick(state: ArenaState, map: GameMap, dt: number, now: number, effects: EffectSystem): ProjectileHitEvent[] {
     const hits: ProjectileHitEvent[] = [];
-    
+
     // 1. Process player fire input (T-010: gatilho dispara sempre na direção do facing)
     state.players.forEach((p, id) => {
       if (!p.firing) return;
@@ -28,8 +29,19 @@ export class ProjectileSystem {
 
       p.lastFireAt = now;
 
-      const dirX = Math.cos(p.dir);
-      const dirZ = Math.sin(p.dir);
+      let dirX = Math.cos(p.dir);
+      let dirZ = Math.sin(p.dir);
+
+      // T-012: gancho de herança de velocidade — projétil pesado pode "puxar" a
+      // direção do movimento do atirador. Default ausente = comportamento neutro.
+      const inherit = launcher.movement?.inheritVelocityFactor;
+      if (inherit) {
+        const vx = dirX * launcher.projectile.speed + p.inputX * PLAYER_SPEED * p.speed * inherit;
+        const vz = dirZ * launcher.projectile.speed + p.inputZ * PLAYER_SPEED * p.speed * inherit;
+        const vlen = Math.hypot(vx, vz) || 1;
+        dirX = vx / vlen;
+        dirZ = vz / vlen;
+      }
 
       const proj = new Projectile();
       // nasce na borda do player (offset = raio) na posição autoritativa do tick — sem atraso.
@@ -41,6 +53,11 @@ export class ProjectileSystem {
       proj.dirZ = dirZ;
 
       state.projectiles.set(`p${++_projId}`, proj);
+
+      // T-012: gancho de lentidão — reduz a velocidade do atirador por um tempo, default neutro.
+      if (launcher.movement?.selfSlowFactor && launcher.movement.selfSlowMs) {
+        effects.applySlow(id, p, launcher.movement.selfSlowFactor, launcher.movement.selfSlowMs, now);
+      }
     });
 
     // 2. Simulate projectiles

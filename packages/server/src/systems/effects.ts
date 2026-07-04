@@ -14,11 +14,12 @@ import {
   PLAYER_BASE_HP,
 } from "@aop/shared";
 
-export type EffectKind = "speed_up" | "xp_boost";
+export type EffectKind = "speed_up" | "xp_boost" | "launcher_slow";
 
 interface ActiveEffect {
   kind: EffectKind;
   expiresAt: number;
+  magnitude?: number; // T-012: multiplicador dinâmico (ex.: lentidão por lançador) — kinds de valor fixo ignoram
 }
 
 interface AttrPoints {
@@ -35,6 +36,7 @@ interface PlayerEffectState {
 const DURATION: Record<EffectKind, number> = {
   speed_up: SPEED_BOOST_MS,
   xp_boost: XP_BOOST_MS, // farm_event (T-004)
+  launcher_slow: 0, // não usado — duração vem do LauncherDef via applySlow()
 };
 
 export class EffectSystem {
@@ -55,6 +57,24 @@ export class EffectSystem {
     const existing = s.active.find((e) => e.kind === kind);
     if (existing) existing.expiresAt = now + DURATION[kind];
     else s.active.push({ kind, expiresAt: now + DURATION[kind] });
+    this.recompute(player, s);
+  }
+
+  /**
+   * T-012: gancho de mobilidade por lançador — lentidão temporária com magnitude/duração
+   * vindas do próprio `LauncherDef.movement`, não de uma constante fixa. `factor >= 1` ou
+   * `durationMs <= 0` é neutro (não aplica nada) — cobre o default de `basic_shot`.
+   */
+  applySlow(playerId: string, player: Player, factor: number, durationMs: number, now: number) {
+    if (factor >= 1 || durationMs <= 0) return;
+    const s = this.stateFor(playerId);
+    const existing = s.active.find((e) => e.kind === "launcher_slow");
+    if (existing) {
+      existing.expiresAt = now + durationMs;
+      existing.magnitude = factor;
+    } else {
+      s.active.push({ kind: "launcher_slow", expiresAt: now + durationMs, magnitude: factor });
+    }
     this.recompute(player, s);
   }
 
@@ -107,7 +127,11 @@ export class EffectSystem {
   private recompute(player: Player, s: PlayerEffectState) {
     let speed = 1 + s.attr.velocidade * ATTR_POINT_VALUE;
     if (s.active.some((e) => e.kind === "speed_up")) speed *= SPEED_BOOST_MULT;
-    player.speed = Math.min(speed, SPEED_MAX_MULT);
+    speed = Math.min(speed, SPEED_MAX_MULT);
+    // T-012: lentidão de lançador se aplica por cima do teto — reduz o efetivo, não o disputa
+    const slow = s.active.find((e) => e.kind === "launcher_slow");
+    if (slow?.magnitude) speed *= slow.magnitude;
+    player.speed = speed;
     player.strength = 1 + s.attr.forca * ATTR_POINT_VALUE;
     player.vitality = 1 + s.attr.vitalidade * ATTR_POINT_VALUE;
     player.maxHp = Math.round(PLAYER_BASE_HP * player.vitality);

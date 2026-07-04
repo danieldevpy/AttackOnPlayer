@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-04 — Sessão 5 (cont.): T-012 (ganchos de mobilidade) — SPEC-0003 fecha
+- **T-012** (PROMPT-0018), última task da spec: `LauncherDef` ganha `movement?` opcional (`selfSlowFactor`, `selfSlowMs`, `inheritVelocityFactor`) — ausente = neutro, `basic_shot` não muda.
+- `EffectSystem` ganhou o primeiro efeito de **magnitude dinâmica** (`launcher_slow`, campo `ActiveEffect.magnitude` + método `applySlow()`) — até aqui todo efeito tinha força/duração fixas em constante; agora cada lançador pode definir as suas. `inheritVelocityFactor` bende a direção do projétil somando uma fração do vetor de movimento do atirador (não muda a magnitude do tiro, só a direção).
+- Lançador de teste `heavy_shot_dev` no registro `LAUNCHERS`, só selecionável via mensagem nova `dev_launcher` — e essa mensagem só funciona com `DEBUG=1` (reaproveitado o flag real que já existia, sem inventar um `DEV_MODE` novo que só existia nos docs).
+- Verificado: novo `describe` determinístico em `projectiles.test.ts` (4/4 no total) prova que `heavy_shot_dev` derruba `player.speed` para o fator exato e ele volta sozinho após a duração, e que `basic_shot` não mexe em nada. `npm run test` (shared) 5/5. `npm run bots -- 3 30` sem crash. Confirmação visual da janela transiente de 700ms não foi possível no preview (ambiente processa comandos com throttling de dezenas de segundos entre chamadas) — o teste unitário é a prova mais confiável disso mesmo.
+- **SPEC-0003 fecha:** T-009..T-013 todas ✅. Falta só veredito geral do CD e decisão de merge (`movimento_e_direcao` → `main`, checklist em `QA.md`).
+
 ## 2026-07-04 — Sessão 5 (cont.): T-013 (migração dos bots)
 - **T-013** (PROMPT-0017): bots (`packages/bots/src/bot.ts`) migrados para `{x, z, aimX?, aimZ?, fire?}` — miram continuamente no inimigo engajado (`aimX/aimZ`, chumbo/lead + erro por skill) mesmo fora do alcance de tiro; o gatilho (`fire: true`) só liga dentro do alcance do launcher. Direção real do disparo sai do facing resolvido pelo servidor, igual ao cliente humano desde T-009/T-010.
 - Fecha o efeito colateral aceito nas duas entregas anteriores: bots tinham parado de atirar (0 tiros) porque mandavam o `fx/fz` antigo, que o servidor não lê mais.
