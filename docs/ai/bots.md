@@ -4,7 +4,16 @@
 - Headless, conectam via colyseus.js como jogadores reais (mesmo protocolo, zero código especial no servidor).
 - Comportamento: caça o coletável mais próximo; sem alvo, vagueia evitando paredes.
 - Uso: `npm run bots -- <qtd> <segundos>`. Servem para testar sync, colisão, spawner e métricas.
-- M1: bots atiram/esquivam com níveis de habilidade parametrizados (para testar TTK e balanceamento).
+
+## Bots de combate (M1 — T-008, mínimo do aceite)
+Mesma base headless; ganham camada de combate sobre a caça a coletáveis:
+- **Skill parametrizável** `fraco | medio | forte` (env `BOT_SKILL`; se ausente, sorteada por bot). A skill controla: erro de mira (spread em rad), alcance de engajamento, limiar de fuga (fração de HP) e agressividade.
+- **Mirar e atirar:** escolhem o inimigo vivo mais próximo dentro do alcance do launcher (`LAUNCHERS[launcher].projectile.range`), aplicam erro de mira proporcional à skill e disparam via `input` com `fx/fz` respeitando o cooldown do launcher. Não atiram de dentro de zona safe nem contra alvo em safe (o servidor bloquearia — evita desperdício).
+- **Fugir:** com HP abaixo do limiar, param de atirar e se afastam do inimigo mais próximo; evitam permanecer em zona de guerra (`zoneAt`) quando feridos.
+- **Default:** sem inimigo no alcance, mantêm o comportamento de coleta por BFS (M0).
+- Fonte única de números de combate: `packages/shared/src/launchers.ts`. Zona: `zoneAt` de `packages/shared/src/map.ts`.
+
+**Gancho para T-008b:** a estrutura de skill é o ponto de extensão para personalidade/atributos sorteados e para o modo "boss" (skill alta + HP/atributos elevados). Proibido lógica de combate hardcoded fora dessa camada.
 
 ## Guardian (M3)
 Um único NPC de elite (não vários genéricos):

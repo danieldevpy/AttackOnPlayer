@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-04 — Sessão 4: T-008 (bots de combate, mínimo) + análise de frameworks
+- Análise pedida pelo CD antes de codar: spec-kit/dotcontext **não são ferramentas** aqui — ADR-004 os trocou por processo leve in-repo, seguido bem. Desvios: specs pararam no SPEC-0002, SESSAO_ATUAL apontava branch defasada, edição não commitada em BACKLOG. Registrado em PROMPT-0013.
+- Base arrumada: T-008 dividido em T-008 (mínimo) + **T-008b** (personalidade/atributos/boss); `bots.md` e SESSAO_ATUAL atualizados.
+- Bots de combate em `packages/bots/src/bot.ts`: perfis de skill `fraco|medio|forte` (`BOT_SKILL` ou sorteio), mira com **lead**, fuga a HP baixo, e — causa-raiz corrigida — **ignoram alvos em zona safe** (antes congelavam dentro da safe do spawn, 0 tiros). `forte` = caçador pelo mapa todo.
+- Verificado: tsc limpo (server/client/bots); shared 10/10; **novo teste `projectiles.test.ts` 2/2** (cadeia tiro→dano→morte→kill + bloqueio em safe); corrida ao vivo de 6 bots forte com `DEBUG=1` → **18 hits, 1 kill, 1 death** confirmados no ring buffer. Kills raros em janela curta por causa da fuga a 25% HP (ajuste fica p/ passe de balance).
+- Próximo: veredito do CD no navegador; depois T-008b.
+
 ## 2026-07-04 — Sessão 3 (docs): continuidade entre sessões e modelos
 - Evoluída a documentação para memória institucional: `DOC_MAP.md` (quando ler o quê), `SESSAO_ATUAL.md` (ponteiro substituído a cada sessão), `VISAO-ATUAL.md` (snapshot estável do marco), `mechanics/PLAYER_LOOP.md` (FAQ gameplay com números), `QA.md` (matriz automático vs manual + checklist merge).
 - Decisão de arquitetura doc: **dois arquivos** — VISAO (fase/milestone, muda pouco) + SESSAO (fio imediato, muda sempre). Conflito: SESSAO vence para próximo passo; código vence para comportamento.

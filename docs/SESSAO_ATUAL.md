@@ -1,11 +1,11 @@
 # Sessão atual — ponteiro de continuidade
 
-> **Substituir este arquivo inteiro** ao fim de cada sessão de trabalho.  
+> **Substituir este arquivo inteiro** ao fim de cada sessão de trabalho.
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
-**Atualizado em:** 2026-07-04  
-**Branch:** `continuar_antrigravity` (5 commits à frente de `main`: T-004b → T-007 + bugfix respawn/hitbox)  
-**Marco:** M1 — T-001..T-007 concluídos; próximo T-008
+**Atualizado em:** 2026-07-04
+**Branch:** `task_008` (contém tudo de T-001..T-008 + camada de continuidade). `continuar_antrigravity` = até T-007; `main` defasado na era T-004 — **merge para `main` pendente** (checklist em `QA.md`).
+**Marco:** M1 — T-001..T-008 concluídos; próximo T-008b (ou passe de balance T-OPTIONAL).
 
 ---
 
@@ -13,42 +13,42 @@
 
 Última entrega fechada:
 
-- **T-007** — modo debug: overlay F3, `GET /debug/rooms`, ring buffer, `BOT_VERBOSE=1`
-- **Bugfix pós-teste CD** — respawn por distância/risco, colisão de projétil por segmento, evento `safe_block`, `maxHp` por vitalidade
+- **T-008 (mínimo)** — bots de combate: skill `fraco|medio|forte` (`BOT_SKILL` ou sorteio), miram com lead, atiram no alcance do launcher, fogem com HP baixo, ignoram alvos em zona safe. `forte` = caçador pelo mapa todo.
+- Novo teste `packages/server/src/systems/projectiles.test.ts` (kill chain + bloqueio em safe).
 
-Commits recentes:
-
-- `be7cc0a` fix(combat): respawn estratégico e hitbox após morte
-- `1ad69ec` T-007: Modo debug dinâmico
+Antes disso: T-007 (debug F3), bugfix respawn/hitbox — ver DEVLOG.
 
 ## Próximo passo sugerido
 
-**T-008 — Bots de combate** (`docs/BACKLOG.md`): mirar, atirar, fugir com vida baixa, skill parametrizável. Depende de T-005/T-006 (prontos).
+Escolher um:
 
-Prompt típico:
+- **T-008b** — personalidade/atributos sorteados + modo boss (gancho já pronto na camada de skill).
+- **T-OPTIONAL** — passe de balance: TTK real e ajustar o limiar de fuga (kills são raros em janela curta hoje).
+- **Merge → main** — rodar checklist de `QA.md` e consolidar branches.
 
-> Executar T-008 do docs/BACKLOG.md
+Prompt típico: `Executar T-008b do docs/BACKLOG.md`
 
 ## Veredito do Creative Director
 
 | Fluxo | Status | Notas |
 |---|---|---|
-| Combate manual (2 abas) | ✅ testado | Relato originou bugfix respawn/safe_block |
-| Debug F3 + `/debug/rooms` | ✅ validado na sessão | |
-| Reroll (R) | ⬜ não registrado veredito formal | ver `PLAYER_LOOP.md` |
+| Combate bot×bot | ✅ verificado (headless) | 6 bots forte: 18 hits, 1 kill, 1 death; teste determinístico 2/2 |
+| Combate manual (2 abas) | ✅ testado antes | originou bugfix respawn/safe_block |
+| Debug F3 + `/debug/rooms` | ✅ validado | |
 | Merge para `main` | ⬜ pendente | checklist em `QA.md` |
 
 ## Comandos úteis agora
 
 ```bash
 npm run test
-npm run dev:server    # DEBUG=1 opcional
+npm run dev:server                 # DEBUG=1 opcional (feed F3 e /debug/rooms)
 npm run dev:client
-npm run bots -- 3 30
+BOT_SKILL=forte npm run bots -- 4 30   # 4 bots de combate por 30s
 ```
 
 ## Leituras se a sessão nova for só conversa
 
+- Bots / combate → `docs/ai/bots.md`
 - Gameplay FAQ → `docs/mechanics/PLAYER_LOOP.md`
 - Testes / merge → `docs/QA.md`
 - Visão do produto → `docs/VISAO-ATUAL.md`

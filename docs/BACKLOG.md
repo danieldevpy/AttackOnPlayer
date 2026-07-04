@@ -44,10 +44,17 @@
 **Contexto:** docs/mechanics/debug-mode.md · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/main.ts · packages/bots/src/bot.ts
 **Aceite:** F3 mostra eventos ao vivo; /debug/rooms responde; sem custo quando desligado.
 
-## T-008 — Bots de combate 〔M〕 · depende: T-005, T-006
-**Objetivo:** bots miram e atiram (com erro proposital parametrizado), fogem quando com pouca vida, avaliam risco de zona de guerra. O bot ter modo algoritimo e futuramente conseguir ser acionado por um modelo (ou respondendo ou enviando comandos)
-**Contexto:** docs/ai/bots.md · packages/bots/src/bot.ts
+## T-008 — Bots de combate 〔M〕 ✅ (PROMPT-0013) · depende: T-005, T-006
+**Objetivo:** bots miram e atiram (com erro proposital parametrizado), fogem quando com pouca vida, avaliam risco de zona de guerra. Consegue ter um nível de "personalidade" e atributos para o bot, podendo ter um modo default com algumas coisas sortidas para diferenciar na sessão, como também criar um bem "personalizado" como um boss.
+
+**Escopo desta entrega (mínimo do aceite):** combate funcional + skill parametrizável (fraco/médio/forte). Personalidade/atributos sorteados e modo "boss" ficam para **T-008b** (a base de skill já deixa o gancho pronto).
+**Contexto:** docs/ai/bots.md · packages/bots/src/bot.ts · packages/shared/src/launchers.ts (alcance/cooldown) · packages/shared/src/map.ts (zoneAt)
 **Aceite:** 4 bots geram kills entre si; skill parametrizável (fraco/médio/forte).
+
+## T-008b — Personalidade, atributos e boss 〔M〕 · depende: T-008
+**Objetivo:** perfis de bot (agressivo/cauteloso/caçador…) sorteados por sessão via a base de skill da T-008; atributos iniciais por perfil; um modo "boss" personalizado (skill alta, HP/atributos elevados, comportamento distinto). Gancho para futuramente o cérebro do bot ser acionado por um modelo (Guardian, M3).
+**Contexto:** docs/ai/bots.md · packages/bots/src/bot.ts
+**Aceite:** perfis visivelmente diferentes numa mesma sessão; boss sobrevive/ameaça mais que bots comuns.
 
 ## T-OPTIONAL 1 — Passe de balance + métricas de combate 〔P〕 · depende: T-006
 **Objetivo:** métricas TTK, XP/min, dano por arma; ajustar curvas com dados de 10 partidas de bots.
