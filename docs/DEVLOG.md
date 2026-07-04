@@ -1,5 +1,10 @@
 # Devlog
 
+## 2026-07-04 — Sessão 3 (docs): continuidade entre sessões e modelos
+- Evoluída a documentação para memória institucional: `DOC_MAP.md` (quando ler o quê), `SESSAO_ATUAL.md` (ponteiro substituído a cada sessão), `VISAO-ATUAL.md` (snapshot estável do marco), `mechanics/PLAYER_LOOP.md` (FAQ gameplay com números), `QA.md` (matriz automático vs manual + checklist merge).
+- Decisão de arquitetura doc: **dois arquivos** — VISAO (fase/milestone, muda pouco) + SESSAO (fio imediato, muda sempre). Conflito: SESSAO vence para próximo passo; código vence para comportamento.
+- Atualizados `AGENTS.md`, `instrucoes/COMO_CONTINUAR.md`, `REGRAS_DE_PROMPT.md` (veredito CD no template PROMPT).
+
 ## 2026-07-04 — Sessão 3 (bugfix pós-teste): respawn e hitbox
 - Relato do CD após teste manual: depois de matar outro player, houve dúvida se o respawn era aleatório/seguro e o tiro pareceu não acertar novamente após o respawn.
 - Diagnóstico: respawn era sorteado entre spawns safe, sem avaliar distância de outros players; além disso, dano em safe zone era bloqueado silenciosamente, parecendo falha de hitbox. A colisão do projétil também testava só a posição final do tick.

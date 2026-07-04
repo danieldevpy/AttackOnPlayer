@@ -1,5 +1,7 @@
 # Crescimento — XP, atributos e economia (PROMPT-0003)
 
+> **Referência jogável completa** (reroll, números, combate, morte): `PLAYER_LOOP.md` nesta pasta.
+
 Princípio: crescimento **controlável e escalável** — nunca "tudo num atributo só".
 
 ## Camadas

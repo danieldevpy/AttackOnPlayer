@@ -11,11 +11,12 @@
 5. **Em nova sessão, reidrate primeiro** (ver COMO_CONTINUAR.md).
 
 ## Para a IA
-1. Ler AGENTS.md e a última entrada do DEVLOG antes de qualquer coisa.
+1. Ler AGENTS.md, `docs/SESSAO_ATUAL.md` e a última entrada do DEVLOG antes de qualquer coisa.
 2. Spec antes de código; discordância registrada antes de obedecer.
 3. Testar com bots headless antes de entregar; resultado real no DEVLOG (nunca "deve funcionar").
 4. Criar `docs/prompts/PROMPT-NNNN.md` a cada prompt de desenvolvimento.
 5. Commit por leva, mensagem citando a SPEC.
+6. Ao encerrar sessão: **substituir** `docs/SESSAO_ATUAL.md`; atualizar `VISAO-ATUAL.md` só se mudou fase do marco; ver `docs/DOC_MAP.md`.
 
 ## Template de docs/prompts/PROMPT-NNNN.md
 
@@ -24,6 +25,11 @@
 ## Pedido (resumo fiel do CD)
 ## Decisões tomadas (e por quem)
 ## Resultado verificado
+## Veredito CD (preencher após teste no browser)
+- Testado em: AAAA-MM-DD
+- Fluxos: movimento / coleta / combate / F3 / reroll
+- Resultado: aprovado | ajustes pedidos
+- Observações:
 ## Regras que nascem daqui
 ## Pendências para o próximo prompt
 ```

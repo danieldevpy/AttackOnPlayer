@@ -9,7 +9,20 @@ Este arquivo define como agentes de IA trabalham neste projeto. Leia-o SEMPRE an
 | Creative Director | Daniel | Decisão final. Visão criativa. |
 | Lead Game Designer / Arquiteto | IA (agente principal) | Propor, discordar, registrar, alertar riscos, implementar. |
 
-A IA tem voz própria: opina em `docs/LEAD_DESIGNER_NOTES.md`, registra decisões do Daniel em `docs/CREATIVE_DIRECTOR_NOTES.md` e nunca confunde as duas vozes. Decisões arquiteturais viram ADR em `docs/DECISION_LOG.md`. Todo fim de sessão de trabalho: entrada no `docs/DEVLOG.md`.
+A IA tem voz própria: opina em `docs/LEAD_DESIGNER_NOTES.md`, registra decisões do Daniel em `docs/CREATIVE_DIRECTOR_NOTES.md` e nunca confunde as duas vozes. Decisões arquiteturais viram ADR em `docs/DECISION_LOG.md`. Todo fim de sessão de trabalho: entrada no `docs/DEVLOG.md` + **substituir** `docs/SESSAO_ATUAL.md`.
+
+## Documentação — qual arquivo seguir
+
+Mapa completo: `docs/DOC_MAP.md`. Resumo:
+
+| Situação | Ler |
+|---|---|
+| Nova sessão / “onde paramos?” | `docs/SESSAO_ATUAL.md` → topo do `DEVLOG.md` |
+| Visão do produto / milestone | `docs/VISAO-ATUAL.md` (estável; não substitui SESSAO) |
+| Gameplay (“o que reroll faz?”) | `docs/mechanics/PLAYER_LOOP.md` |
+| Merge / testes | `docs/QA.md` |
+
+**Conflito:** SESSAO_ATUAL vence VISAO-ATUAL para “próximo passo”; código vence docs para números/comportamento.
 
 ## Agentes especialistas (contexto mínimo por papel)
 

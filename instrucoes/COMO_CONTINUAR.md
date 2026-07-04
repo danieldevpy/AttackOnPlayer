@@ -19,10 +19,17 @@ Só mandar o próximo prompt. O contexto já está carregado.
 A IA não lembra nada entre sessões — os **arquivos** lembram. Comece a nova sessão com:
 
 > Projeto AttackOnPlayer em ~/Desenvolvimento/AttakOnPlayer. Leia AGENTS.md,
-> docs/ROADMAP.md, docs/DEVLOG.md (última entrada) e o último arquivo de
-> docs/prompts/. Depois me diga em que ponto estamos e o que está aberto.
+> docs/SESSAO_ATUAL.md, docs/DEVLOG.md (última entrada) e o último
+> docs/prompts/PROMPT-NNNN.md. Depois me diga em que ponto estamos.
 
-Isso recarrega o estúdio inteiro em ~4 leituras. Nunca comece pedindo feature direto: a IA precisa reidratar o contexto primeiro.
+Isso recarrega o estúdio em ~4 leituras. Mapa completo de docs: `docs/DOC_MAP.md`.
+
+- **`SESSAO_ATUAL.md`** — onde paramos *agora* (substituído a cada sessão)
+- **`VISAO-ATUAL.md`** — retrato estável do jogo (atualizar só quando mudar fase do marco)
+- **`PLAYER_LOOP.md`** — FAQ de gameplay (reroll, escalar, combate)
+- **`QA.md`** — o que testes/bots cobrem vs. smoke manual
+
+Nunca comece pedindo feature direto: a IA precisa reidratar o contexto primeiro.
 
 ## Fluxo por TASKS (vigente desde PROMPT-0003 — controle de tokens)
 O trabalho agora está fatiado em `docs/BACKLOG.md`. Seu prompt de implementação é só:
