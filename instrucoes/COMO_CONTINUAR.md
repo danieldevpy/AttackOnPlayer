@@ -24,7 +24,14 @@ A IA não lembra nada entre sessões — os **arquivos** lembram. Comece a nova 
 
 Isso recarrega o estúdio inteiro em ~4 leituras. Nunca comece pedindo feature direto: a IA precisa reidratar o contexto primeiro.
 
-## Fluxo de cada pedido de feature
+## Fluxo por TASKS (vigente desde PROMPT-0003 — controle de tokens)
+O trabalho agora está fatiado em `docs/BACKLOG.md`. Seu prompt de implementação é só:
+
+> Executar T-001 do docs/BACKLOG.md
+
+A IA lê apenas o contexto listado na task, implementa, testa com bots, registra e commita. Uma task por prompt, no seu tempo. Tasks com ⚠️ pedem uma decisão sua ANTES — decida no mesmo prompt ("Executar T-004; decisão: box vale só no round").
+
+## Fluxo de pedido de feature nova (fora do backlog)
 1. Você descreve o que quer (ver `REGRAS_DE_PROMPT.md`).
 2. A IA escreve/atualiza a SPEC e aponta riscos ANTES de codar.
 3. Implementa com placeholders, testa com bots headless.

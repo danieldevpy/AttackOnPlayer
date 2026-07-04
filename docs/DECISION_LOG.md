@@ -38,6 +38,16 @@ F1 primitivas → F2 composição → F3 sprites 3D (billboards) → F4 low-poly
 **Data:** 2026-07-04 · **Status:** Aprovado (CD, PROMPT-0002)
 Atributo efetivo = base × efeitos ativos, recalculado no servidor a cada tick. Efeitos têm duração, renovação e teto (speed máx 2×). Lista de efeitos sincronizada só para HUD. Nova skill = novo `EffectKind` — proibido lógica de atributo solta no Room.
 
+## ADR-010 — Pivô: campo aberto com props e zonas (substitui blocos Bomberman)
+**Data:** 2026-07-04 · **Status:** Aprovado (CD, PROMPT-0003)
+O mapa deixa de ser labirinto de pilares e vira campo aberto com objetos de cenário (props) esparsos: colidíveis (pedra, árvore, muro, caixa) e decorativos. O mapa ganha ZONAS: safe (spawn, sem combate, pouco loot) e guerra (loot raro, box, spawn acelerado). **Mantém-se intacto:** grid de colisão por tile, seed sync (props e zonas derivam do mesmo seed), tamanho dinâmico (ADR-007), spawner longe de jogadores (ADR-006).
+**Consequência:** só `buildMap()` e visuais mudam; rede/colisão/bots intocados. Zonas dinâmicas (rotacionar entre rounds) ficam para depois.
+
+## ADR-011 — Lançadores data-driven
+**Data:** 2026-07-04 · **Status:** Aprovado (CD, PROMPT-0003)
+Toda arma é uma `LauncherDef` (dados em shared): projétil (velocidade, raio, alcance), disparo (cooldown, padrão: straight | spread | lob | homing...), dano e efeitos on-hit (reusa EffectSystem/ADR-009). Atributos do jogador (força etc.) multiplicam os valores base. Servidor simula projéteis (`ProjectileSystem`).
+**Consequência:** arma/skill nova = nova entrada no registro + visual em visuals.ts. Proibido hardcode de arma no Room.
+
 ## ADR-006 — Recursos valiosos nascem longe de jogadores
 **Data:** 2026-07-04 · **Status:** Aprovado (CD)
 O spawner divide o mapa em células, mede densidade de jogadores por célula e gera coletáveis nas vazias. Espalha jogadores naturalmente e cria mapa "vivo". Implementado desde M0 de forma simples (raio mínimo de distância).
