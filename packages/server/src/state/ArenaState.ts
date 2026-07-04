@@ -16,13 +16,13 @@ export class Player extends Schema {
   @type("number") hp = 100; // T-005
   @type("number") maxHp = 100; // T-005
   @type("string") launcher = "basic_shot"; // T-005
+  @type("number") dir = 0; // T-009: facing (rad), híbrido mira/movimento — nunca zera
 
   // não sincronizado (uso interno do servidor)
   inputX = 0;
   inputZ = 0;
   playerToken = ""; // T-004b: ADR-012
-  fireDirX = 0; // T-005
-  fireDirZ = 0; // T-005
+  firing = false; // T-010: gatilho — direção do tiro vem de `dir` (facing), não do input
   lastFireAt = 0; // T-005
 }
 

@@ -235,6 +235,8 @@ function updateDebugState() {
     rows.push(`<tr><td colspan="2" class="section">── MEU PLAYER ──</td></tr>`);
     rows.push(`<tr><td>sessão</td><td>${mySessionId}</td></tr>`);
     rows.push(`<tr><td>pos</td><td>x:${me.x?.toFixed(2)} z:${me.z?.toFixed(2)}</td></tr>`);
+    rows.push(`<tr><td>facing</td><td>${((me.dir ?? 0) * 180 / Math.PI).toFixed(0)}°</td></tr>`);
+    rows.push(`<tr><td>gatilho</td><td>${fireSources.size > 0 ? `ativo (${Array.from(fireSources).join(", ")})` : "inativo"}</td></tr>`);
     rows.push(`<tr><td>hp</td><td>${Math.ceil(me.hp)}/${me.maxHp} (vit:${me.vitality?.toFixed(2)})</td></tr>`);
     rows.push(`<tr><td>nível / xp</td><td>${me.level} / ${me.xp?.toFixed(0)}</td></tr>`);
     rows.push(`<tr><td>força</td><td>${me.strength?.toFixed(3)}</td></tr>`);
@@ -250,7 +252,7 @@ function updateDebugState() {
   rows.push(`<tr><td colspan="2" class="section">── TODOS OS PLAYERS ──</td></tr>`);
   st?.players?.forEach((p: any, id: string) => {
     const tag = id === mySessionId ? " (você)" : (p.isBot ? " [bot]" : "");
-    rows.push(`<tr><td>${p.name}${tag}</td><td>lv${p.level} HP:${Math.ceil(p.hp)}/${p.maxHp} x:${p.x?.toFixed(1)} z:${p.z?.toFixed(1)}</td></tr>`);
+    rows.push(`<tr><td>${p.name}${tag}</td><td>lv${p.level} HP:${Math.ceil(p.hp)}/${p.maxHp} x:${p.x?.toFixed(1)} z:${p.z?.toFixed(1)} dir:${((p.dir ?? 0) * 180 / Math.PI).toFixed(0)}°</td></tr>`);
   });
 
   rows.push(`</table>`);
@@ -261,13 +263,19 @@ function updateDebugState() {
 let announceUntil = 0;
 const keys = new Set<string>();
 const mouse = new THREE.Vector2();
-let isFiring = false;
+let mouseMoved = false; // T-009: facing só segue o mouse quando ele se move na tela
 
-addEventListener("mousedown", () => isFiring = true);
-addEventListener("mouseup", () => isFiring = false);
+// T-010: gatilhos desacoplados da mira — cada fonte só liga/desliga um nome neste
+// set; "estou atirando" = algum gatilho ativo. Novo gatilho (gamepad/touch) = uma
+// entrada aqui, sem mudar o protocolo (`fire` continua sendo só um booleano).
+const fireSources = new Set<string>();
+
+addEventListener("mousedown", () => fireSources.add("mouse"));
+addEventListener("mouseup", () => fireSources.delete("mouse"));
 addEventListener("mousemove", (e) => {
   mouse.x = (e.clientX / innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+  mouseMoved = true;
 });
 
 addEventListener("keydown", (e) => {
@@ -282,36 +290,54 @@ addEventListener("keydown", (e) => {
     }
     return;
   }
+  if (e.key === " ") {
+    e.preventDefault(); // espaço não deve rolar a página
+    fireSources.add("space");
+  }
   keys.add(e.key.toLowerCase());
   if (e.key.toLowerCase() === "r") room?.send("reroll"); // T-004: coins compram reroll de atributo
 });
-addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+addEventListener("keyup", (e) => {
+  keys.delete(e.key.toLowerCase());
+  if (e.key === " ") fireSources.delete("space");
+});
 
-let lastInput = { x: 0, z: 0, fx: 0, fz: 0 };
+// vetor do player até o cursor, projetado no chão (usado pela mira)
+function cursorGroundOffset(): { x: number; z: number } | null {
+  const me = playerVisuals.get(mySessionId);
+  if (!me) return null;
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const target = new THREE.Vector3();
+  raycaster.ray.intersectPlane(plane, target);
+  return { x: target.x - me.position.x, z: target.z - me.position.z };
+}
+
+let lastMoveFire = { x: 0, z: 0, fire: false };
 function sendInput() {
   const x = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
   const z = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-  
-  let fx = 0, fz = 0;
-  if (isFiring) {
-    const me = playerVisuals.get(mySessionId);
-    if (me) {
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-      const target = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, target);
-      fx = target.x - me.position.x;
-      fz = target.z - me.position.z;
-    }
+  const fire = fireSources.size > 0;
+
+  // T-009: mira (facing) é independente do gatilho — só sai no payload quando o mouse
+  // se moveu neste tick, e nunca fica "presa" a um vetor antigo em ticks seguintes.
+  let aim: { aimX: number; aimZ: number } | null = null;
+  if (mouseMoved) {
+    const off = cursorGroundOffset();
+    if (off) aim = { aimX: off.x, aimZ: off.z };
+    mouseMoved = false;
   }
 
-  if (x !== lastInput.x || z !== lastInput.z || fx !== lastInput.fx || fz !== lastInput.fz) {
-    lastInput = { x, z, fx, fz };
-    room?.send("input", lastInput);
-  } else if (x !== 0 || z !== 0 || fx !== 0 || fz !== 0) {
-    room?.send("input", lastInput);
-  }
+  const moveFireChanged = x !== lastMoveFire.x || z !== lastMoveFire.z || fire !== lastMoveFire.fire;
+  const shouldSend = moveFireChanged || aim !== null || x !== 0 || z !== 0 || fire;
+  if (!shouldSend) return;
+
+  lastMoveFire = { x, z, fire };
+  const payload: { x: number; z: number; fire?: boolean; aimX?: number; aimZ?: number } = { x, z };
+  if (fire) payload.fire = true;
+  if (aim) { payload.aimX = aim.aimX; payload.aimZ = aim.aimZ; }
+  room?.send("input", payload);
 }
 
 // ---------- Sincronização estado → cena ----------
@@ -407,7 +433,7 @@ function updateHud(now: number) {
     (fx.includes("speed_up") ? `  ⚡x${me.speed?.toFixed(1)}` : "") +
     (fx.includes("xp_boost") ? `  2xXP` : "") +
     `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}` +
-    `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • click=atirar)` +
+    `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • espaço/click=atirar)` +
     (now < announceUntil ? `\n🔥 farm_event na zona de guerra!` : "");
 
   if (now < rosterNext || !st?.players) return;

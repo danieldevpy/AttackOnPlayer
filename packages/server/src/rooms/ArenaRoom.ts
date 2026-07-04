@@ -73,21 +73,29 @@ export class ArenaRoom extends Room<ArenaState> {
     // pré-popula metade do orçamento (ninguém entra num mapa vazio)
     for (let i = 0; i < Math.floor(this.budget / 2); i++) this.spawnCollectible();
 
-    this.onMessage("input", (client, msg: { x: number; z: number; fx?: number; fz?: number }) => {
-      const p = this.state.players.get(client.sessionId);
-      if (!p || typeof msg?.x !== "number" || typeof msg?.z !== "number") return;
-      const len = Math.hypot(msg.x, msg.z);
-      p.inputX = len > 1e-3 ? msg.x / Math.max(1, len) : 0;
-      p.inputZ = len > 1e-3 ? msg.z / Math.max(1, len) : 0;
-      
-      if (typeof msg.fx === "number" && typeof msg.fz === "number") {
-        p.fireDirX = msg.fx;
-        p.fireDirZ = msg.fz;
-      } else {
-        p.fireDirX = 0;
-        p.fireDirZ = 0;
+    this.onMessage(
+      "input",
+      (client, msg: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean }) => {
+        const p = this.state.players.get(client.sessionId);
+        if (!p || typeof msg?.x !== "number" || typeof msg?.z !== "number") return;
+        const len = Math.hypot(msg.x, msg.z);
+        p.inputX = len > 1e-3 ? msg.x / Math.max(1, len) : 0;
+        p.inputZ = len > 1e-3 ? msg.z / Math.max(1, len) : 0;
+
+        // T-010: gatilho é só um booleano — a direção do tiro sai do facing (`dir`),
+        // nunca do input; espaço e clique do mouse (mapeados no cliente) caem aqui iguais.
+        p.firing = msg.fire === true;
+
+        // T-009: facing híbrido — mira tem prioridade quando presente; senão segue o
+        // movimento; parado (sem mira nem movimento) mantém o último dir (nunca zera).
+        if (typeof msg.aimX === "number" && typeof msg.aimZ === "number") {
+          const aimLen = Math.hypot(msg.aimX, msg.aimZ);
+          if (aimLen > 1e-3) p.dir = Math.atan2(msg.aimZ, msg.aimX);
+        } else if (p.inputX !== 0 || p.inputZ !== 0) {
+          p.dir = Math.atan2(p.inputZ, p.inputX);
+        }
       }
-    });
+    );
 
     this.onMessage("ping", (client, t: number) => client.send("pong", t));
 
@@ -191,8 +199,7 @@ export class ArenaRoom extends Room<ArenaState> {
         p.hp = p.maxHp;
         p.inputX = 0;
         p.inputZ = 0;
-        p.fireDirX = 0;
-        p.fireDirZ = 0;
+        p.firing = false;
         
         this.emitDebug("respawn", {
           playerId: id,

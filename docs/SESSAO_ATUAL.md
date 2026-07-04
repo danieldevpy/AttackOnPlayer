@@ -4,8 +4,8 @@
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
 **Atualizado em:** 2026-07-04
-**Branch:** `task_008` (contém tudo de T-001..T-008 + camada de continuidade). `continuar_antrigravity` = até T-007; `main` defasado na era T-004 — **merge para `main` pendente** (checklist em `QA.md`).
-**Marco:** M1 — T-001..T-008 concluídos; próximo T-008b (ou passe de balance T-OPTIONAL).
+**Branch:** `movimento_e_direcao` (SPEC-0003 em execução, sobre o que já tinha T-001..T-008 mergeado). Merge para `main` continua pendente (checklist em `QA.md`).
+**Marco:** M1 — combate base pronto (T-001..T-008); em execução: SPEC-0003 (facing, mira desacoplada, gatilhos).
 
 ---
 
@@ -13,28 +13,29 @@
 
 Última entrega fechada:
 
-- **T-008 (mínimo)** — bots de combate: skill `fraco|medio|forte` (`BOT_SKILL` ou sorteio), miram com lead, atiram no alcance do launcher, fogem com HP baixo, ignoram alvos em zona safe. `forte` = caçador pelo mapa todo.
-- Novo teste `packages/server/src/systems/projectiles.test.ts` (kill chain + bloqueio em safe).
+- **T-010** — gatilhos desacoplados: protocolo de input vira `{x, z, aimX?, aimZ?, fire?}` (sem `fx/fz`); `ProjectileSystem` dispara sempre na direção de `Player.dir` (facing), nunca do input; espaço e clique mapeados no cliente como o mesmo gatilho booleano (`fireSources`, extensível a gamepad/touch). F3 mostra `facing` e `gatilho` do meu player.
+- Antes: **T-009** — `Player.dir` (ângulo, sincronizado) com facing híbrido (mira > movimento > mantém o último, nunca zera).
+- **Efeito colateral conhecido:** bots (T-008) ainda usam o protocolo antigo (`fx/fz`) — se movem/perseguem normal, mas não disparam mais (0 tiros, sem crash). Isso é esperado e será corrigido na T-013.
 
-Antes disso: T-007 (debug F3), bugfix respawn/hitbox — ver DEVLOG.
+Detalhe completo: `docs/prompts/PROMPT-0014.md` (T-009) e `PROMPT-0015.md` (T-010).
 
 ## Próximo passo sugerido
 
-Escolher um:
+Seguir a quebra de `specs/SPEC-0003-facing-mira-gatilhos.md`:
 
-- **T-008b** — personalidade/atributos sorteados + modo boss (gancho já pronto na camada de skill).
-- **T-OPTIONAL** — passe de balance: TTK real e ajustar o limiar de fuga (kills são raros em janela curta hoje).
-- **Merge → main** — rodar checklist de `QA.md` e consolidar branches.
+- **T-011** — facing visível no cliente: rotação do grupo visual de todos os players (indicador placeholder), interpolada. Depende só de T-009 (pronta).
+- **T-012** — ganchos de mobilidade em `LauncherDef` (ex.: lentidão ao disparar) aplicados via `EffectSystem`. Depende de T-010 (pronta).
+- **T-013** — migrar bots para o protocolo novo (mira contínua no alvo + gatilho quando em alcance); fecha o efeito colateral acima. Depende de T-010 (pronta).
 
-Prompt típico: `Executar T-008b do docs/BACKLOG.md`
+Prompt típico: `Continuar a SPEC-0003 — próxima task da quebra`
 
 ## Veredito do Creative Director
 
 | Fluxo | Status | Notas |
 |---|---|---|
-| Combate bot×bot | ✅ verificado (headless) | 6 bots forte: 18 hits, 1 kill, 1 death; teste determinístico 2/2 |
-| Combate manual (2 abas) | ✅ testado antes | originou bugfix respawn/safe_block |
-| Debug F3 + `/debug/rooms` | ✅ validado | |
+| Facing por mouse/teclado/parado (T-009) | ⬜ pendente teste do CD | verificado por IA via preview no browser |
+| Disparo por espaço/clique idênticos (T-010) | ⬜ pendente teste do CD | verificado por IA via preview no browser |
+| Combate bot×bot (T-008, pré-SPEC-0003) | ✅ verificado (headless) | segue válido para movimento/coleta; tiro dos bots pausado até T-013 |
 | Merge para `main` | ⬜ pendente | checklist em `QA.md` |
 
 ## Comandos úteis agora
@@ -43,12 +44,13 @@ Prompt típico: `Executar T-008b do docs/BACKLOG.md`
 npm run test
 npm run dev:server                 # DEBUG=1 opcional (feed F3 e /debug/rooms)
 npm run dev:client
-BOT_SKILL=forte npm run bots -- 4 30   # 4 bots de combate por 30s
+npm run bots -- 3 10               # smoke: bots se movem, mas não atiram até T-013
 ```
 
 ## Leituras se a sessão nova for só conversa
 
+- Spec ativa → `specs/SPEC-0003-facing-mira-gatilhos.md`
+- Facing/movimento → `docs/mechanics/movement.md`
+- Mira/gatilho/combate → `docs/mechanics/combat.md`
 - Bots / combate → `docs/ai/bots.md`
-- Gameplay FAQ → `docs/mechanics/PLAYER_LOOP.md`
 - Testes / merge → `docs/QA.md`
-- Visão do produto → `docs/VISAO-ATUAL.md`

@@ -1,5 +1,14 @@
 # Devlog
 
+## 2026-07-04 — Sessão 5: SPEC-0003 — T-009 (facing) + T-010 (gatilhos desacoplados)
+- Nova spec aprovada (`specs/SPEC-0003-facing-mira-gatilhos.md`, CD): facing sincronizado, mira ≠ gatilho, ganchos de mobilidade por lançador. Quebrada em T-009..T-013.
+- **T-009** (PROMPT-0014): `Player.dir` (ângulo, sincronizado) — híbrido resolvido no servidor: mira (`aimX/aimZ`) tem prioridade quando presente, senão segue o movimento, parado mantém o último valor (nunca zera). Cliente só manda `aimX/aimZ` no tick em que o mouse de fato se move. `docs/mechanics/movement.md` atualizado.
+- **T-010** (PROMPT-0015): protocolo de input perde `fx/fz` de vez — vira `{x, z, aimX?, aimZ?, fire?}`. `ProjectileSystem` usa só `p.firing` (booleano) + `p.dir` (facing) para decidir se/para onde atira; spawn ganha offset de raio na direção do facing. Cliente mapeia gatilhos num `Set` (`fireSources`: mouse/space) — extensível a gamepad/touch sem mudar o protocolo. `docs/mechanics/combat.md` atualizado.
+- Overlay F3 ganhou `facing` e `gatilho` (fontes ativas) do meu player e `dir` de todos — fecha o critério de aceite 6 já nesta entrega.
+- Verificado: tsc limpo (server/client/bots); shared 10/10; `projectiles.test.ts` 2/2 (adaptado para `dir`/`firing`); ao vivo no browser — os 3 casos de facing (mira/teclado/parado) e disparo por espaço e por clique confirmados no F3 (mesma direção, mesmo `dir`).
+- **Efeito colateral aceito**: bots (T-008) ainda mandam `fx/fz` — servidor ignora, então bots se movem/perseguem normalmente mas não disparam mais (0 tiros, sem crash, confirmado com `npm run bots -- 3 10`). Fica para **T-013**, que já existe na spec pra isso.
+- Próximo: T-011 (facing visível/rotação no cliente) e T-012 (ganchos de mobilidade no LauncherDef) podem seguir em paralelo — T-013 fecha a lacuna dos bots.
+
 ## 2026-07-04 — Sessão 4: T-008 (bots de combate, mínimo) + análise de frameworks
 - Análise pedida pelo CD antes de codar: spec-kit/dotcontext **não são ferramentas** aqui — ADR-004 os trocou por processo leve in-repo, seguido bem. Desvios: specs pararam no SPEC-0002, SESSAO_ATUAL apontava branch defasada, edição não commitada em BACKLOG. Registrado em PROMPT-0013.
 - Base arrumada: T-008 dividido em T-008 (mínimo) + **T-008b** (personalidade/atributos/boss); `bots.md` e SESSAO_ATUAL atualizados.

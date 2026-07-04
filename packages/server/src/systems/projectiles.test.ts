@@ -30,8 +30,8 @@ describe("ProjectileSystem (T-008)", () => {
     let kill: any = null;
 
     for (let i = 0; i < 400 && target.hp > 0; i++) {
-      shooter.fireDirX = 1; // aponta direto para B (13 > 10 no eixo x)
-      shooter.fireDirZ = 0;
+      shooter.dir = 0; // facing aponta direto para B (13 > 10 no eixo x)
+      shooter.firing = true;
       const hits = sys.tick(state, map, 0.05, now);
       for (const h of hits) {
         if (h.targetId === "B" && !h.blockedBySafeZone) {
@@ -66,7 +66,7 @@ describe("ProjectileSystem (T-008)", () => {
     let now = 0;
     let blocked = 0;
     for (let i = 0; i < 200; i++) {
-      shooter.fireDirX = 1; shooter.fireDirZ = 0;
+      shooter.dir = 0; shooter.firing = true;
       const hits = sys.tick(state, map, 0.05, now);
       blocked += hits.filter((h) => h.targetId === "B" && h.blockedBySafeZone).length;
       now += 50;

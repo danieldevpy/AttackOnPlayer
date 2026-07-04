@@ -16,29 +16,30 @@ export class ProjectileSystem {
   tick(state: ArenaState, map: GameMap, dt: number, now: number): ProjectileHitEvent[] {
     const hits: ProjectileHitEvent[] = [];
     
-    // 1. Process player fire input
+    // 1. Process player fire input (T-010: gatilho dispara sempre na direção do facing)
     state.players.forEach((p, id) => {
-      if (p.fireDirX === 0 && p.fireDirZ === 0) return;
+      if (!p.firing) return;
       if (zoneAt(map, p.x, p.z) === "safe") return; // cannot fire in safe zone
-      
+
       const launcher = LAUNCHERS[p.launcher];
       if (!launcher) return;
 
       if (now - p.lastFireAt < launcher.fire.cooldownMs) return;
 
       p.lastFireAt = now;
-      
+
+      const dirX = Math.cos(p.dir);
+      const dirZ = Math.sin(p.dir);
+
       const proj = new Projectile();
-      proj.x = p.x;
-      proj.z = p.z;
+      // nasce na borda do player (offset = raio) na posição autoritativa do tick — sem atraso.
+      proj.x = p.x + dirX * PLAYER_RADIUS;
+      proj.z = p.z + dirZ * PLAYER_RADIUS;
       proj.launcherId = p.launcher;
       proj.ownerId = id;
-      
-      // Normalize direction
-      const len = Math.hypot(p.fireDirX, p.fireDirZ);
-      proj.dirX = p.fireDirX / len;
-      proj.dirZ = p.fireDirZ / len;
-      
+      proj.dirX = dirX;
+      proj.dirZ = dirZ;
+
       state.projectiles.set(`p${++_projId}`, proj);
     });
 
