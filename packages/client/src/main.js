@@ -4,6 +4,15 @@ import { buildMap, isWall, zoneAt, xpToNext, ROOM_NAME, SERVER_PORT } from "@aop
 import { createPlayerVisual, createCollectibleVisual, propParts } from "./visuals";
 const hud = document.getElementById("hud");
 const roster = document.getElementById("roster");
+const debugOverlay = document.getElementById("debug-overlay");
+const debugEventsContainer = document.getElementById("debug-events");
+const debugStateEl = document.getElementById("debug-state");
+const debugCloseBtn = document.getElementById("debug-close");
+let debugOpen = false;
+debugCloseBtn.addEventListener("click", () => {
+    debugOpen = false;
+    debugOverlay.classList.remove("active");
+});
 // ---------- Cena base ----------
 const BG = 0x181820;
 const scene = new THREE.Scene();
@@ -147,6 +156,9 @@ async function connect() {
             if (msg.kind === "farm_event")
                 announceUntil = performance.now() + 6000;
         });
+        room.onMessage("debug_event", (ev) => {
+            pushDebugEvent(ev);
+        });
         setInterval(() => room?.send("ping", performance.now()), 2000);
         setInterval(sendInput, 1000 / 20);
     }
@@ -155,6 +167,66 @@ async function connect() {
     }
 }
 connect();
+// ---------- Debug (T-007) ----------
+// Também capturamos eventos localmente (independente de DEBUG=1 no server)
+const localDebugEvents = [];
+function pushDebugEvent(ev) {
+    localDebugEvents.push(ev);
+    if (localDebugEvents.length > 200)
+        localDebugEvents.shift();
+    if (debugOpen)
+        renderDebugEvent(ev);
+}
+function renderDebugEvent(ev) {
+    const el = document.createElement("div");
+    el.className = `debug-event type-${ev.type}`;
+    const ts = new Date(ev.time).toISOString().substring(11, 23);
+    el.innerHTML = `<span class="ts">[${ts}]</span> <b>${ev.type}</b> ${JSON.stringify(ev.payload)}`;
+    debugEventsContainer.appendChild(el);
+    debugEventsContainer.scrollTop = debugEventsContainer.scrollHeight;
+    if (debugEventsContainer.children.length > 60)
+        debugEventsContainer.firstChild?.remove();
+}
+function updateDebugState() {
+    if (!debugOpen)
+        return;
+    const st = room?.state;
+    const me = st?.players?.get?.(mySessionId);
+    const now = Date.now();
+    const rows = [];
+    rows.push(`<h3>🔍 DEBUG (F3) — ${new Date(now).toISOString().substring(11, 23)}</h3>`);
+    rows.push(`<table>`);
+    // Servidor
+    rows.push(`<tr><td colspan="2" class="section">── SALA ──</td></tr>`);
+    rows.push(`<tr><td>mapa</td><td>${st?.mapW ?? "?"}×${st?.mapH ?? "?"} seed:${st?.mapSeed ?? "?"}</td></tr>`);
+    rows.push(`<tr><td>players</td><td>${st?.players?.size ?? 0}</td></tr>`);
+    rows.push(`<tr><td>coletáveis</td><td>${st?.collectibles?.size ?? 0}</td></tr>`);
+    rows.push(`<tr><td>projéteis</td><td>${st?.projectiles?.size ?? 0}</td></tr>`);
+    rows.push(`<tr><td>ping</td><td>${ping < 0 ? "..." : ping + " ms"}</td></tr>`);
+    // Meu player
+    if (me) {
+        rows.push(`<tr><td colspan="2" class="section">── MEU PLAYER ──</td></tr>`);
+        rows.push(`<tr><td>sessão</td><td>${mySessionId}</td></tr>`);
+        rows.push(`<tr><td>pos</td><td>x:${me.x?.toFixed(2)} z:${me.z?.toFixed(2)}</td></tr>`);
+        rows.push(`<tr><td>hp</td><td>${Math.ceil(me.hp)}/${me.maxHp} (vit:${me.vitality?.toFixed(2)})</td></tr>`);
+        rows.push(`<tr><td>nível / xp</td><td>${me.level} / ${me.xp?.toFixed(0)}</td></tr>`);
+        rows.push(`<tr><td>força</td><td>${me.strength?.toFixed(3)}</td></tr>`);
+        rows.push(`<tr><td>velocidade</td><td>${me.speed?.toFixed(3)}</td></tr>`);
+        rows.push(`<tr><td>launcher</td><td>${me.launcher}</td></tr>`);
+        rows.push(`<tr><td>coins</td><td>${me.coins}</td></tr>`);
+        const fx = me.effects ? Array.from(me.effects) : [];
+        rows.push(`<tr><td>efeitos</td><td>${fx.length ? fx.join(", ") : "nenhum"}</td></tr>`);
+        rows.push(`<tr><td>token</td><td>${localStorage.getItem("aop_token") ?? "?"}</td></tr>`);
+    }
+    // Todos os players
+    rows.push(`<tr><td colspan="2" class="section">── TODOS OS PLAYERS ──</td></tr>`);
+    st?.players?.forEach((p, id) => {
+        const tag = id === mySessionId ? " (você)" : (p.isBot ? " [bot]" : "");
+        rows.push(`<tr><td>${p.name}${tag}</td><td>lv${p.level} HP:${Math.ceil(p.hp)}/${p.maxHp} x:${p.x?.toFixed(1)} z:${p.z?.toFixed(1)}</td></tr>`);
+    });
+    rows.push(`</table>`);
+    debugStateEl.innerHTML = rows.join("");
+}
 // ---------- Input (teclado; touch no M1) ----------
 let announceUntil = 0;
 const keys = new Set();
@@ -167,6 +239,17 @@ addEventListener("mousemove", (e) => {
     mouse.y = -(e.clientY / innerHeight) * 2 + 1;
 });
 addEventListener("keydown", (e) => {
+    if (e.key === "F3") {
+        e.preventDefault();
+        debugOpen = !debugOpen;
+        debugOverlay.classList.toggle("active", debugOpen);
+        if (debugOpen) {
+            // Preenche o feed com os últimos eventos locais
+            debugEventsContainer.innerHTML = "";
+            localDebugEvents.slice(-30).forEach(renderDebugEvent);
+        }
+        return;
+    }
     keys.add(e.key.toLowerCase());
     if (e.key.toLowerCase() === "r")
         room?.send("reroll"); // T-004: coins compram reroll de atributo
@@ -283,13 +366,11 @@ function updateHud(now) {
     hud.textContent =
         `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
             `nível: ${me?.level ?? "-"} (xp ${me?.xp ?? 0}/${xpNeed})  HP: ${Math.ceil(me?.hp ?? 0)}/${me?.maxHp ?? 100}` +
-            (fx.includes("speed_up") ? `  ⚡x${me.speed}` : "") +
+            (fx.includes("speed_up") ? `  ⚡x${me.speed?.toFixed(1)}` : "") +
             (fx.includes("xp_boost") ? `  2xXP` : "") +
-            `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vitalidade ${me?.vitality?.toFixed(2) ?? "-"}` +
-            `\ncoins: ${me?.coins ?? 0}  (R = reroll de atributo)` +
-            `\nmapa: ${st?.mapW ?? "?"}x${st?.mapH ?? "?"}\n` +
-            `WASD/setas para mover` +
-            (now < announceUntil ? `\n\n🔥 farm_event na zona de guerra!` : "");
+            `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}` +
+            `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • click=atirar)` +
+            (now < announceUntil ? `\n🔥 farm_event na zona de guerra!` : "");
     if (now < rosterNext || !st?.players)
         return;
     rosterNext = now + 250;
@@ -311,6 +392,7 @@ function updateHud(now) {
 }
 // ---------- Loop ----------
 let t = 0;
+let debugTick = 0;
 function animate() {
     requestAnimationFrame(animate);
     t += 0.05;
@@ -321,6 +403,9 @@ function animate() {
         mesh.rotation.y += 0.02;
     });
     updateHud(performance.now());
+    // Atualiza painel de debug a ~10fps para não sobrecarregar DOM
+    if (debugOpen && ++debugTick % 2 === 0)
+        updateDebugState();
     renderer.render(scene, camera);
 }
 animate();

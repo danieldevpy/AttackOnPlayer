@@ -11,6 +11,7 @@ type GameMap = import("@aop/shared").GameMap;
 const COUNT = Number(process.argv[2] ?? 2);
 const DURATION_S = Number(process.argv[3] ?? 20);
 const URL = process.env.SERVER_URL ?? `ws://localhost:${SERVER_PORT}`;
+const BOT_VERBOSE = process.env.BOT_VERBOSE === "1";
 
 /** BFS 4-direções no grid; retorna centros de tile do caminho (sem o inicial). */
 function bfsPath(map: GameMap, fx: number, fz: number, tx: number, tz: number) {
@@ -44,6 +45,7 @@ async function runBot(i: number) {
   const name = `bot-${i}`;
   const client = new Client(URL);
   const room = await client.joinOrCreate(ROOM_NAME, { name, bot: true });
+  room.onMessage("debug_event", () => {});
   console.log(`[${name}] entrou na sala ${room.roomId}`);
 
   let map: GameMap | undefined;
@@ -78,6 +80,7 @@ async function runBot(i: number) {
     if (target && bestId !== targetId) {
       targetId = bestId;
       path = bfsPath(map, Math.floor(me.x), Math.floor(me.z), Math.floor(target.x), Math.floor(target.z));
+      if (BOT_VERBOSE) console.log(`[${name}] novo alvo: coletável ${targetId} em (${target.x.toFixed(1)}, ${target.z.toFixed(1)}) — caminho: ${path?.length ?? 'inalcançável'} passos`);
     }
 
     // segue o caminho waypoint a waypoint

@@ -4,7 +4,7 @@ Objetivo: debugar eventos e respostas DINAMICAMENTE, sem parar o jogo.
 
 ## Cliente — overlay F3
 - Tecla F3 alterna overlay: zonas pintadas no chão, contagem de entidades, tick do servidor, timers de efeito por player, últimos N eventos.
-- Feed de eventos ao vivo (canto inferior): `pickup`, `spawn`, `hit`, `death`, `zone_event` com timestamp.
+- Feed de eventos ao vivo (canto inferior): `pickup`, `spawn`, `hit`, `death`, `respawn`, `safe_block`, `zone_event` com timestamp.
 
 ## Servidor
 - Canal `debug` na sala: quando `DEBUG=1`, o servidor emite cada evento de jogo pelo WebSocket (mesma conexão, zero infra nova).

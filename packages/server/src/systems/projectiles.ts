@@ -1,17 +1,20 @@
 import { Player, Projectile, ArenaState } from "../state/ArenaState";
-import { LAUNCHERS, isWall, zoneAt, GameMap } from "@aop/shared";
+import { LAUNCHERS, isWall, zoneAt, GameMap, PLAYER_RADIUS } from "@aop/shared";
 
 // Generate unique IDs for projectiles
 let _projId = 0;
 
-export interface KillEvent {
-  victimId: string;
+export interface ProjectileHitEvent {
+  targetId: string;
   killerId: string;
+  damage: number;
+  killed: boolean;
+  blockedBySafeZone: boolean;
 }
 
 export class ProjectileSystem {
-  tick(state: ArenaState, map: GameMap, dt: number, now: number): KillEvent[] {
-    const kills: KillEvent[] = [];
+  tick(state: ArenaState, map: GameMap, dt: number, now: number): ProjectileHitEvent[] {
+    const hits: ProjectileHitEvent[] = [];
     
     // 1. Process player fire input
     state.players.forEach((p, id) => {
@@ -49,6 +52,8 @@ export class ProjectileSystem {
       }
 
       const dist = launcher.projectile.speed * dt;
+      const prevX = proj.x;
+      const prevZ = proj.z;
       proj.x += proj.dirX * dist;
       proj.z += proj.dirZ * dist;
       proj.distanceTraveled += dist;
@@ -89,25 +94,40 @@ export class ProjectileSystem {
       // check hit players
       let hitPlayer = false;
       state.players.forEach((target, targetId) => {
+        if (hitPlayer) return;
         if (targetId === proj.ownerId) return; // ignore self
         if (target.hp <= 0) return; // ignore dead
-        
-        // safe zone protects from damage
-        if (zoneAt(map, target.x, target.z) === "safe") return;
 
-        const distance = Math.hypot(proj.x - target.x, proj.z - target.z);
-        // Player radius is 0.4 usually, projectile radius is launcher.projectile.radius
-        if (distance < 0.4 + launcher.projectile.radius) {
+        const distance = distancePointToSegment(target.x, target.z, prevX, prevZ, proj.x, proj.z);
+        if (distance < PLAYER_RADIUS + launcher.projectile.radius) {
+          hitPlayer = true;
+
+          // safe zone protects from damage, but still consumes the projectile so
+          // debugging does not look like the hitbox failed.
+          if (zoneAt(map, target.x, target.z) === "safe") {
+            hits.push({
+              targetId,
+              killerId: proj.ownerId,
+              damage: 0,
+              killed: false,
+              blockedBySafeZone: true,
+            });
+            return;
+          }
+
           // HIT!
           const owner = state.players.get(proj.ownerId);
           const strength = owner ? owner.strength : 1;
           const damage = launcher.damage * strength;
           
           target.hp -= damage;
-          if (target.hp <= 0) {
-            kills.push({ victimId: targetId, killerId: proj.ownerId });
-          }
-          hitPlayer = true;
+          hits.push({
+            targetId,
+            killerId: proj.ownerId,
+            damage,
+            killed: target.hp <= 0,
+            blockedBySafeZone: false,
+          });
         }
       });
 
@@ -119,6 +139,17 @@ export class ProjectileSystem {
 
     toRemove.forEach((pid) => state.projectiles.delete(pid));
     
-    return kills;
+    return hits;
   }
+}
+
+function distancePointToSegment(px: number, pz: number, ax: number, az: number, bx: number, bz: number) {
+  const abx = bx - ax;
+  const abz = bz - az;
+  const lenSq = abx * abx + abz * abz;
+  if (lenSq <= 1e-9) return Math.hypot(px - ax, pz - az);
+  const t = Math.max(0, Math.min(1, ((px - ax) * abx + (pz - az) * abz) / lenSq));
+  const cx = ax + abx * t;
+  const cz = az + abz * t;
+  return Math.hypot(px - cx, pz - cz);
 }

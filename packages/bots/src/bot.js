@@ -8,6 +8,7 @@ const { ROOM_NAME, SERVER_PORT, buildMap, isWall } = await import("@aop/shared")
 const COUNT = Number(process.argv[2] ?? 2);
 const DURATION_S = Number(process.argv[3] ?? 20);
 const URL = process.env.SERVER_URL ?? `ws://localhost:${SERVER_PORT}`;
+const BOT_VERBOSE = process.env.BOT_VERBOSE === "1";
 /** BFS 4-direções no grid; retorna centros de tile do caminho (sem o inicial). */
 function bfsPath(map, fx, fz, tx, tz) {
     if (fx === tx && fz === tz)
@@ -44,6 +45,7 @@ async function runBot(i) {
     const name = `bot-${i}`;
     const client = new Client(URL);
     const room = await client.joinOrCreate(ROOM_NAME, { name, bot: true });
+    room.onMessage("debug_event", () => { });
     console.log(`[${name}] entrou na sala ${room.roomId}`);
     let map;
     let path = null;
@@ -76,6 +78,8 @@ async function runBot(i) {
         if (target && bestId !== targetId) {
             targetId = bestId;
             path = bfsPath(map, Math.floor(me.x), Math.floor(me.z), Math.floor(target.x), Math.floor(target.z));
+            if (BOT_VERBOSE)
+                console.log(`[${name}] novo alvo: coletável ${targetId} em (${target.x.toFixed(1)}, ${target.z.toFixed(1)}) — caminho: ${path?.length ?? 'inalcançável'} passos`);
         }
         // segue o caminho waypoint a waypoint
         let dir = { x: 0, z: 0 };
@@ -111,7 +115,8 @@ async function runBot(i) {
     if (DURATION_S > 0) {
         setTimeout(async () => {
             clearInterval(think);
-            const me = room.state?.players?.get?.(room.sessionId);
+            const state = room.state;
+            const me = state?.players?.get?.(room.sessionId);
             console.log(`[${name}] saindo — nível final ${me?.level ?? "?"}, boosts pegos: ver métricas`);
             await room.leave();
         }, DURATION_S * 1000);

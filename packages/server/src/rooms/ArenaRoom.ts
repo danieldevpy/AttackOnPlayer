@@ -43,6 +43,8 @@ import {
   XP_PER_KILL_PER_LEVEL,
 } from "@aop/shared";
 
+export const activeRooms = new Map<string, ArenaRoom>();
+
 export class ArenaRoom extends Room<ArenaState> {
   maxClients = MAX_PLAYERS;
   private map!: GameMap;
@@ -52,6 +54,7 @@ export class ArenaRoom extends Room<ArenaState> {
   private projectiles = new ProjectileSystem();
   private collectibleSeq = 0;
   private nextSpawnAt = 0;
+  public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
 
   onCreate(options?: { expectedPlayers?: number }) {
     this.setState(new ArenaState());
@@ -64,6 +67,8 @@ export class ArenaRoom extends Room<ArenaState> {
     this.state.mapH = size.h;
     this.state.mapSeed = seed;
     this.budget = collectibleBudget(size.w, size.h);
+
+    activeRooms.set(this.roomId, this);
 
     // pré-popula metade do orçamento (ninguém entra num mapa vazio)
     for (let i = 0; i < Math.floor(this.budget / 2); i++) this.spawnCollectible();
@@ -117,11 +122,17 @@ export class ArenaRoom extends Room<ArenaState> {
   onLeave(client: Client) {
     const p = this.state.players.get(client.sessionId);
     if (p) {
+      this.emitDebug("disconnect", { playerId: client.sessionId });
       this.metrics.end(client.sessionId, p.level);
       console.log(`[arena] - ${p.name} (nível ${p.level})`);
     }
     this.effects.clear(client.sessionId);
     this.state.players.delete(client.sessionId);
+  }
+
+  onDispose() {
+    activeRooms.delete(this.roomId);
+    console.log(`[arena] Sala ${this.roomId} fechada.`);
   }
 
   private update(dt: number) {
@@ -130,21 +141,35 @@ export class ArenaRoom extends Room<ArenaState> {
     // efeitos expiram antes do movimento (velocidade correta no tick)
     this.effects.tick(this.state.players, now);
 
-    // projéteis (T-005)
-    const kills = this.projectiles.tick(this.state, this.map, dt, now);
+    // projéteis (T-005/T-006)
+    const projectileHits = this.projectiles.tick(this.state, this.map, dt, now);
+    const killerByVictim = new Map<string, string>();
 
     // Morte e respawn (T-006)
-    kills.forEach((kill) => {
-      const victim = this.state.players.get(kill.victimId);
-      const killer = this.state.players.get(kill.killerId);
-      if (victim && killer) {
-        this.metrics.addKill(kill.killerId);
-        this.grantXp(kill.killerId, killer, XP_PER_KILL_PER_LEVEL * victim.level);
+    projectileHits.forEach((hit) => {
+      if (hit.blockedBySafeZone) {
+        this.emitDebug("safe_block", { victimId: hit.targetId, shooterId: hit.killerId });
+        return;
+      }
+      const victim = this.state.players.get(hit.targetId);
+      const killer = this.state.players.get(hit.killerId);
+      this.emitDebug("hit", {
+        victimId: hit.targetId,
+        shooterId: hit.killerId,
+        damage: Math.round(hit.damage),
+        hpAfter: Math.max(0, Math.ceil(victim?.hp ?? 0)),
+        isKill: hit.killed,
+      });
+      if (victim && killer && hit.killed && !killerByVictim.has(hit.targetId)) {
+        killerByVictim.set(hit.targetId, hit.killerId);
+        this.metrics.addKill(hit.killerId);
+        this.grantXp(hit.killerId, killer, XP_PER_KILL_PER_LEVEL * victim.level);
       }
     });
 
     this.state.players.forEach((p, id) => {
       if (p.hp <= 0) {
+        this.emitDebug("death", { playerId: id, levelBefore: p.level });
         this.metrics.addDeath(id);
         
         // Perda de nível
@@ -159,14 +184,24 @@ export class ArenaRoom extends Room<ArenaState> {
         p.xp = 0;
         this.effects.resetAttrToLevel(id, p, p.level);
         
-        // Respawn em zona safe
-        const spawns = spawnPoints(this.map.w, this.map.h);
-        const spawn = spawns[Math.floor(Math.random() * spawns.length)];
+        // Respawn em ponto safe escolhido por distância/risco, não sorte pura.
+        const spawn = this.pickRespawnPoint(id);
         p.x = spawn.x;
         p.z = spawn.z;
         p.hp = p.maxHp;
+        p.inputX = 0;
+        p.inputZ = 0;
+        p.fireDirX = 0;
+        p.fireDirZ = 0;
         
-        console.log(`[arena] ${p.name} morreu. Respawn no nível ${p.level}.`);
+        this.emitDebug("respawn", {
+          playerId: id,
+          killerId: killerByVictim.get(id) ?? null,
+          levelAfter: p.level,
+          x: spawn.x,
+          z: spawn.z,
+        });
+        console.log(`[arena] ${p.name} morreu. Respawn no nível ${p.level} em (${spawn.x}, ${spawn.z}).`);
       }
     });
 
@@ -185,6 +220,7 @@ export class ArenaRoom extends Room<ArenaState> {
       this.state.players.forEach((p, pid) => {
         if (Math.hypot(p.x - c.x, p.z - c.z) >= COLLECT_DIST) return;
         this.state.collectibles.delete(cid);
+        this.emitDebug("pickup", { playerId: pid, kind: c.kind });
         switch (c.kind) {
           case "speed_up":
             this.effects.apply(pid, p, "speed_up", now);
@@ -231,6 +267,37 @@ export class ArenaRoom extends Room<ArenaState> {
     }
   }
 
+  private pickRespawnPoint(deadPlayerId: string) {
+    const spawns = spawnPoints(this.map.w, this.map.h);
+    let best = spawns[0];
+    let bestScore = -Infinity;
+
+    for (const spawn of spawns) {
+      let nearestPlayer = Infinity;
+      this.state.players.forEach((p, id) => {
+        if (id === deadPlayerId || p.hp <= 0) return;
+        nearestPlayer = Math.min(nearestPlayer, Math.hypot(p.x - spawn.x, p.z - spawn.z));
+      });
+
+      let nearestProjectile = Infinity;
+      this.state.projectiles.forEach((proj) => {
+        nearestProjectile = Math.min(nearestProjectile, Math.hypot(proj.x - spawn.x, proj.z - spawn.z));
+      });
+
+      const playerScore = Number.isFinite(nearestPlayer) ? nearestPlayer : this.map.w + this.map.h;
+      const projectileScore = Number.isFinite(nearestProjectile) ? Math.min(nearestProjectile, 12) : 12;
+      const jitter = Math.random() * 0.01; // desempate sem transformar em sorte dominante
+      const score = playerScore * 2 + projectileScore + jitter;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = spawn;
+      }
+    }
+
+    return best;
+  }
+
   /** XP → nível → pontos de atributo (T-003). Loop cobre XP suficiente p/ vários níveis de uma vez. */
   private grantXp(id: string, p: Player, amount: number) {
     p.xp += amount * p.xpMult; // xp_boost (farm_event) dobra o ganho — T-004
@@ -265,15 +332,33 @@ export class ArenaRoom extends Room<ArenaState> {
         if (Math.abs(c.x - cx) + Math.abs(c.z - cz) < 2) blocked = true;
       });
       if (blocked) continue;
-      const c = new Collectible();
-      c.x = cx;
-      c.z = cz;
-      const weights = zone === "safe" ? SAFE_WEIGHTS : zone === "war" ? WAR_WEIGHTS : FIELD_WEIGHTS;
-      c.kind = pickWeighted(Math.random, weights);
-      this.state.collectibles.set(`c${this.collectibleSeq++}`, c);
-      if (c.kind === "farm_event") this.broadcast("announce", { kind: "farm_event", x: cx, z: cz });
+      this.createCollectible(cx, cz);
       return true;
     }
     return false; // mapa lotado perto de todo mundo — sem drop (design!)
+  }
+
+  private createCollectible(x: number, z: number) {
+    const zone = zoneAt(this.map, x, z);
+    const weights = zone === "safe" ? SAFE_WEIGHTS : zone === "war" ? WAR_WEIGHTS : FIELD_WEIGHTS;
+    const kind = pickWeighted(Math.random, weights);
+    const c = new Collectible();
+    c.x = x;
+    c.z = z;
+    c.kind = kind;
+    const id = `c${this.collectibleSeq++}`;
+    this.state.collectibles.set(id, c);
+    this.emitDebug("spawn", { id, x, z, kind, zone });
+    if (kind === "farm_event") this.broadcast("announce", { kind: "farm_event", x, z });
+  }
+
+  private emitDebug(type: string, payload: any) {
+    const isDebug = process.env.DEBUG === "1";
+    const ev = { time: Date.now(), type, payload };
+    this.debugEvents.push(ev);
+    if (this.debugEvents.length > 200) this.debugEvents.shift();
+    if (isDebug) {
+      this.broadcast("debug_event", ev);
+    }
   }
 }

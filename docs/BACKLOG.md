@@ -39,17 +39,17 @@
 **Contexto:** docs/mechanics/progression.md · docs/mechanics/growth.md · packages/server/src/rooms/ArenaRoom.ts
 **Aceite:** morrer aplica a curva de perda (baixo nível quase não perde, alto nível perde muito); toggle de reset total funciona por room; métricas de kill/death.
 
-## T-007 — Modo debug dinâmico 〔M〕
+## T-007 — Modo debug dinâmico 〔M〕 ✅ (PROMPT-0011)
 **Objetivo:** overlay F3 (zonas, entidades, timers, feed de eventos), canal debug no servidor, /debug/rooms, ring buffer, BOT_VERBOSE.
 **Contexto:** docs/mechanics/debug-mode.md · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/main.ts · packages/bots/src/bot.ts
 **Aceite:** F3 mostra eventos ao vivo; /debug/rooms responde; sem custo quando desligado.
 
 ## T-008 — Bots de combate 〔M〕 · depende: T-005, T-006
-**Objetivo:** bots miram e atiram (com erro proposital parametrizado), fogem quando com pouca vida, avaliam risco de zona de guerra.
+**Objetivo:** bots miram e atiram (com erro proposital parametrizado), fogem quando com pouca vida, avaliam risco de zona de guerra. O bot ter modo algoritimo e futuramente conseguir ser acionado por um modelo (ou respondendo ou enviando comandos)
 **Contexto:** docs/ai/bots.md · packages/bots/src/bot.ts
 **Aceite:** 4 bots geram kills entre si; skill parametrizável (fraco/médio/forte).
 
-## T-009 — Passe de balance + métricas de combate 〔P〕 · depende: T-006
+## T-OPTIONAL 1 — Passe de balance + métricas de combate 〔P〕 · depende: T-006
 **Objetivo:** métricas TTK, XP/min, dano por arma; ajustar curvas com dados de 10 partidas de bots.
 **Contexto:** docs/observability/metrics.md · packages/server/src/metrics/SessionMetrics.ts
 **Aceite:** relatório em docs/ai/ com números reais e ajustes aplicados.
