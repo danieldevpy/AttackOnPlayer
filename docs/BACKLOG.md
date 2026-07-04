@@ -14,7 +14,7 @@
 **Contexto:** docs/mechanics/world.md (tabela) · instrucoes/FASES_VISUAIS.md · packages/client/src/visuals.ts · packages/client/src/main.ts
 **Aceite:** cada tipo visualmente distinto; draw calls sob controle (instancing por tipo).
 
-## T-003 — Crescimento: XP, nível, atributos múltiplos 〔M〕
+## T-003 — Crescimento: XP, nível, atributos múltiplos 〔M〕 ✅ (PROMPT-0006)
 **Objetivo:** xp/coins no Player, curva `XP_BASE × n^XP_EXP`, pontos por nível, atributos força/velocidade/vitalidade com auto-distribuição, integrados ao EffectSystem como camada permanente do round.
 **Contexto:** docs/mechanics/growth.md · packages/server/src/systems/effects.ts · packages/server/src/state/ArenaState.ts · packages/shared/src/constants.ts
 **Aceite:** coletar dá XP e sobe nível pela curva; atributos refletem no estado; teste unitário da curva.

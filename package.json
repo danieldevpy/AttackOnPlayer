@@ -5,7 +5,8 @@
   "scripts": {
     "dev:server": "npm run dev -w @aop/server",
     "dev:client": "npm run dev -w @aop/client",
-    "bots": "npm run start -w @aop/bots --"
+    "bots": "npm run start -w @aop/bots --",
+    "test": "npm run test -w @aop/shared"
   },
   "engines": { "node": ">=20" }
 }

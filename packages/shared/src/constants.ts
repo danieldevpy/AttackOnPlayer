@@ -31,6 +31,19 @@ export const PROP_DENSITY = 0.04; // ~4% dos tiles internos viram prop colidíve
 export const SAFE_ZONE_RADIUS = 6; // tiles ao redor de cada spawn (também afasta props)
 export const WAR_ZONE_RADIUS = 10; // tiles ao redor do(s) ponto(s) quente(s)
 
+// Crescimento — XP, nível, atributos (T-003, docs/mechanics/growth.md)
+export const XP_BASE = 20;
+export const XP_EXP = 1.35; // as 2 constantes controlam todo o pacing (balance por dados, T-009)
+export const XP_PICKUP_AMOUNT = 8; // XP de um coletável comum (xp_orb)
+export const ATTR_POINTS_PER_LEVEL_EACH = 1; // preset equilibrado v1: mesmo tanto em cada atributo por nível
+export const ATTR_POINT_VALUE = 0.04; // cada ponto = +4% no multiplicador do atributo
+export const COIN_REROLL_COST = 15; // T-004: coins compram reroll do preset de atributo do último nível
+
+/** XP necessário para sair de `level` e chegar ao próximo — curva de pacing (T-003). */
+export function xpToNext(level: number): number {
+  return Math.round(XP_BASE * Math.pow(level, XP_EXP));
+}
+
 // Efeitos (ADR-009)
 export const SPEED_BOOST_MULT = 1.5;
 export const SPEED_BOOST_MS = 8000;

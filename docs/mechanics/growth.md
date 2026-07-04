@@ -8,12 +8,12 @@ XP → nível → pontos de atributo → distribuição em atributos → poder e
 coins → economia paralela (uso a decidir)
 ```
 
-## XP e nível (T-003)
+## XP e nível (T-003 ✅)
 - Fontes de XP: coletável comum (pouco), farm event (muito), kill (média + bônus por nível da vítima), box (bônus).
 - Curva: `xpParaNivel(n) = XP_BASE × n^XP_EXP` — 2 constantes controlam TODO o pacing (balance por dados, ver metrics.md).
 - Subir de nível → +PONTOS_POR_NIVEL pontos de atributo.
 
-## Atributos (T-003)
+## Atributos (T-003 ✅)
 | Atributo | Efeito | Interage com |
 |---|---|---|
 | Força | multiplica dano do lançador | combat.md |

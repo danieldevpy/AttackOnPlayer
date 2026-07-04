@@ -20,6 +20,9 @@ import {
   RESPAWN_DELAY_MIN_MS,
   RESPAWN_DELAY_MAX_MS,
   RESPAWN_FAST_MS,
+  xpToNext,
+  XP_PICKUP_AMOUNT,
+  ATTR_POINTS_PER_LEVEL_EACH,
 } from "@aop/shared";
 
 export class ArenaRoom extends Room<ArenaState> {
@@ -109,7 +112,7 @@ export class ArenaRoom extends Room<ArenaState> {
         if (c.kind === "speed_up") {
           this.effects.apply(pid, p, "speed_up", now);
         } else {
-          p.level += 1;
+          this.grantXp(pid, p, XP_PICKUP_AMOUNT);
         }
         this.metrics.addPickup(pid, c.kind);
       });
@@ -123,6 +126,20 @@ export class ArenaRoom extends Room<ArenaState> {
           ? now + RESPAWN_FAST_MS
           : now + RESPAWN_DELAY_MIN_MS + Math.random() * (RESPAWN_DELAY_MAX_MS - RESPAWN_DELAY_MIN_MS);
       }
+    }
+  }
+
+  /** XP → nível → pontos de atributo (T-003). Loop cobre XP suficiente p/ vários níveis de uma vez. */
+  private grantXp(id: string, p: Player, amount: number) {
+    p.xp += amount;
+    while (p.xp >= xpToNext(p.level)) {
+      p.xp -= xpToNext(p.level);
+      p.level += 1;
+      this.effects.addAttrPoints(id, p, {
+        velocidade: ATTR_POINTS_PER_LEVEL_EACH,
+        forca: ATTR_POINTS_PER_LEVEL_EACH,
+        vitalidade: ATTR_POINTS_PER_LEVEL_EACH,
+      });
     }
   }
 

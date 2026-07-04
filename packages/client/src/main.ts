@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
-import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
+import { buildMap, isWall, zoneAt, xpToNext, ROOM_NAME, SERVER_PORT } from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual, propParts } from "./visuals";
 
 const hud = document.getElementById("hud")!;
@@ -245,10 +245,12 @@ function updateHud(now: number) {
   const st: any = room?.state;
   const me = st?.players?.get?.(mySessionId);
   const fx: string[] = me?.effects ? Array.from(me.effects) : [];
+  const xpNeed = me ? xpToNext(me.level) : 0;
   hud.textContent =
     `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
-    `nível: ${me?.level ?? "-"}` +
+    `nível: ${me?.level ?? "-"} (xp ${me?.xp ?? 0}/${xpNeed})` +
     (fx.includes("speed_up") ? `  ⚡x${me.speed}` : "") +
+    `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vitalidade ${me?.vitality?.toFixed(2) ?? "-"}` +
     `\nmapa: ${st?.mapW ?? "?"}x${st?.mapH ?? "?"}\n` +
     `WASD/setas para mover`;
 

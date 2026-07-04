@@ -1,5 +1,11 @@
 # Devlog
 
+## 2026-07-04 — Sessão 3 (cont.): T-003
+- XP/nível via curva (`xpToNext`), atributos força/velocidade/vitalidade como segunda camada do EffectSystem existente (mesmo `recompute()`, preset equilibrado: 1 ponto em cada por nível, +4%/ponto).
+- Primeiro teste unitário do projeto (vitest, `constants.test.ts`) — dívida registrada em LEAD_DESIGNER_NOTES começou a ser paga.
+- Verificado: `npm run test` 3/3, tsc limpo, bots mostram nível subindo pela curva e atributo de velocidade refletido em `speed` independente do speed_up temporário. Detalhe em PROMPT-0006.md.
+- Próximo: T-004 (coletáveis expandidos).
+
 ## 2026-07-04 — Sessão 3 (cont.): T-002
 - Props ganharam pré-modelos F2 (pedra/árvore/caixa/muro/bandeira) compostos de primitivas em `visuals.ts`. Técnica: 1 InstancedMesh por parte-tipo (não por instância) — mantém draw calls baixos mesmo com composição.
 - Verificado via preview (screenshot): zona safe pintada + pedra/caixa/muro distintos; bots sem regressão. Detalhe em PROMPT-0005.md.

@@ -5,8 +5,12 @@ export class Player extends Schema {
   @type("number") x = 0;
   @type("number") z = 0;
   @type("number") level = 1;
+  @type("number") xp = 0; // progresso dentro do nível atual (T-003)
+  @type("number") coins = 0;
   @type("boolean") isBot = false;
   @type("number") speed = 1; // multiplicador efetivo (ADR-009) — servidor calcula
+  @type("number") strength = 1; // multiplica dano (combat.md, T-005)
+  @type("number") vitality = 1; // multiplica vida máxima (combat.md, T-006)
   @type(["string"]) effects = new ArraySchema<string>(); // kinds ativos, só p/ HUD
 
   // não sincronizado (uso interno do servidor)
