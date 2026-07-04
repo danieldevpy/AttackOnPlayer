@@ -11,6 +11,7 @@ export class Player extends Schema {
   @type("number") speed = 1; // multiplicador efetivo (ADR-009) — servidor calcula
   @type("number") strength = 1; // multiplica dano (combat.md, T-005)
   @type("number") vitality = 1; // multiplica vida máxima (combat.md, T-006)
+  @type("number") xpMult = 1; // farm_event (T-004): XP em dobro por 20s
   @type(["string"]) effects = new ArraySchema<string>(); // kinds ativos, só p/ HUD
 
   // não sincronizado (uso interno do servidor)
@@ -21,7 +22,7 @@ export class Player extends Schema {
 export class Collectible extends Schema {
   @type("number") x = 0;
   @type("number") z = 0;
-  @type("string") kind = "level_up"; // level_up | speed_up
+  @type("string") kind = "xp_orb"; // xp_orb | speed_up | coin_buff | farm_event | box (T-004)
 }
 
 export class ArenaState extends Schema {

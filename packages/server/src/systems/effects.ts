@@ -3,9 +3,16 @@
 // PERMANENTE do round no mesmo pipeline — nunca lógica de atributo solta no Room.
 import { ArraySchema } from "@colyseus/schema";
 import { Player } from "../state/ArenaState";
-import { SPEED_BOOST_MULT, SPEED_BOOST_MS, SPEED_MAX_MULT, ATTR_POINT_VALUE } from "@aop/shared";
+import {
+  SPEED_BOOST_MULT,
+  SPEED_BOOST_MS,
+  SPEED_MAX_MULT,
+  ATTR_POINT_VALUE,
+  XP_BOOST_MULT,
+  XP_BOOST_MS,
+} from "@aop/shared";
 
-export type EffectKind = "speed_up";
+export type EffectKind = "speed_up" | "xp_boost";
 
 interface ActiveEffect {
   kind: EffectKind;
@@ -25,6 +32,7 @@ interface PlayerEffectState {
 
 const DURATION: Record<EffectKind, number> = {
   speed_up: SPEED_BOOST_MS,
+  xp_boost: XP_BOOST_MS, // farm_event (T-004)
 };
 
 export class EffectSystem {
@@ -48,12 +56,24 @@ export class EffectSystem {
     this.recompute(player, s);
   }
 
-  /** Soma pontos de atributo permanentes do round (level-up chama isto — T-003). */
+  /** Soma pontos de atributo permanentes do round (level-up e box chamam isto — T-003/T-004). */
   addAttrPoints(playerId: string, player: Player, points: Partial<AttrPoints>) {
     const s = this.stateFor(playerId);
     s.attr.velocidade += points.velocidade ?? 0;
     s.attr.forca += points.forca ?? 0;
     s.attr.vitalidade += points.vitalidade ?? 0;
+    this.recompute(player, s);
+  }
+
+  /** Coins compram isto (T-004): redistribui o TOTAL de pontos já ganho entre os 3 atributos. */
+  rerollAttrPoints(playerId: string, player: Player) {
+    const s = this.stateFor(playerId);
+    const total = s.attr.velocidade + s.attr.forca + s.attr.vitalidade;
+    const cuts = [Math.random(), Math.random()].sort((a, b) => a - b);
+    const velocidade = Math.round(total * cuts[0]);
+    const forca = Math.round(total * (cuts[1] - cuts[0]));
+    const vitalidade = total - velocidade - forca;
+    s.attr = { velocidade, forca, vitalidade };
     this.recompute(player, s);
   }
 
@@ -80,6 +100,7 @@ export class EffectSystem {
     player.speed = Math.min(speed, SPEED_MAX_MULT);
     player.strength = 1 + s.attr.forca * ATTR_POINT_VALUE;
     player.vitality = 1 + s.attr.vitalidade * ATTR_POINT_VALUE;
+    player.xpMult = s.active.some((e) => e.kind === "xp_boost") ? XP_BOOST_MULT : 1;
     player.effects = new ArraySchema<string>(...s.active.map((e) => e.kind));
   }
 }

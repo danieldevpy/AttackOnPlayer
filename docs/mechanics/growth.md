@@ -24,15 +24,9 @@ coins → economia paralela (uso a decidir)
 - v2: escolha manual rápida (3 botões no respawn/level-up).
 - Implementação: atributos entram no `EffectSystem` como camada "permanente do round" (ADR-009) — mesmo pipeline, sem código novo de recompute.
 
-## Coletáveis expandidos (T-004)
-| Kind | Onde | Efeito |
-|---|---|---|
-| `xp_orb` | campo (substitui level_up) | +XP pequeno |
-| `speed_up` | campo | boost temporário (já existe) |
-| `farm_event` | zona de guerra, raro, anunciado | área dá XP em dobro por 20s |
-| `coin_buff` | campo | +coins / multiplicador de coins temporário |
-| `box` | zona de guerra, muito raro | skill/lançador + pontos de atributo |
+## Coletáveis expandidos (T-004 ✅ — tabela completa em mechanics/collectibles.md)
+`xp_orb`, `speed_up`, `coin_buff` nascem no campo (raros em zona safe); `farm_event`/`box` só na zona de guerra. Zona escolhe o *pool* de pesos (`FIELD_WEIGHTS`/`SAFE_WEIGHTS`/`WAR_WEIGHTS`), não uma lista fixa por kind.
 
-## Decisões do CD (2026-07-04 — desbloqueiam T-004)
-1. **Box "reset de MU":** dá bônus forte só no round (atributos + skill, mesmo pipeline do EffectSystem) **e** soma pontos num acumulador persistente por `playerToken` (ADR-012). O acumulador só é visível com `DEV_MODE` ligado (painel debug) e não influencia o poder dentro do round nem o balanceamento entre salas ainda — isso é scaffold para o M3 (matchmaking/múltiplas salas).
-2. **Coins compram reroll:** ao juntar `COIN_REROLL_COST` coins, o jogador pode re-rolar a distribuição automática de atributos do nível mais recente (reusa o preset de T-003, sem UI de loja nova). Precursor da "escolha manual" (v2).
+## Decisões do CD (2026-07-04 — desbloquearam T-004)
+1. **Box "reset de MU":** dá bônus forte só no round (atributos, mesmo pipeline do EffectSystem — `BOX_ATTR_BONUS_EACH`, 3× o de um level-up normal) **e** vai somar pontos num acumulador persistente por `playerToken` quando o scaffold (T-004b/ADR-012) estiver pronto. O acumulador só é visível com `DEV_MODE` ligado (painel debug, T-007) e não influencia o poder dentro do round nem o balanceamento entre salas ainda. Skill/lançador do box fica pendente de T-005 (lançadores não existem ainda) — quando chegar, box passa a também sortear um lançador.
+2. **Coins compram reroll:** implementado — `EffectSystem.rerollAttrPoints` redistribui o TOTAL de pontos já ganhos entre os 3 atributos (mantém a soma, muda a proporção). Custa `COIN_REROLL_COST` coins, acionado pela tecla R no cliente (placeholder de UI — vira botão de verdade quando F2/F3 de UI entrar em pauta).

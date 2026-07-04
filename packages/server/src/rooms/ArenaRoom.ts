@@ -6,16 +6,17 @@ import {
   GameMap,
   buildMap,
   isWall,
+  zoneAt,
   mapSizeFor,
   moveWithCollision,
   spawnPoints,
   collectibleBudget,
+  pickWeighted,
   TICK_RATE,
   PLAYER_SPEED,
   PLAYER_RADIUS,
   MAX_PLAYERS,
   COLLECT_DIST,
-  SPEED_UP_CHANCE,
   SPAWN_MIN_PLAYER_DIST,
   RESPAWN_DELAY_MIN_MS,
   RESPAWN_DELAY_MAX_MS,
@@ -23,6 +24,13 @@ import {
   xpToNext,
   XP_PICKUP_AMOUNT,
   ATTR_POINTS_PER_LEVEL_EACH,
+  SAFE_ZONE_SPAWN_CHANCE,
+  SAFE_WEIGHTS,
+  WAR_WEIGHTS,
+  FIELD_WEIGHTS,
+  COIN_BUFF_AMOUNT,
+  BOX_ATTR_BONUS_EACH,
+  COIN_REROLL_COST,
 } from "@aop/shared";
 
 export class ArenaRoom extends Room<ArenaState> {
@@ -58,6 +66,14 @@ export class ArenaRoom extends Room<ArenaState> {
     });
 
     this.onMessage("ping", (client, t: number) => client.send("pong", t));
+
+    // T-004: coins compram reroll da distribuição de atributos (não gasta se não puder pagar)
+    this.onMessage("reroll", (client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.coins < COIN_REROLL_COST) return;
+      p.coins -= COIN_REROLL_COST;
+      this.effects.rerollAttrPoints(client.sessionId, p);
+    });
 
     this.setSimulationInterval((dt) => this.update(dt / 1000), 1000 / TICK_RATE);
     console.log(
@@ -109,10 +125,27 @@ export class ArenaRoom extends Room<ArenaState> {
       this.state.players.forEach((p, pid) => {
         if (Math.hypot(p.x - c.x, p.z - c.z) >= COLLECT_DIST) return;
         this.state.collectibles.delete(cid);
-        if (c.kind === "speed_up") {
-          this.effects.apply(pid, p, "speed_up", now);
-        } else {
-          this.grantXp(pid, p, XP_PICKUP_AMOUNT);
+        switch (c.kind) {
+          case "speed_up":
+            this.effects.apply(pid, p, "speed_up", now);
+            break;
+          case "coin_buff":
+            p.coins += COIN_BUFF_AMOUNT;
+            break;
+          case "farm_event":
+            this.effects.apply(pid, p, "xp_boost", now);
+            break;
+          case "box":
+            // bônus forte no round (vs. 1 do level-up normal); persistência entre
+            // partidas (ADR-012) é ligada em T-004b, sem tocar este pipeline.
+            this.effects.addAttrPoints(pid, p, {
+              velocidade: BOX_ATTR_BONUS_EACH,
+              forca: BOX_ATTR_BONUS_EACH,
+              vitalidade: BOX_ATTR_BONUS_EACH,
+            });
+            break;
+          default:
+            this.grantXp(pid, p, XP_PICKUP_AMOUNT);
         }
         this.metrics.addPickup(pid, c.kind);
       });
@@ -131,7 +164,8 @@ export class ArenaRoom extends Room<ArenaState> {
 
   /** XP → nível → pontos de atributo (T-003). Loop cobre XP suficiente p/ vários níveis de uma vez. */
   private grantXp(id: string, p: Player, amount: number) {
-    p.xp += amount;
+    p.xp += amount * p.xpMult; // xp_boost (farm_event) dobra o ganho — T-004
+
     while (p.xp >= xpToNext(p.level)) {
       p.xp -= xpToNext(p.level);
       p.level += 1;
@@ -143,6 +177,7 @@ export class ArenaRoom extends Room<ArenaState> {
     }
   }
 
+  /** T-004: zona decide o pool de kinds; safe também é suprimida (rara), guerra já é rara por ser pequena. */
   private spawnCollectible(): boolean {
     // amostragem aleatória (mapa grande: varrer tudo por spawn seria caro)
     for (let attempt = 0; attempt < 40; attempt++) {
@@ -151,6 +186,8 @@ export class ArenaRoom extends Room<ArenaState> {
       if (isWall(this.map, tx, tz)) continue;
       const cx = tx + 0.5;
       const cz = tz + 0.5;
+      const zone = zoneAt(this.map, cx, cz);
+      if (zone === "safe" && Math.random() > SAFE_ZONE_SPAWN_CHANCE) continue;
       let blocked = false;
       this.state.players.forEach((p) => {
         if (Math.abs(p.x - cx) + Math.abs(p.z - cz) < SPAWN_MIN_PLAYER_DIST) blocked = true;
@@ -162,8 +199,10 @@ export class ArenaRoom extends Room<ArenaState> {
       const c = new Collectible();
       c.x = cx;
       c.z = cz;
-      c.kind = Math.random() < SPEED_UP_CHANCE ? "speed_up" : "level_up";
+      const weights = zone === "safe" ? SAFE_WEIGHTS : zone === "war" ? WAR_WEIGHTS : FIELD_WEIGHTS;
+      c.kind = pickWeighted(Math.random, weights);
       this.state.collectibles.set(`c${this.collectibleSeq++}`, c);
+      if (c.kind === "farm_event") this.broadcast("announce", { kind: "farm_event", x: cx, z: cz });
       return true;
     }
     return false; // mapa lotado perto de todo mundo — sem drop (design!)

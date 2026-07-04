@@ -1,20 +1,19 @@
 # Coletáveis (mapa vivo — ADR-006)
 
-## Tipos (desde SPEC-0002)
-| Kind | Visual (F1) | Efeito |
-|---|---|---|
-| `level_up` | esfera dourada | +1 nível |
-| `speed_up` | octaedro ciano | velocidade ×1.5 por 8s (ver mechanics/skills.md) |
-
-Proporção de spawn: 70% level_up / 30% speed_up.
+## Tipos (T-004 ✅ — substitui SPEC-0002)
+| Kind | Visual (F1) | Efeito | Onde nasce |
+|---|---|---|---|
+| `xp_orb` | esfera dourada | +XP (curva de nível, growth.md) | campo, raro em safe |
+| `speed_up` | octaedro ciano | velocidade ×1.5 por 8s | campo, raro em safe |
+| `coin_buff` | cilindro achatado amarelo | +coins (compram reroll de atributo) | campo |
+| `farm_event` | cone verde | XP em dobro por 20s (efeito `xp_boost`), anunciado no HUD | só zona de guerra |
+| `box` | cubo roxo | bônus forte de atributo no round + acumulador persistente (ADR-012) | só zona de guerra, muito raro |
 
 - Spawner roda no tick do servidor: orçamento escala com a área (~1 por 160 tiles, mín. 5).
-- Célula candidata: livre (sem parede) e a ≥ 4 tiles (Manhattan) de qualquer jogador.
-- Coleta: distância < 0.6 do centro → +1 nível (M0) e evento de métrica.
+- Célula candidata: livre (sem parede), a ≥ 4 tiles (Manhattan) de qualquer jogador, **e a zona decide o pool de kinds**: `SAFE_WEIGHTS`/`WAR_WEIGHTS`/`FIELD_WEIGHTS` (constants.ts). Zona safe também sofre supressão (`SAFE_ZONE_SPAWN_CHANCE`) — a maioria das tentativas ali é descartada.
+- farm_event/box já nascem raros de graça: a zona de guerra é geograficamente pequena perto da área total do mapa — não precisa de nenhuma lógica extra de raridade global, só o peso relativo dentro do pool da zona.
+- Coleta: distância < 0.6 do centro → efeito por kind (ver tabela) + evento de métrica (`pickupsByKind`).
 - Respawn com atraso de 2–5s para criar deslocamento constante.
-
-## Expansão planejada (T-004 — ver growth.md)
-xp_orb, farm_event (zona de guerra, XP em dobro na área), coin_buff, box (skill + pontos; regra de persistência pendente de decisão do CD).
 
 ## Evolução
 - M2: raridade ponderada pela **aura** de quem está na região (aura ↑ = chance de item de qualidade maior naquela célula vazia — oportunidade, não garantia).

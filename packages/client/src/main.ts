@@ -158,6 +158,9 @@ async function connect() {
     room = await client.joinOrCreate(ROOM_NAME, { name: `web-${Math.floor(Math.random() * 999)}` });
     mySessionId = room.sessionId;
     room.onMessage("pong", (t: number) => (ping = Math.round(performance.now() - t)));
+    room.onMessage("announce", (msg: { kind: string }) => {
+      if (msg.kind === "farm_event") announceUntil = performance.now() + 6000;
+    });
     setInterval(() => room?.send("ping", performance.now()), 2000);
     setInterval(sendInput, 1000 / 20);
   } catch (e) {
@@ -167,8 +170,12 @@ async function connect() {
 connect();
 
 // ---------- Input (teclado; touch no M1) ----------
+let announceUntil = 0;
 const keys = new Set<string>();
-addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
+addEventListener("keydown", (e) => {
+  keys.add(e.key.toLowerCase());
+  if (e.key.toLowerCase() === "r") room?.send("reroll"); // T-004: coins compram reroll de atributo
+});
 addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 let lastInput = { x: 0, z: 0 };
 function sendInput() {
@@ -250,9 +257,12 @@ function updateHud(now: number) {
     `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
     `nível: ${me?.level ?? "-"} (xp ${me?.xp ?? 0}/${xpNeed})` +
     (fx.includes("speed_up") ? `  ⚡x${me.speed}` : "") +
+    (fx.includes("xp_boost") ? `  2xXP` : "") +
     `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vitalidade ${me?.vitality?.toFixed(2) ?? "-"}` +
+    `\ncoins: ${me?.coins ?? 0}  (R = reroll de atributo)` +
     `\nmapa: ${st?.mapW ?? "?"}x${st?.mapH ?? "?"}\n` +
-    `WASD/setas para mover`;
+    `WASD/setas para mover` +
+    (now < announceUntil ? `\n\n🔥 farm_event na zona de guerra!` : "");
 
   if (now < rosterNext || !st?.players) return;
   rosterNext = now + 250;
@@ -265,6 +275,7 @@ function updateHud(now: number) {
       <span class="name">${p.name}${self ? " (você)" : ""}</span>
       ${p.isBot ? `<span class="tag">BOT</span>` : ""}
       ${fx2.includes("speed_up") ? `<span class="tag">⚡</span>` : ""}
+      ${fx2.includes("xp_boost") ? `<span class="tag">2xXP</span>` : ""}
       <span class="lvl">lv${p.level}</span>
     </div>`;
   });

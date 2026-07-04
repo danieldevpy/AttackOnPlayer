@@ -11,7 +11,7 @@ export interface PlayerSession {
   durationS?: number;
   distance: number;
   pickups: number;
-  pickupsSpeed: number;
+  pickupsByKind: Record<string, number>; // xp_orb/speed_up/coin_buff/farm_event/box (T-004)
   levelStart: number;
   levelEnd?: number;
 }
@@ -31,7 +31,7 @@ export class MetricsRecorder {
       joinedAt: Date.now(),
       distance: 0,
       pickups: 0,
-      pickupsSpeed: 0,
+      pickupsByKind: {},
       levelStart: level,
     });
   }
@@ -41,11 +41,11 @@ export class MetricsRecorder {
     if (s) s.distance += d;
   }
 
-  addPickup(playerId: string, kind: string = "level_up") {
+  addPickup(playerId: string, kind: string = "xp_orb") {
     const s = this.sessions.get(playerId);
     if (!s) return;
     s.pickups += 1;
-    if (kind === "speed_up") s.pickupsSpeed += 1;
+    s.pickupsByKind[kind] = (s.pickupsByKind[kind] ?? 0) + 1;
   }
 
   end(playerId: string, levelEnd: number) {

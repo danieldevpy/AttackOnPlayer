@@ -1,5 +1,13 @@
 # Devlog
 
+## 2026-07-04 — Sessão 3 (cont.): T-004
+- Coletáveis expandidos: xp_orb, speed_up, coin_buff (campo), farm_event/box (só zona de guerra, já raros de graça pelo tamanho da zona). Zona safe ganhou supressão de spawn própria.
+- farm_event reusa EffectSystem (`xp_boost`); box dá bônus de atributo 3× maior; coins compram reroll da distribuição de atributos.
+- Métricas passam a registrar pickups por kind.
+- Verificado: testes 5/5, tsc limpo, 4 bots mostraram os 4 kinds de campo/guerra nas métricas (incl. 1 farm_event). Detalhe em PROMPT-0007.md.
+- Aprendizado: dois `tsx watch` concorrentes brigando pela porta 2567 travaram o servidor em loop de crash — sempre `pgrep -af "src/index.ts"` antes de investigar erro de conexão.
+- Próximo: T-004b (scaffold de progressão persistente).
+
 ## 2026-07-04 — Sessão 3 (cont.): T-003
 - XP/nível via curva (`xpToNext`), atributos força/velocidade/vitalidade como segunda camada do EffectSystem existente (mesmo `recompute()`, preset equilibrado: 1 ponto em cada por nível, +4%/ponto).
 - Primeiro teste unitário do projeto (vitest, `constants.test.ts`) — dívida registrada em LEAD_DESIGNER_NOTES começou a ser paga.

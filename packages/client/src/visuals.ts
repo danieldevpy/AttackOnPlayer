@@ -7,11 +7,17 @@ export const VISUAL_PHASE: 1 | 2 | 3 | 4 = 1;
 
 const playerGeo = new THREE.CapsuleGeometry(0.35, 0.5, 4, 8);
 const ringGeo = new THREE.RingGeometry(0.45, 0.58, 24);
-const levelUpGeo = new THREE.SphereGeometry(0.25, 12, 12);
+const xpOrbGeo = new THREE.SphereGeometry(0.25, 12, 12);
 const speedUpGeo = new THREE.OctahedronGeometry(0.28);
+const coinBuffGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.08, 16);
+const farmEventGeo = new THREE.ConeGeometry(0.28, 0.4, 4);
+const boxLootGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
 
-const levelUpMat = new THREE.MeshLambertMaterial({ color: 0xffd54f, emissive: 0x7a5c00 });
+const xpOrbMat = new THREE.MeshLambertMaterial({ color: 0xffd54f, emissive: 0x7a5c00 });
 const speedUpMat = new THREE.MeshLambertMaterial({ color: 0x26c6da, emissive: 0x005662 });
+const coinBuffMat = new THREE.MeshLambertMaterial({ color: 0xffc107, emissive: 0x7a5c00 });
+const farmEventMat = new THREE.MeshLambertMaterial({ color: 0x66bb6a, emissive: 0x1b4d1e });
+const boxLootMat = new THREE.MeshLambertMaterial({ color: 0x8e24aa, emissive: 0x3a0d47 });
 
 /** Cor estável por id (inimigos variam de tom, mas o ANEL é o sinal). */
 export function colorFor(id: string): number {
@@ -52,9 +58,18 @@ export function createPlayerVisual(id: string, isSelf: boolean): THREE.Group {
 }
 
 export function createCollectibleVisual(kind: string): THREE.Mesh {
-  return kind === "speed_up"
-    ? new THREE.Mesh(speedUpGeo, speedUpMat)
-    : new THREE.Mesh(levelUpGeo, levelUpMat);
+  switch (kind) {
+    case "speed_up":
+      return new THREE.Mesh(speedUpGeo, speedUpMat);
+    case "coin_buff":
+      return new THREE.Mesh(coinBuffGeo, coinBuffMat);
+    case "farm_event":
+      return new THREE.Mesh(farmEventGeo, farmEventMat);
+    case "box":
+      return new THREE.Mesh(boxLootGeo, boxLootMat);
+    default:
+      return new THREE.Mesh(xpOrbGeo, xpOrbMat);
+  }
 }
 
 /**

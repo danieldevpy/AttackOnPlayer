@@ -13,8 +13,7 @@ export const PLAYER_RADIUS = 0.35;
 export const MAX_PLAYERS = 8;
 
 // Coletáveis (ADR-006: nascem longe de jogadores)
-export type CollectibleKind = "level_up" | "speed_up";
-export const SPEED_UP_CHANCE = 0.3; // 30% speed_up / 70% level_up
+export type CollectibleKind = "xp_orb" | "speed_up" | "coin_buff" | "farm_event" | "box";
 export const COLLECT_DIST = 0.6;
 export const SPAWN_MIN_PLAYER_DIST = 4; // tiles (Manhattan)
 export const RESPAWN_DELAY_MIN_MS = 2000;
@@ -30,6 +29,40 @@ export function collectibleBudget(w: number, h: number): number {
 export const PROP_DENSITY = 0.04; // ~4% dos tiles internos viram prop colidível
 export const SAFE_ZONE_RADIUS = 6; // tiles ao redor de cada spawn (também afasta props)
 export const WAR_ZONE_RADIUS = 10; // tiles ao redor do(s) ponto(s) quente(s)
+
+// Coletáveis expandidos + spawn por zona (T-004, docs/mechanics/growth.md)
+// A raridade de farm_event/box já vem de graça do tamanho da zona de guerra (pequena
+// perto da área total do mapa) — os pesos abaixo só decidem QUAL kind nasce ali dentro.
+export const SAFE_ZONE_SPAWN_CHANCE = 0.3; // maioria das tentativas em zona safe é descartada (rara)
+export const FIELD_WEIGHTS: Array<[CollectibleKind, number]> = [
+  ["xp_orb", 0.6],
+  ["speed_up", 0.25],
+  ["coin_buff", 0.15],
+];
+export const SAFE_WEIGHTS: Array<[CollectibleKind, number]> = [
+  ["xp_orb", 0.7],
+  ["speed_up", 0.3],
+];
+export const WAR_WEIGHTS: Array<[CollectibleKind, number]> = [
+  ["farm_event", 0.85],
+  ["box", 0.15],
+];
+
+export const COIN_BUFF_AMOUNT = 10;
+export const XP_BOOST_MULT = 2; // farm_event: XP em dobro
+export const XP_BOOST_MS = 20000;
+export const BOX_ATTR_BONUS_EACH = 3; // box: bônus forte no round (vs. 1 do level-up normal)
+
+/** Sorteio ponderado — usado para escolher o kind do coletável dentro da zona. */
+export function pickWeighted<T extends string>(rnd: () => number, weights: Array<[T, number]>): T {
+  const total = weights.reduce((sum, [, w]) => sum + w, 0);
+  let roll = rnd() * total;
+  for (const [kind, w] of weights) {
+    roll -= w;
+    if (roll <= 0) return kind;
+  }
+  return weights[weights.length - 1][0];
+}
 
 // Crescimento — XP, nível, atributos (T-003, docs/mechanics/growth.md)
 export const XP_BASE = 20;

@@ -19,7 +19,7 @@
 **Contexto:** docs/mechanics/growth.md · packages/server/src/systems/effects.ts · packages/server/src/state/ArenaState.ts · packages/shared/src/constants.ts
 **Aceite:** coletar dá XP e sobe nível pela curva; atributos refletem no estado; teste unitário da curva.
 
-## T-004 — Coletáveis expandidos + spawn por zona 〔M〕 · depende: T-001, T-003
+## T-004 — Coletáveis expandidos + spawn por zona 〔M〕 ✅ (PROMPT-0007) · depende: T-001, T-003
 **Objetivo:** xp_orb, farm_event, coin_buff, box (conforme growth.md); pesos de spawn por zona (guerra = raros). Box: bônus forte no round + soma no acumulador persistente por playerToken (ADR-012, painel visível só em T-007/DEV_MODE). Coins: reroll de atributo (COIN_REROLL_COST).
 **Contexto:** docs/mechanics/growth.md · docs/DECISION_LOG.md (ADR-012) · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/visuals.ts
 **Aceite:** box só nasce em zona de guerra; farm_event anunciado no HUD; métricas registram por kind; reroll consome coins e reaplica preset de atributo.
