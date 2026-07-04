@@ -1,5 +1,17 @@
 # Devlog
 
+## 2026-07-04 — Sessão 3 (bugfix pós-teste): respawn e hitbox
+- Relato do CD após teste manual: depois de matar outro player, houve dúvida se o respawn era aleatório/seguro e o tiro pareceu não acertar novamente após o respawn.
+- Diagnóstico: respawn era sorteado entre spawns safe, sem avaliar distância de outros players; além disso, dano em safe zone era bloqueado silenciosamente, parecendo falha de hitbox. A colisão do projétil também testava só a posição final do tick.
+- Correções: respawn agora escolhe o spawn com melhor distância/risco, zera input/tiro ao renascer, projétil usa colisão por segmento contra o player, tiro bloqueado por safe zone consome o projétil e emite evento `safe_block`, e vitalidade agora recalcula `maxHp`.
+- Verificado: typecheck limpo em server/client/bots e 10/10 testes do shared.
+
+## 2026-07-04 — Sessão 3 (retomada): T-007
+- Modo debug dinâmico fechado para teste: overlay F3 com snapshot vivo de sala/player/todos os players, feed de eventos, botão de fechar e histórico local.
+- Servidor expõe `/debug/rooms` com salas ativas, mapa, budget, projéteis e ring buffer dos últimos eventos; eventos `spawn`, `pickup`, `hit`, `death` e `disconnect` entram no buffer e só são enviados por WebSocket com `DEBUG=1`.
+- Bots ganharam `BOT_VERBOSE=1` para logar decisão de alvo/caminho e consomem `debug_event` sem poluir o terminal quando `DEBUG=1`.
+- Verificado: typecheck limpo em server/client/bots e 10/10 testes do shared. Próximo: T-008 (Bots de combate).
+
 ## 2026-07-04 — Sessão 3 (cont.): T-006
 - Morte, respawn e perda de nível.
 - ProjectileSystem agora retorna as mortes confirmadas para o `ArenaRoom`.

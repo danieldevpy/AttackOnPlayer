@@ -10,6 +10,8 @@ import {
   ATTR_POINT_VALUE,
   XP_BOOST_MULT,
   XP_BOOST_MS,
+  ATTR_POINTS_PER_LEVEL_EACH,
+  PLAYER_BASE_HP,
 } from "@aop/shared";
 
 export type EffectKind = "speed_up" | "xp_boost";
@@ -108,6 +110,8 @@ export class EffectSystem {
     player.speed = Math.min(speed, SPEED_MAX_MULT);
     player.strength = 1 + s.attr.forca * ATTR_POINT_VALUE;
     player.vitality = 1 + s.attr.vitalidade * ATTR_POINT_VALUE;
+    player.maxHp = Math.round(PLAYER_BASE_HP * player.vitality);
+    player.hp = Math.min(player.hp, player.maxHp);
     player.xpMult = s.active.some((e) => e.kind === "xp_boost") ? XP_BOOST_MULT : 1;
     player.effects = new ArraySchema<string>(...s.active.map((e) => e.kind));
   }

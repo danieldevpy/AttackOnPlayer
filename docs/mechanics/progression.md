@@ -6,6 +6,7 @@
 ## Perda de nível na morte (T-006, decisão do CD 2026-07-04)
 - Piso nos níveis 1–3: perda mínima (protege jogador casual/iniciante).
 - Acima do piso: perda escala com o nível — `lossFraction(level)` cresce de forma linear/clamped até um teto (perto de reset, mas não travado em 100% por padrão). Números exatos batidos em `constants.ts` na implementação.
+- Respawn após morte nasce em uma safe zone escolhida por risco: o servidor pontua os spawns por distância de players vivos e projéteis recentes, em vez de usar sorte pura. O input/tiro do player é zerado ao renascer.
 - **Reset total** (derruba pra nível 1) existe como **opção ativável** — flag por room (`fullResetOnDeath`) com default global configurável — não é o comportamento único.
 - Fora de escopo agora (depende de combate/Aura existirem de verdade — ver LEAD_DESIGNER_NOTES 2026-07-04): crítico, armadura/defesa, aura decidindo chance de sobreviver. Registrado para quando M2 (Aura) entrar em pauta.
 

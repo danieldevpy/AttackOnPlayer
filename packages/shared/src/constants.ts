@@ -9,6 +9,7 @@ export const TILE = 1; // 1 tile = 1 unidade de mundo
 export const TICK_RATE = 20; // simulações/s no servidor
 export const PLAYER_SPEED = 4; // unidades/s (base — ver mechanics/skills.md)
 export const PLAYER_RADIUS = 0.35;
+export const PLAYER_BASE_HP = 100;
 
 export const MAX_PLAYERS = 8;
 
