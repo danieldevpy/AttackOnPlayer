@@ -19,6 +19,8 @@
 
 Detalhe completo: `docs/prompts/PROMPT-0019.md`.
 
+**Correção de documentação (pedido explícito do CD):** `ROADMAP.md`, `VISAO-ATUAL.md` e `mechanics/PLAYER_LOOP.md` estavam desatualizados havia várias entregas (ainda diziam "T-008 pendente" e "bots não atiram", quando T-008 e a SPEC-0003 inteira já estavam prontas) — trazidos de volta à realidade. `QA.md` ganhou o gate que faltava (`npx vitest run` do `server`, que já existia mas não estava documentado) e a matriz de features atualizada.
+
 ## Próximo passo sugerido
 
 Nenhuma pendência de código conhecida. Falta só:

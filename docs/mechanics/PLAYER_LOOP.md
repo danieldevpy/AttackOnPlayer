@@ -74,8 +74,10 @@ Ao morrer, `resetAttrToLevel` volta ao preset equilibrado do **novo** nível —
 
 ## Combate
 
-- Input: **click** define direção; servidor aplica cooldown (~600 ms no `basic_shot`)
-- Projétil: alcance ~8u; some em prop ou ao acertar
+- **Mira ≠ gatilho** (T-009/T-010): o facing (`Player.dir`) segue o mouse quando ele se move na tela, senão segue a última direção de movimento, e nunca zera parado. Espaço e clique são o mesmo gatilho — os dois disparam **na direção do facing atual**, não numa direção mandada pelo input.
+- Servidor aplica cooldown (~600 ms no `basic_shot`); projétil nasce na borda do player (offset de raio) na posição autoritativa do tick — sem atraso ao atirar em movimento.
+- Projétil: alcance ~8u; some em prop ou ao acertar.
+- **Ganchos de mobilidade por lançador** (T-012, opcional em `LauncherDef.movement`): lentidão do atirador ao disparar e/ou herança de velocidade pelo projétil. `basic_shot` não usa nenhum; existe um lançador de teste (`heavy_shot_dev`) só em dev (`DEBUG=1` + mensagem `dev_launcher`).
 - **Safe zone:** bloqueia dano; projétil é consumido; debug emite `safe_block` (não é hitbox quebrada)
 - Colisão: segmento do projétil no tick vs círculo do player (`PLAYER_RADIUS`)
 
@@ -96,10 +98,10 @@ Flag opcional `fullResetOnDeath` (por room) — ver `progression.md`.
 
 ## Debug (desenvolvimento)
 
-- **F3:** overlay com estado + feed de eventos
-- **`GET /debug/rooms`:** salas ativas, ring buffer (200 eventos)
-- **`DEBUG=1`:** eventos também via WebSocket
-- **`BOT_VERBOSE=1`:** logs de decisão dos bots
+- **F3:** overlay com estado + feed de eventos ao vivo — sempre ativo, não depende de env var no servidor (bugfix pós-teste manual)
+- **`GET /debug/rooms`:** salas ativas, ring buffer (200 eventos) — sempre ativo
+- **`DEBUG=1`:** só habilita a mensagem dev-only `dev_launcher` (T-012, trocar lançador manualmente)
+- **`BOT_VERBOSE=1`:** logs de decisão dos bots (alvo, caminho, fuga, `"preso — escapando lateralmente"` do anti-stuck)
 
 ---
 
@@ -108,4 +110,4 @@ Flag opcional `fullResetOnDeath` (por room) — ver `progression.md`.
 - Aura, crítico, armadura (M2+)
 - Matchmaking por nível (M3)
 - Acumulador persistente da box **aplicado** ao round (scaffold only)
-- Bots não atiram sozinhos — combate PvP manual ou T-008
+- Personalidade/atributos sorteados de bot + modo boss (T-008b) — hoje só a skill `fraco/medio/forte` varia

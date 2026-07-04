@@ -1,5 +1,11 @@
 # Devlog
 
+## 2026-07-04 — Sessão 5 (cont., docs): correção de documentação desatualizada
+- Pedido do CD: documentar corretamente o bugfix anterior seguindo o padrão do projeto, e relatar estado atual + próximos passos.
+- Ao revisar contra `AGENTS.md`/`DOC_MAP.md`, achado: `ROADMAP.md`, `VISAO-ATUAL.md` e `mechanics/PLAYER_LOOP.md` estavam **desatualizados de várias entregas atrás** — ainda diziam "T-008 pendente" e "bots não atiram sozinhos", quando T-008 (bots de combate) e a SPEC-0003 inteira (facing/mira/gatilhos) já estavam prontas e testadas. `QA.md` também não documentava o gate `npx vitest run` do `server` (existia e já rodava nesta sessão, só não estava no checklist).
+- Corrigido: `ROADMAP.md` (linha do M1 reflete SPEC-0003 completa), `VISAO-ATUAL.md` (reescrito — tabela "o que já funciona" com facing/gatilho/ganchos de mobilidade/bots de combate/anti-stuck), `PLAYER_LOOP.md` (seções Combate e Debug reescritas pro modelo mira≠gatilho e F3 sempre-on), `QA.md` (gate do server no checklist, matriz de features com as novas mecânicas, remoção da entrada obsoleta "T-008 bots atiram" da lista de "não bloqueia merge").
+- Sem mudança de código nesta entrada — só documentação. Nenhum `PROMPT-NNNN` novo (mesmo padrão da sessão de docs anterior, ver DEVLOG "Sessão 3 (docs)").
+
 ## 2026-07-04 — Sessão 5 (cont.): bugfix pós-teste manual (F3, ritmo de ataque, anti-stuck)
 - CD testou a SPEC-0003 completa no browser + bots e relatou 3 problemas (PROMPT-0019):
   1. **F3 sem log:** o broadcast do feed de eventos exigia `DEBUG=1` no servidor além de abrir F3 no cliente — um segundo interruptor escondido. Removida a checagem; o feed agora sempre acompanha o ring buffer/`/debug/rooms`, que já eram sempre-on. `DEBUG=1` sobra só pro `dev_launcher` (T-012).
