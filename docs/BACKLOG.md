@@ -4,7 +4,7 @@
 
 ---
 
-## T-001 — Pivô: mapa campo aberto com props e zonas 〔M〕
+## T-001 — Pivô: mapa campo aberto com props e zonas 〔M〕 ✅ (PROMPT-0004)
 **Objetivo:** substituir labirinto por campo aberto (ADR-010): props colidíveis esparsos (~4%) + zonas safe/guerra/campo derivadas do seed. Zonas sincronizadas (cliente pinta o chão), sem região fechada.
 **Contexto:** docs/mechanics/world.md · packages/shared/src/map.ts · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/main.ts
 **Aceite:** bots BFS continuam coletando; chão muda de cor por zona; nenhum prop bloqueia spawn.

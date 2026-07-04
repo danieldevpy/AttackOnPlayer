@@ -26,6 +26,11 @@ export function collectibleBudget(w: number, h: number): number {
   return Math.max(5, Math.floor((w * h) / 160));
 }
 
+// Mundo aberto — props e zonas (ADR-010, T-001)
+export const PROP_DENSITY = 0.04; // ~4% dos tiles internos viram prop colidível
+export const SAFE_ZONE_RADIUS = 6; // tiles ao redor de cada spawn (também afasta props)
+export const WAR_ZONE_RADIUS = 10; // tiles ao redor do(s) ponto(s) quente(s)
+
 // Efeitos (ADR-009)
 export const SPEED_BOOST_MULT = 1.5;
 export const SPEED_BOOST_MS = 8000;

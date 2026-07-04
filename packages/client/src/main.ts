@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
-import { buildMap, TILE_WALL, ROOM_NAME, SERVER_PORT } from "@aop/shared";
+import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual } from "./visuals";
 
 const hud = document.getElementById("hud")!;
@@ -48,25 +48,86 @@ function buildWorld(w: number, h: number, seed: number) {
   grid.position.set(w / 2, 0.01, h / 2);
   scene.add(grid);
 
-  const wallCells: Array<[number, number]> = [];
-  for (let z = 0; z < h; z++)
-    for (let x = 0; x < w; x++) if (map.cells[z * w + x] === TILE_WALL) wallCells.push([x, z]);
-  const walls = new THREE.InstancedMesh(
+  // borda do mapa: contém a arena (campo aberto não tem labirinto — ADR-010/T-001)
+  const perimeter: Array<[number, number]> = [];
+  for (let x = 0; x < w; x++) {
+    perimeter.push([x, 0]);
+    perimeter.push([x, h - 1]);
+  }
+  for (let z = 1; z < h - 1; z++) {
+    perimeter.push([0, z]);
+    perimeter.push([w - 1, z]);
+  }
+  const border = new THREE.InstancedMesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshLambertMaterial({ color: 0x616161 }),
-    wallCells.length
+    perimeter.length
   );
   const m = new THREE.Matrix4();
-  wallCells.forEach(([x, z], i) => {
+  perimeter.forEach(([x, z], i) => {
     m.setPosition(x + 0.5, 0.5, z + 0.5);
-    walls.setMatrixAt(i, m);
+    border.setMatrixAt(i, m);
   });
-  scene.add(walls);
+  scene.add(border);
+
+  // props esparsos: placeholder por tipo (pré-modelos chegam em T-002)
+  const PROP_COLOR: Record<string, number> = {
+    pedra: 0x9e9e9e,
+    arvore: 0x33691e,
+    caixa: 0x8d6e63,
+    muro: 0x4e4e4e,
+  };
+  const byType = new Map<string, typeof map.props>();
+  map.props.forEach((p) => {
+    if (!byType.has(p.type)) byType.set(p.type, []);
+    byType.get(p.type)!.push(p);
+  });
+  byType.forEach((list, type) => {
+    const mesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshLambertMaterial({ color: PROP_COLOR[type] ?? 0x757575 }),
+      list.length
+    );
+    list.forEach((p, i) => {
+      m.makeScale(p.w, 1, p.h);
+      m.setPosition(p.x + p.w / 2, 0.5, p.z + p.h / 2);
+      mesh.setMatrixAt(i, m);
+    });
+    scene.add(mesh);
+  });
+
+  // zonas: cliente pinta o chão a partir do mesmo seed (ADR-010), sem tráfego extra
+  const ZONE_COLOR = { safe: 0x2f6fa8, war: 0x8a2f2f } as const;
+  const zoneTiles: Record<"safe" | "war", Array<[number, number]>> = { safe: [], war: [] };
+  for (let z = 1; z < h - 1; z++) {
+    for (let x = 1; x < w - 1; x++) {
+      if (isWall(map, x, z)) continue;
+      const kind = zoneAt(map, x + 0.5, z + 0.5);
+      if (kind === "field") continue;
+      zoneTiles[kind].push([x, z]);
+    }
+  }
+  const rot = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+  (Object.keys(zoneTiles) as Array<"safe" | "war">).forEach((kind) => {
+    const tiles = zoneTiles[kind];
+    if (!tiles.length) return;
+    const mesh = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({ color: ZONE_COLOR[kind], transparent: true, opacity: 0.45 }),
+      tiles.length
+    );
+    tiles.forEach(([x, z], i) => {
+      const tile = rot.clone();
+      tile.setPosition(x + 0.5, 0.015, z + 0.5);
+      mesh.setMatrixAt(i, tile);
+    });
+    scene.add(mesh);
+  });
 
   camera.position.set(w / 2, 15, h / 2 + 8);
   camera.lookAt(w / 2, 0, h / 2);
   worldBuilt = true;
-  console.log(`[client] mundo ${w}x${h} (seed ${seed}), ${wallCells.length} blocos`);
+  console.log(`[client] mundo ${w}x${h} (seed ${seed}), ${map.props.length} props, ${map.zones.length} zonas`);
 }
 
 // ---------- Entidades dinâmicas ----------
