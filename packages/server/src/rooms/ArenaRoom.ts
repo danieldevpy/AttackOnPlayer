@@ -31,7 +31,6 @@ import {
   RESPAWN_FAST_MS,
   xpToNext,
   XP_PICKUP_AMOUNT,
-  ATTR_POINTS_PER_LEVEL_EACH,
   SAFE_ZONE_SPAWN_CHANCE,
   SAFE_WEIGHTS,
   WAR_WEIGHTS,
@@ -42,6 +41,10 @@ import {
   lossFraction,
   XP_PER_KILL_PER_LEVEL,
   LAUNCHERS,
+  UpgradeCard,
+  UPGRADE_CHOICE_TIMEOUT_MS,
+  UPGRADE_AUTO_PICK,
+  upgradeCardsForLevel,
 } from "@aop/shared";
 
 export const activeRooms = new Map<string, ArenaRoom>();
@@ -56,6 +59,8 @@ export class ArenaRoom extends Room<ArenaState> {
   private collectibleSeq = 0;
   private nextSpawnAt = 0;
   public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
+  // T-016: fila de ofertas de card por player — levels[0] é a oferta aberta; o resto aguarda.
+  private pendingUpgrade = new Map<string, { levels: number[]; expiresAt: number }>();
 
   onCreate(options?: { expectedPlayers?: number }) {
     this.setState(new ArenaState());
@@ -108,6 +113,14 @@ export class ArenaRoom extends Room<ArenaState> {
       this.effects.rerollAttrPoints(client.sessionId, p);
     });
 
+    // T-016: escolha de card de level-up — servidor valida tudo (oferta aberta + card
+    // pertencente à oferta); escolha inválida é IGNORADA sem consumir a oferta.
+    this.onMessage("choose_upgrade", (client, cardId: string) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || typeof cardId !== "string") return;
+      this.resolveUpgrade(client.sessionId, p, cardId, Date.now());
+    });
+
     // T-012: troca de lançador atrás de flag DEV — só existe para validar manualmente
     // os ganchos de mobilidade (ex.: heavy_shot_dev); nunca disponível em produção.
     this.onMessage("dev_launcher", (client, launcherId: string) => {
@@ -145,6 +158,7 @@ export class ArenaRoom extends Room<ArenaState> {
       console.log(`[arena] - ${p.name} (nível ${p.level})`);
     }
     this.effects.clear(client.sessionId);
+    this.pendingUpgrade.delete(client.sessionId); // T-016
     this.state.players.delete(client.sessionId);
   }
 
@@ -158,6 +172,17 @@ export class ArenaRoom extends Room<ArenaState> {
 
     // efeitos expiram antes do movimento (velocidade correta no tick)
     this.effects.tick(this.state.players, now);
+
+    // T-016: oferta de card expirada → auto-pick equilibrado (o jogo nunca pausa; AFK evolui)
+    this.pendingUpgrade.forEach((pending, id) => {
+      if (now < pending.expiresAt) return;
+      const p = this.state.players.get(id);
+      if (!p) {
+        this.pendingUpgrade.delete(id);
+        return;
+      }
+      this.resolveUpgrade(id, p, null, now);
+    });
 
     // projéteis (T-005/T-006)
     const projectileHits = this.projectiles.tick(this.state, this.map, dt, now, this.effects);
@@ -201,6 +226,9 @@ export class ArenaRoom extends Room<ArenaState> {
         
         p.xp = 0;
         this.effects.resetAttrToLevel(id, p, p.level);
+        // T-016: morte apaga a build — ofertas pendentes morrem junto (os níveis já foram perdidos)
+        this.pendingUpgrade.delete(id);
+        p.pendingUpgrades = 0;
         
         // Respawn em ponto safe escolhido por distância/risco, não sorte pura.
         const spawn = this.pickRespawnPoint(id);
@@ -315,19 +343,68 @@ export class ArenaRoom extends Room<ArenaState> {
     return best;
   }
 
-  /** XP → nível → pontos de atributo (T-003). Loop cobre XP suficiente p/ vários níveis de uma vez. */
+  /** XP → nível → oferta de cards (T-003/T-016). Loop cobre XP suficiente p/ vários níveis de uma vez. */
   private grantXp(id: string, p: Player, amount: number) {
     p.xp += amount * p.xpMult; // xp_boost (farm_event) dobra o ganho — T-004
 
     while (p.xp >= xpToNext(p.level)) {
       p.xp -= xpToNext(p.level);
       p.level += 1;
-      this.effects.addAttrPoints(id, p, {
-        agilidade: ATTR_POINTS_PER_LEVEL_EACH,
-        forca: ATTR_POINTS_PER_LEVEL_EACH,
-        vitalidade: ATTR_POINTS_PER_LEVEL_EACH,
-      });
+      // T-016: os 3 pts do nível agora vêm de ESCOLHA (cards); timeout → auto-pick
+      // equilibrado (mesmo preset de antes — quem ignora o menu evolui igual à v1).
+      this.queueUpgradeOffer(id, p);
     }
+  }
+
+  /** T-016: um level-up = uma oferta na fila; a primeira abre na hora, o resto espera resolução. */
+  private queueUpgradeOffer(id: string, p: Player) {
+    let pending = this.pendingUpgrade.get(id);
+    if (!pending) {
+      pending = { levels: [], expiresAt: 0 };
+      this.pendingUpgrade.set(id, pending);
+    }
+    pending.levels.push(p.level);
+    p.pendingUpgrades = pending.levels.length;
+    if (pending.levels.length === 1) this.sendUpgradeOffer(id, pending);
+  }
+
+  private sendUpgradeOffer(id: string, pending: { levels: number[]; expiresAt: number }) {
+    pending.expiresAt = Date.now() + UPGRADE_CHOICE_TIMEOUT_MS;
+    const level = pending.levels[0];
+    const client = this.clients.find((c) => c.sessionId === id);
+    client?.send("upgrade_offer", {
+      level,
+      cards: upgradeCardsForLevel(level),
+      timeoutMs: UPGRADE_CHOICE_TIMEOUT_MS,
+    });
+  }
+
+  /**
+   * T-016: aplica a escolha (ou o auto-pick, com `cardId = null` no timeout).
+   * Escolha inválida (card fora da oferta / sem oferta aberta) é ignorada SEM
+   * consumir a oferta — cliente malicioso não ganha nada tentando.
+   */
+  private resolveUpgrade(id: string, p: Player, cardId: string | null, now: number) {
+    const pending = this.pendingUpgrade.get(id);
+    if (!pending || pending.levels.length === 0) return;
+    const level = pending.levels[0];
+    const card: UpgradeCard | undefined =
+      cardId === null ? UPGRADE_AUTO_PICK : upgradeCardsForLevel(level).find((c) => c.id === cardId);
+    if (!card) return;
+
+    pending.levels.shift();
+    p.pendingUpgrades = pending.levels.length;
+    this.effects.addAttrPoints(id, p, card.points);
+    this.emitDebug("upgrade", { playerId: id, level, cardId: card.id, auto: cardId === null });
+    this.clients.find((c) => c.sessionId === id)?.send("upgrade_applied", {
+      cardId: card.id,
+      label: card.label,
+      level,
+      auto: cardId === null,
+    });
+
+    if (pending.levels.length > 0) this.sendUpgradeOffer(id, pending);
+    else this.pendingUpgrade.delete(id);
   }
 
   /** T-004: zona decide o pool de kinds; safe também é suprimida (rara), guerra já é rara por ser pequena. */

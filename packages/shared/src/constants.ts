@@ -97,6 +97,33 @@ export function attrMult(key: AttrKey, points: number): number {
   return Math.min(d.max, Math.max(d.min, 1 + points * d.perPoint));
 }
 
+// Cards de level-up (T-016, SPEC-0004) — escolha do jogador a cada nível.
+// DETERMINÍSTICOS por nível (nunca sorteio): quem conhece a tabela planeja a build
+// (pilar habilidade > sorte). Todo card vale UPGRADE_CARD_POINTS pontos.
+export interface UpgradeCard {
+  id: string;
+  label: string;
+  points: Partial<Record<AttrKey, number>>;
+}
+export const UPGRADE_CARD_POINTS = 3; // mesma soma do preset antigo (1 pt × 3 atributos-base)
+export const UPGRADE_CHOICE_TIMEOUT_MS = 5000; // sem escolha → auto-pick; o jogo NUNCA pausa
+export const UPGRADE_CARD_POOL: UpgradeCard[] = [
+  { id: "forca_bruta", label: "+3 Força", points: { forca: 3 } },
+  { id: "casca_grossa", label: "+3 Vitalidade", points: { vitalidade: 3 } },
+  { id: "pes_ligeiros", label: "+3 Agilidade", points: { agilidade: 3 } },
+  { id: "gatilho_rapido", label: "+2 Cadência  +1 Alcance", points: { cadencia: 2, alcance: 1 } },
+  { id: "olhar_de_aguia", label: "+2 Alcance  +1 Cadência", points: { alcance: 2, cadencia: 1 } },
+  { id: "equilibrado", label: "+1 Força  +1 Vitalidade  +1 Agilidade", points: { forca: 1, vitalidade: 1, agilidade: 1 } },
+];
+/** Timeout/AFK e bots sem política: o preset equilibrado de sempre. */
+export const UPGRADE_AUTO_PICK: UpgradeCard = UPGRADE_CARD_POOL[5];
+/** 3 cards da oferta do nível — janela determinística sobre o pool (offsets 0/2/4 são sempre distintos mod 6). */
+export function upgradeCardsForLevel(level: number): UpgradeCard[] {
+  const n = UPGRADE_CARD_POOL.length;
+  const base = ((level % n) + n) % n;
+  return [UPGRADE_CARD_POOL[base], UPGRADE_CARD_POOL[(base + 2) % n], UPGRADE_CARD_POOL[(base + 4) % n]];
+}
+
 /** XP necessário para sair de `level` e chegar ao próximo — curva de pacing (T-003). */
 export function xpToNext(level: number): number {
   return Math.round(XP_BASE * Math.pow(level, XP_EXP));

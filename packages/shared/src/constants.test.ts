@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { xpToNext, XP_BASE, XP_EXP, pickWeighted } from "./constants";
+import {
+  xpToNext,
+  XP_BASE,
+  XP_EXP,
+  pickWeighted,
+  upgradeCardsForLevel,
+  UPGRADE_CARD_POOL,
+  UPGRADE_CARD_POINTS,
+  UPGRADE_AUTO_PICK,
+} from "./constants";
 
 describe("xpToNext (curva de XP, T-003)", () => {
   it("bate com a fórmula XP_BASE × nível^XP_EXP", () => {
@@ -19,6 +28,28 @@ describe("xpToNext (curva de XP, T-003)", () => {
 
   it("nunca é zero ou negativo", () => {
     for (let level = 1; level <= 50; level++) expect(xpToNext(level)).toBeGreaterThan(0);
+  });
+});
+
+describe("upgradeCardsForLevel (cards de level-up, T-016)", () => {
+  it("é determinística por nível e devolve 3 cards distintos", () => {
+    for (let level = 1; level <= 40; level++) {
+      const a = upgradeCardsForLevel(level);
+      const b = upgradeCardsForLevel(level);
+      expect(a.map((c) => c.id)).toEqual(b.map((c) => c.id)); // sem sorteio — habilidade > sorte
+      expect(new Set(a.map((c) => c.id)).size).toBe(3);
+    }
+  });
+
+  it("todo card do pool vale exatamente UPGRADE_CARD_POINTS pontos", () => {
+    for (const card of UPGRADE_CARD_POOL) {
+      const total = Object.values(card.points).reduce((s, v) => s + (v ?? 0), 0);
+      expect(total).toBe(UPGRADE_CARD_POINTS);
+    }
+  });
+
+  it("auto-pick é o preset equilibrado (timeout nunca pune quem ignora o menu)", () => {
+    expect(UPGRADE_AUTO_PICK.points).toEqual({ forca: 1, vitalidade: 1, agilidade: 1 });
   });
 });
 

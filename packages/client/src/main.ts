@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
-import { buildMap, isWall, zoneAt, xpToNext, ROOM_NAME, SERVER_PORT } from "@aop/shared";
+import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual, propParts } from "./visuals";
+import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex } from "./hud";
 
 const hud = document.getElementById("hud")!;
-const roster = document.getElementById("roster")!;
 const debugOverlay = document.getElementById("debug-overlay")!;
 const debugEventsContainer = document.getElementById("debug-events")!;
 const debugStateEl = document.getElementById("debug-state")!;
@@ -184,6 +184,9 @@ async function connect() {
     room.onMessage("debug_event", (ev: any) => {
       pushDebugEvent(ev);
     });
+    // T-016: cards de level-up — servidor manda a oferta e confirma a escolha
+    room.onMessage("upgrade_offer", (offer: any) => showUpgradeOffer(offer));
+    room.onMessage("upgrade_applied", (msg: any) => onUpgradeApplied(msg));
     setInterval(() => room?.send("ping", performance.now()), 2000);
     setInterval(sendInput, 1000 / 20);
   } catch (e) {
@@ -295,6 +298,10 @@ addEventListener("keydown", (e) => {
   if (e.key === " ") {
     e.preventDefault(); // espaço não deve rolar a página
     fireSources.add("space");
+  }
+  // T-016: 1/2/3 escolhem o card da oferta aberta (consome a tecla só se houver oferta)
+  if (e.key === "1" || e.key === "2" || e.key === "3") {
+    if (chooseUpgradeByIndex(Number(e.key) - 1)) return;
   }
   keys.add(e.key.toLowerCase());
   if (e.key.toLowerCase() === "r") room?.send("reroll"); // T-004: coins compram reroll de atributo
@@ -434,40 +441,13 @@ function followCamera() {
   camera.lookAt(camera.position.x, 0, camera.position.z - 8);
 }
 
-// ---------- HUD + roster ----------
-let rosterNext = 0;
-function updateHud(now: number) {
-  const st: any = room?.state;
-  const me = st?.players?.get?.(mySessionId);
-  const fx: string[] = me?.effects ? Array.from(me.effects) : [];
-  const xpNeed = me ? xpToNext(me.level) : 0;
-  hud.textContent =
-    `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
-    `nível: ${me?.level ?? "-"} (xp ${me?.xp ?? 0}/${xpNeed})  HP: ${Math.ceil(me?.hp ?? 0)}/${me?.maxHp ?? 100}` +
-    (fx.includes("speed_up") ? `  ⚡x${me.speed?.toFixed(1)}` : "") +
-    (fx.includes("xp_boost") ? `  2xXP` : "") +
-    `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}  cad ${me?.attackSpeed?.toFixed(2) ?? "-"}  alc ${me?.reach?.toFixed(2) ?? "-"}` +
-    `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • espaço/click=atirar)` +
-    (now < announceUntil ? `\n🔥 farm_event na zona de guerra!` : "");
-
-  if (now < rosterNext || !st?.players) return;
-  rosterNext = now + 250;
-  let html = `<div class="title">PLAYERS</div>`;
-  st.players.forEach((p: any, id: string) => {
-    const self = id === mySessionId;
-    const fx2: string[] = p.effects ? Array.from(p.effects) : [];
-    html += `<div class="row">
-      <span class="dot ${self ? "self" : "enemy"}"></span>
-      <span class="name">${p.name}${self ? " (você)" : ""}</span>
-      ${p.isBot ? `<span class="tag">BOT</span>` : ""}
-      ${fx2.includes("speed_up") ? `<span class="tag">⚡</span>` : ""}
-      ${fx2.includes("xp_boost") ? `<span class="tag">2xXP</span>` : ""}
-      <span class="lvl">lv${p.level}</span>
-      <span class="hp">${Math.ceil(p.hp)}/${p.maxHp}</span>
-    </div>`;
-  });
-  roster.innerHTML = html;
-}
+// ---------- HUD + roster (T-016: extraídos para hud.ts) ----------
+initHud({
+  getRoom: () => room,
+  getSessionId: () => mySessionId,
+  getPing: () => ping,
+  getAnnounceUntil: () => announceUntil,
+});
 
 // ---------- Loop ----------
 let t = 0;

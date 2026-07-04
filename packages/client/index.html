@@ -79,11 +79,40 @@
         position: fixed; bottom: 6px; left: 8px; z-index: 11;
         pointer-events: none;
       }
+      /* Cards de level-up (T-016) — placeholder de UI, fase visual F1 */
+      #upgrade-cards {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        z-index: 20; display: none; flex-direction: column; align-items: center;
+        font-family: monospace; pointer-events: none;
+      }
+      #upgrade-cards.active { display: flex; }
+      #upgrade-cards .upgrade-header {
+        color: #ffd54f; font-size: 12px; letter-spacing: 2px; margin-bottom: 6px;
+        text-shadow: 0 0 6px #000;
+      }
+      #upgrade-cards .upgrade-row { display: flex; gap: 10px; }
+      .upgrade-card {
+        pointer-events: auto; cursor: pointer; min-width: 130px;
+        background: rgba(16,16,24,.92); color: #eee;
+        border: 1px solid #ffd54f66; border-radius: 8px; padding: 10px 12px;
+        font-family: monospace; font-size: 12px; text-align: center;
+        display: flex; flex-direction: column; gap: 6px; align-items: center;
+      }
+      .upgrade-card:hover { border-color: #ffd54f; background: rgba(30,30,44,.95); }
+      .upgrade-card .key {
+        background: #ffd54f; color: #000; font-weight: bold;
+        border-radius: 4px; padding: 0 6px; font-size: 11px;
+      }
+      #upgrade-cards .upgrade-timer {
+        width: 220px; height: 3px; background: #333; border-radius: 2px; margin-top: 8px;
+      }
+      #upgrade-cards .upgrade-timer-fill { height: 100%; background: #ffd54f; border-radius: 2px; }
     </style>
   </head>
   <body>
     <div id="hud">conectando...</div>
     <div id="roster"></div>
+    <div id="upgrade-cards"></div>
     <div id="debug-overlay">
       <button id="debug-close">✕ F3</button>
       <div id="debug-state"></div>

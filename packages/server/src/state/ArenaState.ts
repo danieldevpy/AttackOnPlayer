@@ -19,6 +19,7 @@ export class Player extends Schema {
   @type("number") maxHp = 100; // T-005
   @type("string") launcher = "basic_shot"; // T-005
   @type("number") dir = 0; // T-009: facing (rad), híbrido mira/movimento — nunca zera
+  @type("number") pendingUpgrades = 0; // T-016: ofertas de card na fila (HUD mostra badge)
 
   // não sincronizado (uso interno do servidor)
   inputX = 0;

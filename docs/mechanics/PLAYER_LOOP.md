@@ -20,17 +20,19 @@
 
 XP para subir do nível `n`: **`20 × n^1.35`** (`xpToNext`).
 
-Cada level-up adiciona **+1 ponto em cada** atributo (força, velocidade, vitalidade) — preset equilibrado v1.
+Cada level-up abre uma **oferta de 3 cards** (T-016) valendo **3 pontos** cada — teclas **1/2/3** ou clique. Sem escolha em **5s** → auto-pick equilibrado (+1 Força +1 Vitalidade +1 Agilidade, o preset de sempre). Cards são **determinísticos por nível** (`upgradeCardsForLevel`) — decorou a tabela, planeja a build. Vários level-ups de uma vez viram fila (badge no HUD).
 
-### Efeito de cada atributo
+### Efeito de cada atributo (T-015 — tabela `ATTR_DEFS`, valor e teto POR atributo)
 
-Cada ponto = **+4%** no multiplicador (`ATTR_POINT_VALUE = 0.04`):
+| Atributo | Impacto | Valor/pt | Piso–Teto |
+|---|---|---|---|
+| **Força** | Dano do tiro = `launcher.damage × strength` | +6% | 1–3.0 |
+| **Vitalidade** | `maxHp = 100 × vitality` (`PLAYER_BASE_HP`) | +4% | 1–2.5 |
+| **Agilidade** | Movimento = `PLAYER_SPEED × speed` (empilha com `speed_up`, teto 2×) | +3% | 1–2.0 |
+| **Cadência** | Cooldown do tiro = `cooldownMs × attackSpeed` | −4% | 0.55–1 |
+| **Alcance** | Range do projétil = `range × reach` (congelado no disparo) | +5% | 1–1.75 |
 
-| Atributo | Impacto |
-|---|---|
-| **Força** | Dano do tiro = `launcher.damage × strength` |
-| **Velocidade** | Movimento = `PLAYER_SPEED × speed` (empilha com `speed_up`, teto 2×) |
-| **Vitalidade** | `maxHp = 100 × vitality` (`PLAYER_BASE_HP`) |
+**TTK alvo (T-014, dano base 20):** 5 tiros entre iguais; especialista em Força derruba em 3.
 
 ### Buffs temporários
 
@@ -55,8 +57,8 @@ Coletável `coin_buff` → **+10 coins** (`COIN_BUFF_AMOUNT`).
 ### O que reroll faz (tecla **R**)
 
 - Custa **15 coins** (`COIN_REROLL_COST`)
-- **Redistribui aleatoriamente** o total de pontos de atributo **já ganhos no round** entre força/velocidade/vitalidade
-- **Mantém a soma** — só muda a especialização (tank / dps / mobile)
+- **Redistribui aleatoriamente** o total de pontos de atributo **já ganhos no round** entre os **5** atributos (força/vitalidade/agilidade/cadência/alcance — T-015)
+- **Mantém a soma** — só muda a especialização (tank / dps / mobile / gatilho / sniper)
 - Servidor valida: sem coins suficientes, ignora
 
 ### O que reroll **não** muda

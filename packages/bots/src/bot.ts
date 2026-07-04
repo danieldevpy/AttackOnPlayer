@@ -73,6 +73,14 @@ async function runBot(i: number) {
   const client = new Client(URL);
   const room = await client.joinOrCreate(ROOM_NAME, { name, bot: true });
   room.onMessage("debug_event", () => {});
+  // T-016: level-up virou oferta de cards. Bot responde com o card equilibrado (auto-pick
+  // explícito) — a política de escolha por perfil (bruto/tanque/caçador) chega na T-008b.
+  room.onMessage("upgrade_applied", () => {});
+  room.onMessage("upgrade_offer", (offer: any) => {
+    const cards: any[] = offer?.cards ?? [];
+    const pick = cards.find((c: any) => c.id === "equilibrado") ?? cards[0];
+    if (pick) setTimeout(() => room.send("choose_upgrade", pick.id), 150 + Math.random() * 250);
+  });
   console.log(`[${name}] entrou na sala ${room.roomId} — skill ${skillName}`);
 
   let map: GameMap | undefined;
