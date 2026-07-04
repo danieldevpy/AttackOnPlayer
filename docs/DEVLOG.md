@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-04 — Sessão 5 (cont.): T-013 (migração dos bots)
+- **T-013** (PROMPT-0017): bots (`packages/bots/src/bot.ts`) migrados para `{x, z, aimX?, aimZ?, fire?}` — miram continuamente no inimigo engajado (`aimX/aimZ`, chumbo/lead + erro por skill) mesmo fora do alcance de tiro; o gatilho (`fire: true`) só liga dentro do alcance do launcher. Direção real do disparo sai do facing resolvido pelo servidor, igual ao cliente humano desde T-009/T-010.
+- Fecha o efeito colateral aceito nas duas entregas anteriores: bots tinham parado de atirar (0 tiros) porque mandavam o `fx/fz` antigo, que o servidor não lê mais.
+- Verificado: tsc limpo; `npm run bots -- 6 45` (skill forte) voltou a produzir tiros e pelo menos 1 morte confirmada no log do servidor (`bot-4 morreu. Respawn...`); gate padrão completo (test/tsc×3/bots smoke/guarda `.js`) limpo.
+- `docs/ai/bots.md` atualizado para o protocolo novo.
+- Falta só **T-012** (ganchos de mobilidade no LauncherDef) para fechar a SPEC-0003 inteira.
+
 ## 2026-07-04 — Sessão 5 (cont.): T-011 (facing visível) + bugfix crítico de build
 - **T-011** (PROMPT-0016): indicador placeholder de facing ("nariz", cone amarelo — F1/ADR-003) no `THREE.Group` de todos os players (`visuals.ts`); rotação interpolada em `main.ts` com menor-caminho-angular (`shortestAngleDiff`), convenção `group.rotation.y = -dir` verificada analiticamente com a fórmula de rotação em Y do Three.js.
 - **Achado durante a verificação (não era o pedido, mas bloqueava provar T-011 funcionando):** o repo tinha `.js` compilados esquecidos do lado de `.ts` em `packages/{client,shared,bots}/src/` (de uma `tsc` rodada sem `--noEmit`, commit antigo `be7cc0a`). O Vite resolve import sem extensão preferindo `.js` — ou seja, esses arquivos obsoletos **venciam silenciosamente os `.ts` reais** em qualquer import relativo (`./visuals`, `./constants`, `./map`, `./rng`, `./launchers`). Confirmado via log de rede do preview. Removidos os 9 arquivos órfãos; o `.js` shadow nunca tinha efeito documentado em nenhuma task anterior porque ninguém tinha mexido nesses arquivos desde o commit que os gerou — mas era uma bomba-relógio para qualquer edição futura em `shared/`.

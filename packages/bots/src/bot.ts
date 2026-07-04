@@ -108,7 +108,11 @@ async function runBot(i: number) {
 
     const lowHp = me.hp < skill.fleeHp * me.maxHp;
     let combatDir: { x: number; z: number } | null = null;
-    let fire: { fx: number; fz: number } | null = null;
+    // T-013: mira (aimX/aimZ) e gatilho (fire) são independentes, como no protocolo
+    // real (T-009/T-010) — o bot mira continuamente no alvo engajado, e só liga o
+    // gatilho quando está de fato no alcance do launcher.
+    let aim: { aimX: number; aimZ: number } | null = null;
+    let fire = false;
 
     if (enemy && lowHp && ebest < skill.engageRange * 1.6) {
       // fugir: afasta do inimigo (e, de quebra, tende a sair da zona de guerra)
@@ -130,27 +134,28 @@ async function runBot(i: number) {
       else if (fbest < 1.5) combatDir = { x: me.x - foe.x, z: me.z - foe.z }; // recua se colar em cima
       else combatDir = { x: 0, z: 0 }; // mantém o duelo
 
-      // atira se no alcance e eu não estou em safe (o alvo já é fora de safe por seleção)
-      const canFire = fbest <= fireRange && myZone !== "safe";
-      if (canFire) {
-        // chumbo (lead): prevê a posição do alvo pelo tempo de voo do projétil
-        const now = Date.now();
-        const prev = track.get(foeId);
-        let ex = foe.x;
-        let ez = foe.z;
-        if (prev && now > prev.t) {
-          const dts = (now - prev.t) / 1000;
-          const vx = (foe.x - prev.x) / dts;
-          const vz = (foe.z - prev.z) / dts;
-          const tof = fbest / ldef.projectile.speed;
-          ex = foe.x + vx * tof;
-          ez = foe.z + vz * tof;
-        }
-        const ang = Math.atan2(ez - me.z, ex - me.x) + (Math.random() * 2 - 1) * skill.aimError;
-        fire = { fx: Math.cos(ang), fz: Math.sin(ang) };
+      // chumbo (lead): prevê a posição do alvo pelo tempo de voo do projétil
+      const now = Date.now();
+      const prev = track.get(foeId);
+      let ex = foe.x;
+      let ez = foe.z;
+      if (prev && now > prev.t) {
+        const dts = (now - prev.t) / 1000;
+        const vx = (foe.x - prev.x) / dts;
+        const vz = (foe.z - prev.z) / dts;
+        const tof = fbest / ldef.projectile.speed;
+        ex = foe.x + vx * tof;
+        ez = foe.z + vz * tof;
+      }
+      const ang = Math.atan2(ez - me.z, ex - me.x) + (Math.random() * 2 - 1) * skill.aimError;
+      aim = { aimX: Math.cos(ang), aimZ: Math.sin(ang) };
+
+      // gatilho só liga se no alcance e eu não estou em safe (o alvo já é fora de safe por seleção)
+      if (fbest <= fireRange && myZone !== "safe") {
+        fire = true;
         shots++;
       }
-      track.set(foeId, { x: foe.x, z: foe.z, t: Date.now() });
+      track.set(foeId, { x: foe.x, z: foe.z, t: now });
     } else {
       fleeingLogged = false;
     }
@@ -158,7 +163,10 @@ async function runBot(i: number) {
     if (combatDir) {
       const l = Math.hypot(combatDir.x, combatDir.z);
       const mv = l > 0.01 ? { x: combatDir.x / l, z: combatDir.z / l } : { x: 0, z: 0 };
-      room.send("input", fire ? { ...mv, ...fire } : mv);
+      const payload: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean } = { ...mv };
+      if (aim) { payload.aimX = aim.aimX; payload.aimZ = aim.aimZ; }
+      if (fire) payload.fire = true;
+      room.send("input", payload);
       targetId = ""; // volta a caçar coletável quando o combate acabar
       path = null;
     } else {

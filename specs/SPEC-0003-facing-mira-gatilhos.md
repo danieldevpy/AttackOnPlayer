@@ -53,6 +53,6 @@ Aprovada (Daniel, 2026-07-04): facing híbrido (mouse com fallback para moviment
 **Objetivo:** campos opcionais em `LauncherDef` (ex.: `movement: { selfSlowFactor?, selfSlowMs?, inheritVelocityFactor? }`, defaults neutros) aplicados pelo servidor via `EffectSystem` no momento do disparo. Lançador de teste atrás de flag/DEV para validar.
 **Aceite:** critério 5.
 
-### T-013 — Migração dos bots + QA headless 〔P〕 · depende: T-010
+### T-013 — Migração dos bots + QA headless 〔P〕 ✅ (PROMPT-0017) · depende: T-010
 **Objetivo:** bots usam o novo protocolo (mira contínua no alvo + gatilho quando em alcance); rodada de bots valida kills funcionando como antes. Atualizar `docs/ai/bots.md`.
 **Aceite:** critério 1; `npm run bots -- 3 30` gera hits/kills nas métricas como na T-008.
