@@ -2,6 +2,13 @@ import { Room, Client } from "colyseus";
 import { ArenaState, Player, Collectible } from "../state/ArenaState";
 import { MetricsRecorder } from "../metrics/SessionMetrics";
 import { EffectSystem } from "../systems/effects";
+interface PersistentProgress {
+  forca: number;
+  velocidade: number;
+  vitalidade: number;
+}
+const memDB = new Map<string, PersistentProgress>();
+
 import {
   GameMap,
   buildMap,
@@ -81,10 +88,11 @@ export class ArenaRoom extends Room<ArenaState> {
     );
   }
 
-  onJoin(client: Client, options: { name?: string; bot?: boolean }) {
+  onJoin(client: Client, options: { name?: string; bot?: boolean; token?: string }) {
     const p = new Player();
     p.name = String(options?.name ?? "player").slice(0, 16);
     p.isBot = Boolean(options?.bot);
+    p.playerToken = options?.token || `bot_${client.sessionId}`;
     const spawns = spawnPoints(this.map.w, this.map.h);
     const spawn = spawns[this.state.players.size % spawns.length];
     p.x = spawn.x;
@@ -136,13 +144,22 @@ export class ArenaRoom extends Room<ArenaState> {
             this.effects.apply(pid, p, "xp_boost", now);
             break;
           case "box":
-            // bônus forte no round (vs. 1 do level-up normal); persistência entre
-            // partidas (ADR-012) é ligada em T-004b, sem tocar este pipeline.
+            // bônus forte no round (vs. 1 do level-up normal)
             this.effects.addAttrPoints(pid, p, {
               velocidade: BOX_ATTR_BONUS_EACH,
               forca: BOX_ATTR_BONUS_EACH,
               vitalidade: BOX_ATTR_BONUS_EACH,
             });
+            // T-004b: persistência entre partidas (ADR-012)
+            if (!p.isBot) {
+              let prog = memDB.get(p.playerToken);
+              if (!prog) prog = { forca: 0, velocidade: 0, vitalidade: 0 };
+              prog.forca += BOX_ATTR_BONUS_EACH;
+              prog.velocidade += BOX_ATTR_BONUS_EACH;
+              prog.vitalidade += BOX_ATTR_BONUS_EACH;
+              memDB.set(p.playerToken, prog);
+              console.log(`[arena] ${p.name} progresso persistente:`, prog);
+            }
             break;
           default:
             this.grantXp(pid, p, XP_PICKUP_AMOUNT);

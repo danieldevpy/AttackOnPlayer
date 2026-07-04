@@ -17,6 +17,7 @@ export class Player extends Schema {
   // não sincronizado (uso interno do servidor)
   inputX = 0;
   inputZ = 0;
+  playerToken = ""; // T-004b: ADR-012
 }
 
 export class Collectible extends Schema {

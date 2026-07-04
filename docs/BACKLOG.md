@@ -24,7 +24,7 @@
 **Contexto:** docs/mechanics/growth.md · docs/DECISION_LOG.md (ADR-012) · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/visuals.ts
 **Aceite:** box só nasce em zona de guerra; farm_event anunciado no HUD; métricas registram por kind; reroll consome coins e reaplica preset de atributo.
 
-## T-004b — Scaffold de progressão persistente (ADR-012) 〔P〕 · depende: T-004
+## T-004b — Scaffold de progressão persistente (ADR-012) 〔P〕 ✅ (PROMPT-0008) · depende: T-004
 **Objetivo:** playerToken gerado/persistido no cliente (localStorage), enviado no join; servidor guarda PersistentProgress em memória por token, alimentado pela box.
 **Contexto:** docs/DECISION_LOG.md (ADR-012) · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/main.ts
 **Aceite:** reconectar com o mesmo token mantém o acumulador; não afeta poder dentro do round; visível só com DEV_MODE (painel real chega em T-007).

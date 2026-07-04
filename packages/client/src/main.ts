@@ -153,9 +153,18 @@ let room: Room | undefined;
 let ping = -1;
 let mySessionId = "";
 
+let playerToken = localStorage.getItem("aop_token");
+if (!playerToken) {
+  playerToken = "tok_" + Math.random().toString(36).substring(2, 10);
+  localStorage.setItem("aop_token", playerToken);
+}
+
 async function connect() {
   try {
-    room = await client.joinOrCreate(ROOM_NAME, { name: `web-${Math.floor(Math.random() * 999)}` });
+    room = await client.joinOrCreate(ROOM_NAME, { 
+      name: `web-${Math.floor(Math.random() * 999)}`,
+      token: playerToken
+    });
     mySessionId = room.sessionId;
     room.onMessage("pong", (t: number) => (ping = Math.round(performance.now() - t)));
     room.onMessage("announce", (msg: { kind: string }) => {
