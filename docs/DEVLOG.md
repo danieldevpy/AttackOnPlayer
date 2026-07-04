@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-04 — Sessão 5 (cont.): T-011 (facing visível) + bugfix crítico de build
+- **T-011** (PROMPT-0016): indicador placeholder de facing ("nariz", cone amarelo — F1/ADR-003) no `THREE.Group` de todos os players (`visuals.ts`); rotação interpolada em `main.ts` com menor-caminho-angular (`shortestAngleDiff`), convenção `group.rotation.y = -dir` verificada analiticamente com a fórmula de rotação em Y do Three.js.
+- **Achado durante a verificação (não era o pedido, mas bloqueava provar T-011 funcionando):** o repo tinha `.js` compilados esquecidos do lado de `.ts` em `packages/{client,shared,bots}/src/` (de uma `tsc` rodada sem `--noEmit`, commit antigo `be7cc0a`). O Vite resolve import sem extensão preferindo `.js` — ou seja, esses arquivos obsoletos **venciam silenciosamente os `.ts` reais** em qualquer import relativo (`./visuals`, `./constants`, `./map`, `./rng`, `./launchers`). Confirmado via log de rede do preview. Removidos os 9 arquivos órfãos; o `.js` shadow nunca tinha efeito documentado em nenhuma task anterior porque ninguém tinha mexido nesses arquivos desde o commit que os gerou — mas era uma bomba-relógio para qualquer edição futura em `shared/`.
+- Efeito colateral bom: `npm run test` (shared) foi de "10/10" para **5/5** — eram os mesmos 5 testes de `constants.test.ts` rodando duas vezes (uma do `.ts`, uma do `.js` duplicado), não 10 testes reais. `QA.md` atualizado com o número certo e uma guarda automática (`find ... .ts` sem par `.js`) nos gates e no checklist de merge.
+- Verificado: tsc limpo nos 3 pacotes após a remoção; `npm run test` 5/5; ao vivo no browser (preview) o nariz apareceu e girou corretamente com mouse e teclado; `npm run bots -- 3 10` sem crash (0 tiros, esperado até T-013).
+- Próximo: T-012 (ganchos de mobilidade) e T-013 (migração dos bots) — podem seguir em qualquer ordem, ambas dependem só de T-010 (pronta).
+
 ## 2026-07-04 — Sessão 5: SPEC-0003 — T-009 (facing) + T-010 (gatilhos desacoplados)
 - Nova spec aprovada (`specs/SPEC-0003-facing-mira-gatilhos.md`, CD): facing sincronizado, mira ≠ gatilho, ganchos de mobilidade por lançador. Quebrada em T-009..T-013.
 - **T-009** (PROMPT-0014): `Player.dir` (ângulo, sincronizado) — híbrido resolvido no servidor: mira (`aimX/aimZ`) tem prioridade quando presente, senão segue o movimento, parado mantém o último valor (nunca zera). Cliente só manda `aimX/aimZ` no tick em que o mouse de fato se move. `docs/mechanics/movement.md` atualizado.

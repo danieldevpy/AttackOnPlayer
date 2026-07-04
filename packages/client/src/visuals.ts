@@ -7,6 +7,8 @@ export const VISUAL_PHASE: 1 | 2 | 3 | 4 = 1;
 
 const playerGeo = new THREE.CapsuleGeometry(0.35, 0.5, 4, 8);
 const ringGeo = new THREE.RingGeometry(0.45, 0.58, 24);
+const noseGeo = new THREE.ConeGeometry(0.18, 0.5, 8); // T-011: indicador placeholder de facing
+const noseMat = new THREE.MeshLambertMaterial({ color: 0xffee58, emissive: 0x8a7600 });
 const xpOrbGeo = new THREE.SphereGeometry(0.25, 12, 12);
 const speedUpGeo = new THREE.OctahedronGeometry(0.28);
 const coinBuffGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.08, 16);
@@ -53,6 +55,13 @@ export function createPlayerVisual(id: string, isSelf: boolean): THREE.Group {
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.02;
   group.add(ring);
+
+  // T-011: "nariz" — para onde o grupo aponta é o facing (dir). Gira com o grupo
+  // inteiro; nenhuma arte ainda (ADR-003), só deixa a rotação legível.
+  const nose = new THREE.Mesh(noseGeo, noseMat);
+  nose.rotation.z = -Math.PI / 2; // aponta para +X local, mesma convenção do dir (atan2(z,x))
+  nose.position.set(0.65, 0.65, 0);
+  group.add(nose);
 
   return group;
 }

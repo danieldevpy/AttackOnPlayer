@@ -13,6 +13,10 @@ cd packages/server && npx tsc --noEmit
 cd packages/client && npx tsc --noEmit
 cd packages/bots && npx tsc --noEmit
 npm run bots -- 3 30                      # smoke headless
+
+# Guarda (T-011, PROMPT-0016): nenhum .js compilado deve existir do lado de um .ts em src/ —
+# Vite resolve import sem extensão preferindo .js, e um .js órfão vence o .ts real em silêncio.
+find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -I{} sh -c '[ -f "{}" ] && echo "STALE JS: {}"'
 ```
 
 | Gate | Cobre | Não cobre |
@@ -45,9 +49,10 @@ npm run bots -- 3 30                      # smoke headless
 
 ### Obrigatório
 
-- [ ] `npm run test` — 10/10
+- [ ] `npm run test` — 5/5
 - [ ] Typecheck limpo (3 packages)
 - [ ] `npm run bots -- 3 30` — sem crash
+- [ ] Guarda de `.js` órfão (ver Gates automáticos) — sem saída
 - [ ] Working tree limpa; commits coerentes
 - [ ] `docs/SESSAO_ATUAL.md` reflete o merge
 - [ ] Task correspondente ✅ no `BACKLOG.md`

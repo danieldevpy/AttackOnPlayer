@@ -45,7 +45,7 @@ Aprovada (Daniel, 2026-07-04): facing híbrido (mouse com fallback para moviment
 **Objetivo:** `ProjectileSystem` deixa de ler `fireDir` e passa a usar `fire` (gatilho) + facing do servidor; spawn com offset de raio na direção do facing. Cliente: mapa de gatilhos (espaço, mousedown) → mesmo `fire`; mira via cursor alimenta `aimX/aimZ` mesmo sem atirar. Atualizar `docs/mechanics/combat.md`.
 **Aceite:** critérios 2–4 da spec.
 
-### T-011 — Facing visível (cliente) 〔P〕 · depende: T-009
+### T-011 — Facing visível (cliente) 〔P〕 ✅ (PROMPT-0016) · depende: T-009
 **Objetivo:** rotação do grupo visual de todos os players com interpolação; indicador placeholder de direção; facing no debug overlay (F3).
 **Aceite:** dois clientes abertos — cada um vê o outro girar; critério 6.
 

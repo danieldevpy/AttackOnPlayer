@@ -341,6 +341,14 @@ function sendInput() {
 }
 
 // ---------- Sincronização estado → cena ----------
+// T-011: menor caminho angular (evita o grupo "girar a volta toda" ao cruzar +-180°)
+function shortestAngleDiff(from: number, to: number): number {
+  let diff = (to - from) % (Math.PI * 2);
+  if (diff > Math.PI) diff -= Math.PI * 2;
+  if (diff < -Math.PI) diff += Math.PI * 2;
+  return diff;
+}
+
 function syncWorld() {
   const st: any = room?.state;
   if (!st) return;
@@ -354,11 +362,15 @@ function syncWorld() {
     if (!vis) {
       vis = createPlayerVisual(id, id === mySessionId);
       vis.position.set(p.x, 0, p.z);
+      vis.rotation.y = -(p.dir ?? 0);
       scene.add(vis);
       playerVisuals.set(id, vis);
     }
     vis.position.x += (p.x - vis.position.x) * 0.25;
     vis.position.z += (p.z - vis.position.z) * 0.25;
+    // dir do servidor segue a convenção atan2(z,x); rotation.y = -dir alinha o
+    // "nariz" (local +X) com essa direção no mundo (ver visuals.ts).
+    vis.rotation.y += shortestAngleDiff(vis.rotation.y, -(p.dir ?? 0)) * 0.25;
   });
   playerVisuals.forEach((vis, id) => {
     if (!seenP.has(id)) {
