@@ -104,6 +104,7 @@ export interface UpgradeCard {
   id: string;
   label: string;
   points: Partial<Record<AttrKey, number>>;
+  skill?: string; // T-017: card de marco — concede uma skill (SKILLS) em vez de pontos
 }
 export const UPGRADE_CARD_POINTS = 3; // mesma soma do preset antigo (1 pt × 3 atributos-base)
 export const UPGRADE_CHOICE_TIMEOUT_MS = 5000; // sem escolha → auto-pick; o jogo NUNCA pausa

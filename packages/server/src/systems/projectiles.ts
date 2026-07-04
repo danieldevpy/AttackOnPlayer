@@ -1,5 +1,5 @@
 import { Player, Projectile, ArenaState } from "../state/ArenaState";
-import { LAUNCHERS, isWall, zoneAt, GameMap, PLAYER_RADIUS, PLAYER_SPEED } from "@aop/shared";
+import { LAUNCHERS, isWall, zoneAt, GameMap, PLAYER_RADIUS, PLAYER_SPEED, combinedSkillMods } from "@aop/shared";
 import { EffectSystem } from "./effects";
 
 // Generate unique IDs for projectiles
@@ -25,9 +25,12 @@ export class ProjectileSystem {
       const launcher = LAUNCHERS[p.launcher];
       if (!launcher) return;
 
-      // T-015 (cadência): cooldown efetivo = base do lançador × attackSpeed do atirador
-      // (attrMult já garante piso de 55% — nunca vira metralhadora).
-      if (now - p.lastFireAt < launcher.fire.cooldownMs * p.attackSpeed) return;
+      // T-017: skills do player entram como modificadores data-driven sobre o lançador
+      const mods = combinedSkillMods(Array.from(p.skills));
+
+      // T-015 (cadência) + T-017 (ex.: perfurante +25%): cooldown efetivo =
+      // base do lançador × attackSpeed × cooldownMult das skills.
+      if (now - p.lastFireAt < launcher.fire.cooldownMs * p.attackSpeed * mods.cooldownMult) return;
 
       p.lastFireAt = now;
 
@@ -45,19 +48,32 @@ export class ProjectileSystem {
         dirZ = vz / vlen;
       }
 
-      const proj = new Projectile();
-      // nasce na borda do player (offset = raio) na posição autoritativa do tick — sem atraso.
-      proj.x = p.x + dirX * PLAYER_RADIUS;
-      proj.z = p.z + dirZ * PLAYER_RADIUS;
-      proj.launcherId = p.launcher;
-      proj.ownerId = id;
-      proj.dirX = dirX;
-      proj.dirZ = dirZ;
-      // T-015 (alcance): range efetivo congelado no disparo — trocar de build depois
-      // não alonga projéteis já voando (servidor autoritativo, sem surpresa retroativa).
-      proj.maxRange = launcher.projectile.range * p.reach;
+      // T-017 (pattern "spread" generalizado): N projéteis centrados no facing.
+      // N = 1 (sem skill) degenera no tiro reto de sempre — zero mudança de comportamento.
+      const count = Math.max(1, Math.round(mods.projectilesPerShot));
+      const baseAngle = Math.atan2(dirZ, dirX);
+      for (let i = 0; i < count; i++) {
+        const angle = baseAngle + (i - (count - 1) / 2) * mods.spreadRad;
+        const dx = Math.cos(angle);
+        const dz = Math.sin(angle);
 
-      state.projectiles.set(`p${++_projId}`, proj);
+        const proj = new Projectile();
+        // nasce na borda do player (offset = raio) na posição autoritativa do tick — sem atraso.
+        proj.x = p.x + dx * PLAYER_RADIUS;
+        proj.z = p.z + dz * PLAYER_RADIUS;
+        proj.launcherId = p.launcher;
+        proj.ownerId = id;
+        proj.dirX = dx;
+        proj.dirZ = dz;
+        // T-015/T-017: range/dano/velocidade efetivos CONGELADOS no disparo — trocar de
+        // build depois não altera projéteis já voando (servidor autoritativo).
+        proj.maxRange = launcher.projectile.range * p.reach * mods.rangeMult;
+        proj.damageMult = mods.damageFactor;
+        proj.pierceLeft = mods.pierce;
+        proj.speedMult = mods.projSpeedMult;
+
+        state.projectiles.set(`p${++_projId}`, proj);
+      }
 
       // T-012: gancho de lentidão — reduz a velocidade do atirador por um tempo, default neutro.
       if (launcher.movement?.selfSlowFactor && launcher.movement.selfSlowMs) {
@@ -74,7 +90,7 @@ export class ProjectileSystem {
         return;
       }
 
-      const dist = launcher.projectile.speed * dt;
+      const dist = launcher.projectile.speed * proj.speedMult * dt; // T-017: fôlego acelera o projétil
       const prevX = proj.x;
       const prevZ = proj.z;
       proj.x += proj.dirX * dist;
@@ -114,20 +130,21 @@ export class ProjectileSystem {
         return;
       }
 
-      // check hit players
-      let hitPlayer = false;
+      // check hit players — T-017: com pierce o projétil pode atravessar alvos; `hitIds`
+      // garante que o mesmo alvo não é atingido 2x pelo mesmo projétil.
+      let consumed = false;
       state.players.forEach((target, targetId) => {
-        if (hitPlayer) return;
+        if (consumed) return;
         if (targetId === proj.ownerId) return; // ignore self
         if (target.hp <= 0) return; // ignore dead
+        if (proj.hitIds.includes(targetId)) return; // já atravessado (pierce)
 
         const distance = distancePointToSegment(target.x, target.z, prevX, prevZ, proj.x, proj.z);
         if (distance < PLAYER_RADIUS + launcher.projectile.radius) {
-          hitPlayer = true;
-
           // safe zone protects from damage, but still consumes the projectile so
           // debugging does not look like the hitbox failed.
           if (zoneAt(map, target.x, target.z) === "safe") {
+            consumed = true;
             hits.push({
               targetId,
               killerId: proj.ownerId,
@@ -141,9 +158,10 @@ export class ProjectileSystem {
           // HIT!
           const owner = state.players.get(proj.ownerId);
           const strength = owner ? owner.strength : 1;
-          const damage = launcher.damage * strength;
-          
+          const damage = launcher.damage * strength * proj.damageMult; // T-017: fator das skills
+
           target.hp -= damage;
+          proj.hitIds.push(targetId);
           hits.push({
             targetId,
             killerId: proj.ownerId,
@@ -151,10 +169,13 @@ export class ProjectileSystem {
             killed: target.hp <= 0,
             blockedBySafeZone: false,
           });
+
+          if (proj.pierceLeft > 0) proj.pierceLeft -= 1; // atravessa e segue voando
+          else consumed = true;
         }
       });
 
-      if (hitPlayer) {
+      if (consumed) {
         toRemove.push(pid);
         return;
       }

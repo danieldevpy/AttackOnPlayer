@@ -43,8 +43,13 @@ Cada level-up abre uma **oferta de 3 cards** (T-016) valendo **3 pontos** cada �
 
 ### Box (zona de guerra)
 
-- **No round:** +3 pontos em **cada** atributo (`BOX_ATTR_BONUS_EACH`) — 3× um level-up normal
+- **No round:** +3 pontos em **cada** atributo-base (`BOX_ATTR_BONUS_EACH`) — 3× um level-up normal
+- **Skill grátis (T-017):** sorteia 1 skill de projétil que você ainda não tem
 - **Persistência (scaffold ADR-012):** soma no acumulador por `playerToken` no servidor — **não altera poder in-round ainda**; visível só em dev
+
+### Skills de projétil (T-017)
+
+Marcos de nível **4/8/12**: um card ★ oferece **1 de 2 skills** (Tiro Duplo, Leque, Perfurante, Fôlego, Impulso — tabela em `mechanics/combat.md`). Morte apaga as skills junto com a build.
 
 ---
 

@@ -108,6 +108,7 @@ export function updateHud(now: number) {
     (fx.includes("speed_up") ? `  ⚡x${me.speed?.toFixed(1)}` : "") +
     (fx.includes("xp_boost") ? `  2xXP` : "") +
     `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}  cad ${me?.attackSpeed?.toFixed(2) ?? "-"}  alc ${me?.reach?.toFixed(2) ?? "-"}` +
+    (me?.skills?.length ? `\n★ ${Array.from(me.skills).join(" • ")}` : "") +
     `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • espaço/click=atirar)` +
     (me?.pendingUpgrades > 1 ? `\n📶 +${me.pendingUpgrades - 1} level-up na fila` : "") +
     (now < flashUntil ? `\n${flashLabel}` : "") +

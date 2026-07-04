@@ -84,7 +84,7 @@
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/constants.ts · packages/server/src/rooms/ArenaRoom.ts · packages/server/src/systems/effects.ts · packages/client/src/main.ts · packages/bots/src/bot.ts
 **Aceite:** escolha inválida ignorada; timeout aplica auto-pick; morrer reseta build; bots sem regressão de kills.
 
-## T-017 — Skills de projétil: patterns, marcos e box 〔G〕 · depende: T-016
+## T-017 — Skills de projétil: patterns, marcos e box 〔G〕 ✅ código (PROMPT-0023) · ⚠️ gates pendentes de runtime · depende: T-016
 **Objetivo:** `LauncherDef.fire` ganha `projectilesPerShot/spreadRad/damageFactor` + `pierce`; função de pattern `spread`; pierce no `ProjectileSystem`; 5 skills iniciais data-driven (Tiro Duplo, Leque, Perfurante, Fôlego, Impulso — tabela na spec) como modificadores por player; marcos (`SKILL_MILESTONE_LEVELS`, default 4/8/12) trocam 1 card por escolha de skill (1 de 2); box sorteia skill (fecha decisão do CD em growth.md). Atualizar `docs/mechanics/combat.md`.
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/launchers.ts · packages/server/src/systems/projectiles.ts · packages/server/src/rooms/ArenaRoom.ts · docs/mechanics/growth.md
 **Aceite:** Tiro Duplo spawna 2 projéteis com dano reduzido; Perfurante atravessa exatamente 1 alvo; skill aparece no card do marco e no F3; box concede skill em zona de guerra.

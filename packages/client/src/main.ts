@@ -247,6 +247,7 @@ function updateDebugState() {
     rows.push(`<tr><td>cadência (×cd)</td><td>${me.attackSpeed?.toFixed(3)}</td></tr>`);
     rows.push(`<tr><td>alcance (×range)</td><td>${me.reach?.toFixed(3)}</td></tr>`);
     rows.push(`<tr><td>launcher</td><td>${me.launcher}</td></tr>`);
+    rows.push(`<tr><td>skills</td><td>${me.skills?.length ? Array.from(me.skills).join(", ") : "nenhuma"}</td></tr>`);
     rows.push(`<tr><td>coins</td><td>${me.coins}</td></tr>`);
     const fx: string[] = me.effects ? Array.from(me.effects) : [];
     rows.push(`<tr><td>efeitos</td><td>${fx.length ? fx.join(", ") : "nenhum"}</td></tr>`);

@@ -48,10 +48,27 @@ interface LauncherDef {
 - **Lançador de teste (dev-only):** `heavy_shot_dev` no registro (`packages/shared/src/launchers.ts`) — `selfSlowFactor: 0.5`, `selfSlowMs: 700`, `inheritVelocityFactor: 0.3`. Só é atribuível via mensagem `dev_launcher`, e essa mensagem só funciona com `DEBUG=1` no servidor — nunca alcançável em produção.
 
 ## v1 (T-005)
-1 lançador `basic_shot`: tiro reto, cd 600ms, alcance 8u. Placeholder: esfera pequena. Hit = flash no alvo + número de dano flutuante (F1 de feedback).
+1 lançador `basic_shot`: tiro reto, cd 600ms (base), alcance 8u (base), dano 20 (T-014 — TTK alvo 5 tiros). Placeholder: esfera pequena.
+
+## Skills de projétil (T-017, SPEC-0004)
+Camada de modificadores **por player** sobre o lançador equipado — registro data-driven em `packages/shared/src/skills.ts` (`SKILLS` + `combinedSkillMods`). Skill nova = 1 entrada; NUNCA lógica no Room (mesma regra dos lançadores).
+
+| Skill | Efeito | Custo embutido |
+|---|---|---|
+| `tiro_duplo` | 2 projéteis (±6°) | 65% de dano cada |
+| `leque` | 3 projéteis em cone (±20°) | 50% de dano cada |
+| `perfurante` | atravessa 1 alvo (`hitIds` impede re-hit) | cooldown +25% |
+| `folego` | +35% range, +20% velocidade do projétil | sem dano extra |
+| `impulso` | kill reseta cooldown + `kill_rush` (+30% vel/2s, via EffectSystem) | — |
+
+- **Combinação sem explosão:** projéteis por tiro = MAX entre skills; fatores de dano/range/cooldown = PRODUTO; pierce = SOMA.
+- **Congelado no disparo:** dano/range/velocidade do projétil são fixados no spawn (`damageMult`/`maxRange`/`speedMult`) — build nunca muda projétil em voo.
+- **Cooldown efetivo** = `cooldownMs × attackSpeed (cadência) × cooldownMult (skills)`.
+- **Como ganhar:** marcos de nível 4/8/12 (card ★, escolher 1 de 2 — `SKILL_MILESTONE_CHOICES`) ou box (sorteia uma que falte). Morte apaga as skills (pilar risco real).
+- Decisão de design: skills são modificadores por player; `LauncherDef` fica reservado a **lançadores novos** (armas trocáveis) — os dois empilham.
 
 ## Evolução planejada
-Padrões novos (spread/lob/homing), troca de lançador por drop (box), skills ativas por input, i-frames de esquiva (insumo da aura, ADR-005).
+Padrões novos (lob/homing/orbit), troca de lançador por drop (box), skills ativas por input, i-frames de esquiva (insumo da aura, ADR-005).
 
 ## Aberto (decidir com CD)
 TTK alvo; morte/perda de nível (T-006); quantos lançadores no MVP.

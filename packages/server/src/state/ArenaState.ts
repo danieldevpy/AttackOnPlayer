@@ -20,6 +20,7 @@ export class Player extends Schema {
   @type("string") launcher = "basic_shot"; // T-005
   @type("number") dir = 0; // T-009: facing (rad), híbrido mira/movimento — nunca zera
   @type("number") pendingUpgrades = 0; // T-016: ofertas de card na fila (HUD mostra badge)
+  @type(["string"]) skills = new ArraySchema<string>(); // T-017: skills de projétil do round (morte apaga)
 
   // não sincronizado (uso interno do servidor)
   inputX = 0;
@@ -46,6 +47,10 @@ export class Projectile extends Schema {
   ownerId = "";
   distanceTraveled = 0;
   maxRange = 0; // T-015: range efetivo congelado no disparo (launcher.range × reach do atirador)
+  damageMult = 1; // T-017: fator de dano das skills (ex.: tiro_duplo 0.65)
+  pierceLeft = 0; // T-017: quantos alvos ainda atravessa
+  speedMult = 1; // T-017: fator de velocidade das skills (ex.: fôlego 1.2)
+  hitIds: string[] = []; // T-017: alvos já atingidos (pierce não re-acerta o mesmo alvo)
 }
 
 export class ArenaState extends Schema {

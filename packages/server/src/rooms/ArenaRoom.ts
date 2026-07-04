@@ -45,7 +45,12 @@ import {
   UPGRADE_CHOICE_TIMEOUT_MS,
   UPGRADE_AUTO_PICK,
   upgradeCardsForLevel,
+  SKILLS,
+  SKILL_MILESTONE_LEVELS,
+  SKILL_MILESTONE_CHOICES,
+  combinedSkillMods,
 } from "@aop/shared";
+import { ArraySchema } from "@colyseus/schema";
 
 export const activeRooms = new Map<string, ArenaRoom>();
 
@@ -60,7 +65,9 @@ export class ArenaRoom extends Room<ArenaState> {
   private nextSpawnAt = 0;
   public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
   // T-016: fila de ofertas de card por player — levels[0] é a oferta aberta; o resto aguarda.
-  private pendingUpgrade = new Map<string, { levels: number[]; expiresAt: number }>();
+  // T-017: `cards` guarda a oferta REAL enviada (marcos incluem skills e dependem do estado
+  // do player no momento do envio) — resolução valida contra isto, nunca recomputa.
+  private pendingUpgrade = new Map<string, { levels: number[]; cards: UpgradeCard[]; expiresAt: number }>();
 
   onCreate(options?: { expectedPlayers?: number }) {
     this.setState(new ArenaState());
@@ -207,6 +214,12 @@ export class ArenaRoom extends Room<ArenaState> {
         killerByVictim.set(hit.targetId, hit.killerId);
         this.metrics.addKill(hit.killerId);
         this.grantXp(hit.killerId, killer, XP_PER_KILL_PER_LEVEL * victim.level);
+        // T-017 (skill impulso): kill reseta o cooldown e dá boost curto de velocidade
+        if (combinedSkillMods(Array.from(killer.skills)).onKillImpulso) {
+          killer.lastFireAt = 0;
+          this.effects.apply(hit.killerId, killer, "kill_rush", now);
+          this.emitDebug("impulso", { playerId: hit.killerId });
+        }
       }
     });
 
@@ -226,9 +239,11 @@ export class ArenaRoom extends Room<ArenaState> {
         
         p.xp = 0;
         this.effects.resetAttrToLevel(id, p, p.level);
-        // T-016: morte apaga a build — ofertas pendentes morrem junto (os níveis já foram perdidos)
+        // T-016/T-017: morte apaga a build — ofertas pendentes e skills morrem junto
+        // (pilar risco real: especializar é apostar)
         this.pendingUpgrade.delete(id);
         p.pendingUpgrades = 0;
+        p.skills = new ArraySchema<string>();
         
         // Respawn em ponto safe escolhido por distância/risco, não sorte pura.
         const spawn = this.pickRespawnPoint(id);
@@ -292,6 +307,17 @@ export class ArenaRoom extends Room<ArenaState> {
               prog.vitalidade += BOX_ATTR_BONUS_EACH;
               memDB.set(p.playerToken, prog);
               console.log(`[arena] ${p.name} progresso persistente:`, prog);
+            }
+            // T-017: box também sorteia uma skill que falte (fecha a decisão do CD em
+            // growth.md — "quando lançadores existirem, box passa a também sortear").
+            // RNG aqui é aceitável: box é drop raro de zona de guerra (risco→recompensa).
+            {
+              const missing = Object.keys(SKILLS).filter((s) => !p.skills.includes(s));
+              if (missing.length > 0) {
+                const skill = missing[Math.floor(Math.random() * missing.length)];
+                p.skills.push(skill);
+                this.emitDebug("box_skill", { playerId: pid, skill });
+              }
             }
             break;
           default:
@@ -360,23 +386,50 @@ export class ArenaRoom extends Room<ArenaState> {
   private queueUpgradeOffer(id: string, p: Player) {
     let pending = this.pendingUpgrade.get(id);
     if (!pending) {
-      pending = { levels: [], expiresAt: 0 };
+      pending = { levels: [], cards: [], expiresAt: 0 };
       this.pendingUpgrade.set(id, pending);
     }
     pending.levels.push(p.level);
     p.pendingUpgrades = pending.levels.length;
-    if (pending.levels.length === 1) this.sendUpgradeOffer(id, pending);
+    if (pending.levels.length === 1) this.sendUpgradeOffer(id, p, pending);
   }
 
-  private sendUpgradeOffer(id: string, pending: { levels: number[]; expiresAt: number }) {
+  private sendUpgradeOffer(id: string, p: Player, pending: { levels: number[]; cards: UpgradeCard[]; expiresAt: number }) {
     pending.expiresAt = Date.now() + UPGRADE_CHOICE_TIMEOUT_MS;
     const level = pending.levels[0];
+    pending.cards = this.buildCards(p, level);
     const client = this.clients.find((c) => c.sessionId === id);
     client?.send("upgrade_offer", {
       level,
-      cards: upgradeCardsForLevel(level),
+      cards: pending.cards,
       timeoutMs: UPGRADE_CHOICE_TIMEOUT_MS,
     });
+  }
+
+  /**
+   * T-017: nos marcos (`SKILL_MILESTONE_LEVELS`) a oferta vira [skill A, skill B, atributo]
+   * — escolher 1 de 2 skills ou abrir mão por pontos. Skill já possuída é substituída por
+   * outra que falte; sem skill faltando, a oferta volta a ser só de atributos.
+   */
+  private buildCards(p: Player, level: number): UpgradeCard[] {
+    const attrCards = upgradeCardsForLevel(level);
+    if (!SKILL_MILESTONE_LEVELS.includes(level)) return attrCards;
+
+    const owned = new Set(Array.from(p.skills));
+    const missing = Object.keys(SKILLS).filter((s) => !owned.has(s));
+    if (missing.length === 0) return attrCards;
+
+    const pair = (SKILL_MILESTONE_CHOICES[level] ?? []).filter((s) => !owned.has(s));
+    while (pair.length < 2 && missing.some((s) => !pair.includes(s))) {
+      pair.push(missing.find((s) => !pair.includes(s))!);
+    }
+    const skillCards: UpgradeCard[] = pair.slice(0, 2).map((s) => ({
+      id: `skill_${s}`,
+      label: `★ ${SKILLS[s].name} — ${SKILLS[s].desc}`,
+      points: {},
+      skill: s,
+    }));
+    return [...skillCards, attrCards[0]];
   }
 
   /**
@@ -388,13 +441,19 @@ export class ArenaRoom extends Room<ArenaState> {
     const pending = this.pendingUpgrade.get(id);
     if (!pending || pending.levels.length === 0) return;
     const level = pending.levels[0];
+    // T-017: valida contra a oferta REAL enviada (pending.cards) — nunca recomputa
     const card: UpgradeCard | undefined =
-      cardId === null ? UPGRADE_AUTO_PICK : upgradeCardsForLevel(level).find((c) => c.id === cardId);
+      cardId === null ? UPGRADE_AUTO_PICK : pending.cards.find((c) => c.id === cardId);
     if (!card) return;
 
     pending.levels.shift();
     p.pendingUpgrades = pending.levels.length;
-    this.effects.addAttrPoints(id, p, card.points);
+    if (card.skill) {
+      // T-017: card de marco concede a skill (idempotente — nunca duplica)
+      if (!p.skills.includes(card.skill)) p.skills.push(card.skill);
+    } else {
+      this.effects.addAttrPoints(id, p, card.points);
+    }
     this.emitDebug("upgrade", { playerId: id, level, cardId: card.id, auto: cardId === null });
     this.clients.find((c) => c.sessionId === id)?.send("upgrade_applied", {
       cardId: card.id,
@@ -403,7 +462,7 @@ export class ArenaRoom extends Room<ArenaState> {
       auto: cardId === null,
     });
 
-    if (pending.levels.length > 0) this.sendUpgradeOffer(id, pending);
+    if (pending.levels.length > 0) this.sendUpgradeOffer(id, p, pending);
     else this.pendingUpgrade.delete(id);
   }
 

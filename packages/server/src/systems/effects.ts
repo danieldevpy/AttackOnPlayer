@@ -15,9 +15,11 @@ import {
   PLAYER_BASE_HP,
   attrMult,
   AttrKey,
+  KILL_RUSH_MULT,
+  KILL_RUSH_MS,
 } from "@aop/shared";
 
-export type EffectKind = "speed_up" | "xp_boost" | "launcher_slow";
+export type EffectKind = "speed_up" | "xp_boost" | "launcher_slow" | "kill_rush";
 
 interface ActiveEffect {
   kind: EffectKind;
@@ -36,6 +38,7 @@ const DURATION: Record<EffectKind, number> = {
   speed_up: SPEED_BOOST_MS,
   xp_boost: XP_BOOST_MS, // farm_event (T-004)
   launcher_slow: 0, // não usado — duração vem do LauncherDef via applySlow()
+  kill_rush: KILL_RUSH_MS, // T-017: skill impulso — boost curto ao matar
 };
 
 function zeroAttr(): AttrPoints {
@@ -152,6 +155,7 @@ export class EffectSystem {
     // T-015: cada atributo com valor/pt e teto próprios (ATTR_DEFS) — escala assimétrica ADR-013
     let speed = attrMult("agilidade", s.attr.agilidade);
     if (s.active.some((e) => e.kind === "speed_up")) speed *= SPEED_BOOST_MULT;
+    if (s.active.some((e) => e.kind === "kill_rush")) speed *= KILL_RUSH_MULT; // T-017: impulso
     speed = Math.min(speed, SPEED_MAX_MULT);
     // T-012: lentidão de lançador se aplica por cima do teto — reduz o efetivo, não o disputa
     const slow = s.active.find((e) => e.kind === "launcher_slow");
