@@ -29,7 +29,7 @@
 **Contexto:** docs/DECISION_LOG.md (ADR-012) · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/main.ts
 **Aceite:** reconectar com o mesmo token mantém o acumulador; não afeta poder dentro do round; visível só com DEV_MODE (painel real chega em T-007).
 
-## T-005 — Lançadores v1: tiro reto 〔G〕
+## T-005 — Lançadores v1: tiro reto 〔G〕 ✅ (PROMPT-0009)
 **Objetivo:** LauncherDef registry (shared), ProjectileSystem no servidor, input fire com cooldown, vida/dano (dano × força), projétil some em prop/alcance, feedback de hit no cliente.
 **Contexto:** docs/mechanics/combat.md · packages/server/src/rooms/ArenaRoom.ts · packages/server/src/systems/effects.ts · packages/shared/src/constants.ts · packages/client/src/main.ts
 **Aceite:** bot atinge bot e a vida cai; projétil respeita alcance; zona safe bloqueia dano.

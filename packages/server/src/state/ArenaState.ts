@@ -13,17 +13,35 @@ export class Player extends Schema {
   @type("number") vitality = 1; // multiplica vida máxima (combat.md, T-006)
   @type("number") xpMult = 1; // farm_event (T-004): XP em dobro por 20s
   @type(["string"]) effects = new ArraySchema<string>(); // kinds ativos, só p/ HUD
+  @type("number") hp = 100; // T-005
+  @type("number") maxHp = 100; // T-005
+  @type("string") launcher = "basic_shot"; // T-005
 
   // não sincronizado (uso interno do servidor)
   inputX = 0;
   inputZ = 0;
   playerToken = ""; // T-004b: ADR-012
+  fireDirX = 0; // T-005
+  fireDirZ = 0; // T-005
+  lastFireAt = 0; // T-005
 }
 
 export class Collectible extends Schema {
   @type("number") x = 0;
   @type("number") z = 0;
   @type("string") kind = "xp_orb"; // xp_orb | speed_up | coin_buff | farm_event | box (T-004)
+}
+
+export class Projectile extends Schema {
+  @type("number") x = 0;
+  @type("number") z = 0;
+  @type("string") launcherId = "";
+  
+  // uso interno
+  dirX = 0;
+  dirZ = 0;
+  ownerId = "";
+  distanceTraveled = 0;
 }
 
 export class ArenaState extends Schema {
@@ -33,4 +51,5 @@ export class ArenaState extends Schema {
   @type("number") mapSeed = 0;
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: Collectible }) collectibles = new MapSchema<Collectible>();
+  @type({ map: Projectile }) projectiles = new MapSchema<Projectile>();
 }

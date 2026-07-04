@@ -2,6 +2,7 @@ import { Room, Client } from "colyseus";
 import { ArenaState, Player, Collectible } from "../state/ArenaState";
 import { MetricsRecorder } from "../metrics/SessionMetrics";
 import { EffectSystem } from "../systems/effects";
+import { ProjectileSystem } from "../systems/projectiles";
 interface PersistentProgress {
   forca: number;
   velocidade: number;
@@ -46,6 +47,7 @@ export class ArenaRoom extends Room<ArenaState> {
   private budget = 5;
   private metrics = new MetricsRecorder();
   private effects = new EffectSystem();
+  private projectiles = new ProjectileSystem();
   private collectibleSeq = 0;
   private nextSpawnAt = 0;
 
@@ -64,12 +66,20 @@ export class ArenaRoom extends Room<ArenaState> {
     // pré-popula metade do orçamento (ninguém entra num mapa vazio)
     for (let i = 0; i < Math.floor(this.budget / 2); i++) this.spawnCollectible();
 
-    this.onMessage("input", (client, msg: { x: number; z: number }) => {
+    this.onMessage("input", (client, msg: { x: number; z: number; fx?: number; fz?: number }) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || typeof msg?.x !== "number" || typeof msg?.z !== "number") return;
       const len = Math.hypot(msg.x, msg.z);
       p.inputX = len > 1e-3 ? msg.x / Math.max(1, len) : 0;
       p.inputZ = len > 1e-3 ? msg.z / Math.max(1, len) : 0;
+      
+      if (typeof msg.fx === "number" && typeof msg.fz === "number") {
+        p.fireDirX = msg.fx;
+        p.fireDirZ = msg.fz;
+      } else {
+        p.fireDirX = 0;
+        p.fireDirZ = 0;
+      }
     });
 
     this.onMessage("ping", (client, t: number) => client.send("pong", t));
@@ -117,6 +127,9 @@ export class ArenaRoom extends Room<ArenaState> {
 
     // efeitos expiram antes do movimento (velocidade correta no tick)
     this.effects.tick(this.state.players, now);
+
+    // projéteis (T-005)
+    this.projectiles.tick(this.state, this.map, dt, now);
 
     // movimento autoritativo (velocidade = base × multiplicador do EffectSystem)
     this.state.players.forEach((p, id) => {

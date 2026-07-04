@@ -141,6 +141,7 @@ function buildWorld(w: number, h: number, seed: number) {
 // ---------- Entidades dinâmicas ----------
 const playerVisuals = new Map<string, THREE.Group>();
 const collectibleMeshes = new Map<string, THREE.Mesh>();
+const projectileMeshes = new Map<string, THREE.Mesh>();
 
 // ---------- Rede ----------
 const url =
@@ -181,19 +182,45 @@ connect();
 // ---------- Input (teclado; touch no M1) ----------
 let announceUntil = 0;
 const keys = new Set<string>();
+const mouse = new THREE.Vector2();
+let isFiring = false;
+
+addEventListener("mousedown", () => isFiring = true);
+addEventListener("mouseup", () => isFiring = false);
+addEventListener("mousemove", (e) => {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+});
+
 addEventListener("keydown", (e) => {
   keys.add(e.key.toLowerCase());
   if (e.key.toLowerCase() === "r") room?.send("reroll"); // T-004: coins compram reroll de atributo
 });
 addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
-let lastInput = { x: 0, z: 0 };
+
+let lastInput = { x: 0, z: 0, fx: 0, fz: 0 };
 function sendInput() {
   const x = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
   const z = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-  if (x !== lastInput.x || z !== lastInput.z) {
-    lastInput = { x, z };
+  
+  let fx = 0, fz = 0;
+  if (isFiring) {
+    const me = playerVisuals.get(mySessionId);
+    if (me) {
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const target = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, target);
+      fx = target.x - me.position.x;
+      fz = target.z - me.position.z;
+    }
+  }
+
+  if (x !== lastInput.x || z !== lastInput.z || fx !== lastInput.fx || fz !== lastInput.fz) {
+    lastInput = { x, z, fx, fz };
     room?.send("input", lastInput);
-  } else if (x !== 0 || z !== 0) {
+  } else if (x !== 0 || z !== 0 || fx !== 0 || fz !== 0) {
     room?.send("input", lastInput);
   }
 }
@@ -226,7 +253,7 @@ function syncWorld() {
   });
 
   const seenC = new Set<string>();
-  st.collectibles.forEach((c: any, id: string) => {
+  st.collectibles?.forEach((c: any, id: string) => {
     seenC.add(id);
     if (!collectibleMeshes.has(id)) {
       const mesh = createCollectibleVisual(c.kind);
@@ -239,6 +266,29 @@ function syncWorld() {
     if (!seenC.has(id)) {
       scene.remove(mesh);
       collectibleMeshes.delete(id);
+    }
+  });
+
+  const seenProj = new Set<string>();
+  st.projectiles?.forEach((proj: any, id: string) => {
+    seenProj.add(id);
+    let mesh = projectileMeshes.get(id);
+    if (!mesh) {
+      mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3),
+        new THREE.MeshBasicMaterial({ color: 0xffaa00 })
+      );
+      mesh.position.set(proj.x, 0.5, proj.z);
+      scene.add(mesh);
+      projectileMeshes.set(id, mesh);
+    }
+    mesh.position.x += (proj.x - mesh.position.x) * 0.5;
+    mesh.position.z += (proj.z - mesh.position.z) * 0.5;
+  });
+  projectileMeshes.forEach((mesh, id) => {
+    if (!seenProj.has(id)) {
+      scene.remove(mesh);
+      projectileMeshes.delete(id);
     }
   });
 }
@@ -264,7 +314,7 @@ function updateHud(now: number) {
   const xpNeed = me ? xpToNext(me.level) : 0;
   hud.textContent =
     `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
-    `nível: ${me?.level ?? "-"} (xp ${me?.xp ?? 0}/${xpNeed})` +
+    `nível: ${me?.level ?? "-"} (xp ${me?.xp ?? 0}/${xpNeed})  HP: ${Math.ceil(me?.hp ?? 0)}/${me?.maxHp ?? 100}` +
     (fx.includes("speed_up") ? `  ⚡x${me.speed}` : "") +
     (fx.includes("xp_boost") ? `  2xXP` : "") +
     `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vitalidade ${me?.vitality?.toFixed(2) ?? "-"}` +
@@ -286,6 +336,7 @@ function updateHud(now: number) {
       ${fx2.includes("speed_up") ? `<span class="tag">⚡</span>` : ""}
       ${fx2.includes("xp_boost") ? `<span class="tag">2xXP</span>` : ""}
       <span class="lvl">lv${p.level}</span>
+      <span class="hp">${Math.ceil(p.hp)}/${p.maxHp}</span>
     </div>`;
   });
   roster.innerHTML = html;

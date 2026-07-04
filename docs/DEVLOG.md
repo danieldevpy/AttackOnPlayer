@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-04 — Sessão 3 (cont.): T-005
+- Lançadores v1: tiro reto.
+- Adicionado input via mouse (raycaster) e state handling (hp, maxHp) no client e server.
+- ProjectileSystem implantado no servidor validando cooldown, fire ranges e colisões de projétil (com map bounds, walls, props e jogadores). Zonas safe proíbem tiro e bloqueiam dano.
+- Hud exibe HP atual.
+- Próximo: T-006 (Morte, respawn e perda de nível).
+
 ## 2026-07-04 — Sessão 3 (cont.): T-004b
 - Scaffold de progressão persistente (ADR-012) implementado: `playerToken` salvo no localStorage e enviado no join.
 - Servidor mapeia token num `memDB` indexado mantendo `PersistentProgress` (força, velocidade, vitalidade) que é atualizado na coleta da box.

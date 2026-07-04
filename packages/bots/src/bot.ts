@@ -116,7 +116,8 @@ async function runBot(i: number) {
   if (DURATION_S > 0) {
     setTimeout(async () => {
       clearInterval(think);
-      const me: any = room.state?.players?.get?.(room.sessionId);
+      const state: any = room.state;
+      const me: any = state?.players?.get?.(room.sessionId);
       console.log(`[${name}] saindo — nível final ${me?.level ?? "?"}, boosts pegos: ver métricas`);
       await room.leave();
     }, DURATION_S * 1000);
