@@ -78,8 +78,12 @@ export interface CombinedSkillMods {
   onKillImpulso: boolean;
 }
 
-/** Agrega os modificadores das skills do player (regras de combinação no comentário de cada campo). */
-export function combinedSkillMods(skillIds: readonly string[]): CombinedSkillMods {
+/**
+ * Agrega os modificadores das skills do player (regras de combinação no comentário de
+ * cada campo). Aceita `undefined` na lista porque o iterator do ArraySchema (Colyseus)
+ * tipa itens como possivelmente undefined — ids inválidos são ignorados de qualquer forma.
+ */
+export function combinedSkillMods(skillIds: readonly (string | undefined)[]): CombinedSkillMods {
   const out: CombinedSkillMods = {
     projectilesPerShot: 1,
     spreadRad: 0,
@@ -91,7 +95,7 @@ export function combinedSkillMods(skillIds: readonly string[]): CombinedSkillMod
     onKillImpulso: false,
   };
   for (const id of skillIds) {
-    const m = SKILLS[id]?.mods;
+    const m = id ? SKILLS[id]?.mods : undefined;
     if (!m) continue;
     if (m.projectilesPerShot) out.projectilesPerShot = Math.max(out.projectilesPerShot, m.projectilesPerShot);
     if (m.spreadRad) out.spreadRad = Math.max(out.spreadRad, m.spreadRad);

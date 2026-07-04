@@ -22,10 +22,10 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 
 | Gate | Cobre | Não cobre |
 |---|---|---|
-| `npm run test` (shared) | Curva XP (`xpToNext`), `pickWeighted` de spawn | Combate, reroll, rede |
-| `npx vitest run` (server) | Cadeia tiro→dano→morte→kill, bloqueio em safe zone, ganchos de mobilidade (T-012) | Reroll, protocolo de rede real (roda direto no `ProjectileSystem`/`EffectSystem`, sem Colyseus) |
+| `npm run test` (shared) — **13 testes** | Curva XP, `pickWeighted`, cards de level-up (determinismo/soma/auto-pick, T-016), `combinedSkillMods` (T-017) | Combate, reroll, rede |
+| `npx vitest run` (server) — **17 testes** | Cadeia tiro→dano→morte→kill, safe zone, mobilidade (T-012), **guardas de balance da SPEC-0004** (TTK 5 tiros / full-força 3 tiros), ATTR_DEFS/tetos, cadência/alcance no ProjectileSystem, reroll soma preservada, multishot/pierce/fôlego/kill_rush (T-017) | Protocolo de rede real dos cards (roda direto nos systems, sem Colyseus) |
 | `tsc --noEmit` | Compilação server/client/bots | Comportamento runtime |
-| Bots headless | Movimento, colisão, coleta, sync, métricas JSONL, tiro/kill/respawn de verdade (T-008/T-013) | Reroll |
+| Bots headless | Movimento, colisão, coleta, sync, métricas JSONL, tiro/kill/respawn, **fluxo real oferta→escolha→aplicação de card** (bots escolhem via `choose_upgrade`, T-016) | Reroll |
 
 **CI:** ainda não existe no repositório — gates são locais até GitHub Action ser adicionada.
 
@@ -49,6 +49,10 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 | Bot: anti-stuck | `BOT_VERBOSE=1` — log `"preso — escapando lateralmente"` | Observar bot perto de prop no client |
 | Debug F3 | — | F3 + `/debug/rooms` (sem precisar de `DEBUG=1`) |
 | Persistência box (scaffold) | — | Mesmo token reconecta; log servidor |
+| Cards de level-up (T-016) | Testes shared + bots (hp 104 no nível 2 = card aplicado) | Subir de nível no browser: 3 cards aparecem, 1/2/3 escolhe, timeout 5s auto-pick, badge de fila |
+| Atributos cadência/alcance (T-015) | Testes server | F3 mostra `cadência (×cd)`/`alcance (×range)` mudando ao escolher cards |
+| Skills de projétil (T-017) | Testes server (multishot/pierce/fôlego/kill_rush) | Nível 4: card ★; tiro duplo visível; box em zona de guerra dá skill (evento `box_skill` no F3) |
+| Juice de poder (T-018) | — | Aro âmbar no nível 4+, pulsante no 8+; números de dano flutuantes; streak no HUD com 2+ kills |
 
 ---
 
@@ -56,8 +60,8 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 
 ### Obrigatório
 
-- [ ] `npm run test` (shared) — 5/5
-- [ ] `npx vitest run` (server) — 4/4
+- [ ] `npm run test` (shared) — 13/13
+- [ ] `npx vitest run` (server) — 17/17
 - [ ] Typecheck limpo (3 packages)
 - [ ] `npm run bots -- 3 30` — sem crash
 - [ ] Guarda de `.js` órfão (ver Gates automáticos) — sem saída

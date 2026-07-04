@@ -22,25 +22,25 @@ Vida base 100, cooldown 600ms, acertos perfeitos:
 A queda de TTK **com o nível** (5→3-4 tiros via especialização) só chega com a escala
 assimétrica + builds da T-015/T-016 — este passe corrige o piso, não a curva.
 
-## TTK medido (bots)
+## TTK medido (bots) — preenchido 2026-07-04, pós T-017
 
-| Métrica (10 partidas `npm run bots -- 4 45`) | Antes | Depois |
+Base de comparação: `packages/server/logs/sessions.jsonl` — 90 sessões-bot históricas
+(dano 10) vs 12 sessões-bot novas (dano 20 + cards + skills, rodadas de 20–24s).
+
+| Métrica | Antes (dano 10, histórico) | Depois (dano 20) |
 |---|---|---|
-| Kills por partida | _medir_ | _medir_ |
-| avgKills (`/metrics/summary`) | _medir_ | _medir_ |
+| Kills por sessão-bot | 16/90 = **0.18** | 6/12 = **0.50** (sessões mais curtas) |
+| Kills/min (sessões-bot agregadas) | ~0.04 | ~0.25 |
+| Evidência de TTK | — | bots terminando com hp 20/40 (sofreram 4/3 acertos de 20 — TTK 5 se confirma na prática) |
 
-**Status da medição:** ⚠️ pendente — a sessão de implementação rodou num sandbox sem
-runtime Node confiável (rede intermitente; ver DEVLOG). Comandos para preencher:
+**Leitura:** kills ~2.8× mais frequentes por sessão mesmo em rodadas curtas; vários
+bots terminam "à beira da morte" (hp ≤ 40), o que antes quase não acontecia — confronto
+agora fecha dentro de um engajamento. Nenhum indício de one-shot (impossível por
+construção: teto de força ×3.0 → dano máx. 60 < 100 HP mínimo).
 
-```bash
-npm run dev:server &        # terminal 1
-npm run bots -- 4 45        # terminal 2, repetir ~10x
-curl localhost:2567/metrics/summary
-```
-
-Comparar `avgKills`/`avgDeaths` com o histórico de `packages/server/logs/sessions.jsonl`
-(sessões antigas = dano 10). Se kills/partida não subirem visivelmente, revisitar o dano
-base **antes** de seguir para T-016.
+**Nota de método:** amostra pequena (12 sessões, salas de teste). O passe formal com
+10 partidas cheias continua na T-OPTIONAL 1 — re-rodar depois que T-008b puser builds
+variadas nos bots.
 
 ## Risco observado
 

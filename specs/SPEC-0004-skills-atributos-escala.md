@@ -1,6 +1,6 @@
 # SPEC-0004 — Escala de poder: atributos expandidos, cards de build e skills de projétil
 
-**Status:** aprovada · **Marco:** M1.5 · **Data:** 2026-07-04
+**Status:** implementada (T-014..T-018 ✅, PROMPT-0020..0024) — pendente veredito do CD e T-008b · **Marco:** M1.5 · **Data:** 2026-07-04
 **Origem:** `docs/proposals/PROPOSAL-0001-skills-atributos-escala.md` (diagnóstico completo e matemática do TTK)
 
 ## Problema / objetivo

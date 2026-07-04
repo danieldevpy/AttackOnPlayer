@@ -1,5 +1,11 @@
 # Devlog
 
+## 2026-07-04 — Sessão 7: SPEC-0004 implementada (T-014..T-018)
+- Execução completa da spec em 5 levas commitadas separadamente (PROMPT-0020..0024): rebalance TTK (dano 20 + guarda em teste), `ATTR_DEFS` data-driven (5 atributos, cadência/alcance no `ProjectileSystem`, reroll 5-vias com fix de arredondamento), cards de level-up (fila server-authoritative, `choose_upgrade` validado, timeout auto-pick, `hud.ts` extraído, bots respondem), skills de projétil (multishot/pierce/fôlego/impulso como modificadores por player — desvio registrado da spec: skill é do jogador, não do `LauncherDef`; marcos 4/8/12 com card ★; box sorteia skill), juice de poder (aro por faixa, números de dano com escala, streak).
+- **Verificado:** shared 13/13, server 17/17 (inclui guardas de balance: 5 tiros equilibrado, 3 tiros full-força, pierce exato, cooldown 750ms do perfurante), `tsc --noEmit` limpo ×3, guarda `.js` órfão limpa, smoke com bots real (level-up via card confirmado por `hp 104` no nível 2; kill+respawn ok). **TTK medido:** kills/sessão-bot 0.18 → 0.50, bots terminando com hp 20/40 — relatório em `docs/ai/balance-T014-ttk.md`.
+- Aprendizado de ambiente: sessão em sandbox com rede intermitente e filesystem efêmero fora dos mounts — toolchain bootstrapado por chamada (tarball do Node em outputs); processos de fundo não sobrevivem entre chamadas; `pkill -f tsx` mata o próprio shell (usar kill por PID/porta).
+- Pendente: veredito do CD no browser (checklist novo no QA.md), T-008b (perfis/boss), merge para `main`.
+
 ## 2026-07-04 — Sessão 6 (design): SPEC-0004 — escala de poder, builds e skills
 - Pedido do CD: dano "aumenta devagar", difícil eliminar players; planejar sistema de skills/atributos gamificado antes de implementar.
 - Diagnóstico (PROPOSAL-0001): dano não aumenta devagar — **TTK é matematicamente constante** (10 tiros em qualquer nível) porque força e vitalidade escalam na mesma taxa (+4%/pt, pontos iguais). Verificado por conta: `10×(1+0.04p)` vs `100×(1+0.04p)`.

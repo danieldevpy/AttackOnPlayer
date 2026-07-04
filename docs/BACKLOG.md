@@ -69,27 +69,27 @@
 
 > Origem: `docs/proposals/PROPOSAL-0001-skills-atributos-escala.md` (diagnóstico: TTK constante de 10 tiros — força e vitalidade escalam na mesma taxa). Spec: `specs/SPEC-0004-skills-atributos-escala.md`. Cada task é jogável e testável sozinha (Debug First); executar em ordem.
 
-## T-014 — Rebalance TTK: dano base e relatório 〔P〕 ✅ código (PROMPT-0020) · ⚠️ medição por bots pendente (ver docs/ai/balance-T014-ttk.md)
+## T-014 — Rebalance TTK: dano base e relatório 〔P〕 ✅ (PROMPT-0020 · TTK medido com bots, ver docs/ai/balance-T014-ttk.md)
 **Objetivo:** `basic_shot.damage` 10→20 (TTK base 5 tiros, ver TTK alvo na spec); rodada de bots medindo TTK/kills por round antes/depois; relatório curto em `docs/ai/`. Ajustar testes existentes.
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/launchers.ts · packages/server/src/metrics/SessionMetrics.ts · docs/observability/metrics.md
 **Aceite:** kills por partida de bots sobem visivelmente; TTK médio cai ~metade; relatório com números reais em docs/ai/.
 
-## T-015 — ATTR_DEFS: tabela de atributos + Cadência e Alcance 〔M〕 ✅ código (PROMPT-0021) · ⚠️ gates pendentes de runtime · depende: T-014
+## T-015 — ATTR_DEFS: tabela de atributos + Cadência e Alcance 〔M〕 ✅ (PROMPT-0021) · depende: T-014
 **Objetivo:** substituir `ATTR_POINT_VALUE` único pela tabela `ATTR_DEFS` (valor/pt + teto por atributo, escala assimétrica: Força +6%/×3.0, Vitalidade +4%/×2.5, Agilidade +3%/×2.0, Cadência −4%/mín. 55% cd, Alcance +5%/×1.75); `Player` ganha `attackSpeed` e `reach`; `EffectSystem.recompute()` calcula os 5; `ProjectileSystem` usa cooldown e range efetivos; reroll redistribui entre 5 (4 cortes). Atualizar `docs/mechanics/skills.md` e `growth.md`.
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/constants.ts · packages/server/src/systems/effects.ts · packages/server/src/systems/projectiles.ts · packages/server/src/state/ArenaState.ts
 **Aceite:** testes unitários de valores/tetos e do caso "full-Força n8 mata equilibrado n8 em 3 tiros"; cadência/alcance visíveis no F3.
 
-## T-016 — Cards de level-up (escolha manual v2) 〔G〕 ✅ código (PROMPT-0022) · ⚠️ gates pendentes de runtime · depende: T-015
+## T-016 — Cards de level-up (escolha manual v2) 〔G〕 ✅ (PROMPT-0022) · depende: T-015
 **Objetivo:** level-up gera oferta determinística de 3 cards (3 pts cada, tabela por nível em shared); mensagem `choose_upgrade` validada no servidor (escolha inválida ignorada); timeout 5s → auto-pick equilibrado (jogo nunca pausa); HUD de cards (teclas 1/2/3) — extrair `hud.ts` do `main.ts` nesta task (dívida LEAD_DESIGNER_NOTES); bots respondem com auto-pick. Morte reseta para preset do novo nível. Atualizar `docs/mechanics/growth.md` e `PLAYER_LOOP.md`.
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/constants.ts · packages/server/src/rooms/ArenaRoom.ts · packages/server/src/systems/effects.ts · packages/client/src/main.ts · packages/bots/src/bot.ts
 **Aceite:** escolha inválida ignorada; timeout aplica auto-pick; morrer reseta build; bots sem regressão de kills.
 
-## T-017 — Skills de projétil: patterns, marcos e box 〔G〕 ✅ código (PROMPT-0023) · ⚠️ gates pendentes de runtime · depende: T-016
+## T-017 — Skills de projétil: patterns, marcos e box 〔G〕 ✅ (PROMPT-0023) · depende: T-016
 **Objetivo:** `LauncherDef.fire` ganha `projectilesPerShot/spreadRad/damageFactor` + `pierce`; função de pattern `spread`; pierce no `ProjectileSystem`; 5 skills iniciais data-driven (Tiro Duplo, Leque, Perfurante, Fôlego, Impulso — tabela na spec) como modificadores por player; marcos (`SKILL_MILESTONE_LEVELS`, default 4/8/12) trocam 1 card por escolha de skill (1 de 2); box sorteia skill (fecha decisão do CD em growth.md). Atualizar `docs/mechanics/combat.md`.
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/launchers.ts · packages/server/src/systems/projectiles.ts · packages/server/src/rooms/ArenaRoom.ts · docs/mechanics/growth.md
 **Aceite:** Tiro Duplo spawna 2 projéteis com dano reduzido; Perfurante atravessa exatamente 1 alvo; skill aparece no card do marco e no F3; box concede skill em zona de guerra.
 
-## T-018 — Juice de poder 〔P〕 ✅ código (PROMPT-0024) · ⚠️ gates/screenshot pendentes de runtime · depende: T-016
+## T-018 — Juice de poder 〔P〕 ✅ (PROMPT-0024 · screenshot pendente do teste do CD no browser) · depende: T-016
 **Objetivo:** glow/aro por faixa de nível (1–3 nada, 4–7 fraco, 8+ forte + trail), números de dano com escala visual, kill streak no HUD, flash do card escolhido. Só `visuals.ts`/`hud.ts`, respeitando a fase visual atual.
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · instrucoes/FASES_VISUAIS.md · packages/client/src/visuals.ts
 **Aceite:** glow por faixa visível; screenshot comparando faixas de nível; sem custo de draw calls perceptível.
