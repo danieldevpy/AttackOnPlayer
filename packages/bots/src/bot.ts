@@ -17,10 +17,14 @@ const BOT_VERBOSE = process.env.BOT_VERBOSE === "1";
 // fleeHp = fração de HP p/ recuar; a força da skill deixa o gancho p/ personalidade/boss (T-008b).
 type SkillName = "fraco" | "medio" | "forte";
 // engageRange = raio de detecção/caça (bot persegue inimigo até aqui, mesmo fora do alcance de tiro).
-const SKILLS: Record<SkillName, { aimError: number; engageRange: number; fleeHp: number }> = {
-  fraco: { aimError: 0.4, engageRange: 12, fleeHp: 0.5 }, // reativo: só briga quem chega perto
-  medio: { aimError: 0.18, engageRange: 30, fleeHp: 0.35 }, // caça em raio médio
-  forte: { aimError: 0.06, engageRange: 9999, fleeHp: 0.25 }, // caçador: persegue pelo mapa todo
+// fireIntervalMs = [min,max] do intervalo entre decisões de puxar o gatilho — bugfix pós-teste
+// manual: antes o bot atirava a cada tick assim que no alcance, ficando "impossível de matar"
+// (só o cooldown do lançador, igual pra todo mundo, limitava). Cada skill agora tem seu próprio
+// ritmo de ataque, e o intervalo real sorteia dentro da faixa a cada tiro — não é 100% fixo.
+const SKILLS: Record<SkillName, { aimError: number; engageRange: number; fleeHp: number; fireIntervalMs: [number, number] }> = {
+  fraco: { aimError: 0.4, engageRange: 12, fleeHp: 0.5, fireIntervalMs: [1000, 1900] }, // reativo: só briga quem chega perto
+  medio: { aimError: 0.18, engageRange: 30, fleeHp: 0.35, fireIntervalMs: [550, 1050] }, // caça em raio médio
+  forte: { aimError: 0.06, engageRange: 9999, fleeHp: 0.25, fireIntervalMs: [280, 600] }, // caçador: persegue pelo mapa todo
 };
 const SKILL_NAMES: SkillName[] = ["fraco", "medio", "forte"];
 /** BOT_SKILL fixa a skill de todos; ausente = sorteada por bot (variedade na sessão). */
@@ -29,6 +33,10 @@ function skillFor(i: number): SkillName {
   if (env && SKILLS[env]) return env;
   return SKILL_NAMES[i % SKILL_NAMES.length];
 }
+
+/** Anti-stuck: bot fica "grudado" em obstáculo quando pretende andar mas quase não desloca. */
+const STUCK_DIST_EPS = 0.05; // deslocamento mínimo esperado por tick (100ms) andando livre
+const STUCK_TICKS_THRESHOLD = 5; // ~500ms tentando andar sem sair do lugar
 
 /** BFS 4-direções no grid; retorna centros de tile do caminho (sem o inicial). */
 function bfsPath(map: GameMap, fx: number, fz: number, tx: number, tz: number) {
@@ -76,6 +84,12 @@ async function runBot(i: number) {
   let shots = 0; // telemetria: comandos de tiro enviados
   let engagedTicks = 0; // telemetria: ticks em que houve inimigo em alcance de engajamento
   let minDist = Infinity; // telemetria: menor distância a um inimigo
+  let nextFireAt = 0; // ritmo de ataque por skill (fireIntervalMs), não o cooldown do lançador
+  let lastPos: { x: number; z: number } | null = null; // anti-stuck: posição no tick anterior
+  let stuckTicks = 0;
+  let unstuckUntil = 0;
+  let unstuckDir = { x: 0, z: 0 };
+  let unstuckLogged = false;
   const track = new Map<string, { x: number; z: number; t: number }>(); // p/ estimar velocidade do alvo (lead)
 
   const think = setInterval(() => {
@@ -150,23 +164,26 @@ async function runBot(i: number) {
       const ang = Math.atan2(ez - me.z, ex - me.x) + (Math.random() * 2 - 1) * skill.aimError;
       aim = { aimX: Math.cos(ang), aimZ: Math.sin(ang) };
 
-      // gatilho só liga se no alcance e eu não estou em safe (o alvo já é fora de safe por seleção)
-      if (fbest <= fireRange && myZone !== "safe") {
+      // gatilho só liga se no alcance, fora de safe, e o ritmo de ataque da skill permitir
+      // (bugfix: sem isso o bot atirava a cada tick, limitado só pelo cooldown do lançador —
+      // igual pra todo mundo — e virava "impossível de matar" independente da skill).
+      if (fbest <= fireRange && myZone !== "safe" && now >= nextFireAt) {
         fire = true;
         shots++;
+        const [lo, hi] = skill.fireIntervalMs;
+        nextFireAt = now + lo + Math.random() * (hi - lo); // "peso" aleatório — nunca 100% fixo
       }
       track.set(foeId, { x: foe.x, z: foe.z, t: now });
     } else {
       fleeingLogged = false;
     }
 
+    let moveVec = { x: 0, z: 0 };
+    const inCombat = combatDir !== null;
+
     if (combatDir) {
       const l = Math.hypot(combatDir.x, combatDir.z);
-      const mv = l > 0.01 ? { x: combatDir.x / l, z: combatDir.z / l } : { x: 0, z: 0 };
-      const payload: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean } = { ...mv };
-      if (aim) { payload.aimX = aim.aimX; payload.aimZ = aim.aimZ; }
-      if (fire) payload.fire = true;
-      room.send("input", payload);
+      moveVec = l > 0.01 ? { x: combatDir.x / l, z: combatDir.z / l } : { x: 0, z: 0 };
       targetId = ""; // volta a caçar coletável quando o combate acabar
       path = null;
     } else {
@@ -206,8 +223,48 @@ async function runBot(i: number) {
       }
 
       const len = Math.hypot(dir.x, dir.z);
-      room.send("input", len > 0.01 ? { x: dir.x / len, z: dir.z / len } : { x: 0, z: 0 });
+      moveVec = len > 0.01 ? { x: dir.x / len, z: dir.z / len } : { x: 0, z: 0 };
     }
+
+    // --- Anti-stuck: detecta quando o movimento pretendido não produz deslocamento real
+    // (bot grudado num prop/parede) e força uma saída lateral temporária. Não depende de
+    // raycasting contra props — só observa a posição autoritativa do servidor tick a tick,
+    // que já reflete a colisão real (moveWithCollision no servidor).
+    const now3 = Date.now();
+    const wantsToMove = Math.hypot(moveVec.x, moveVec.z) > 0.3;
+    const distMoved = lastPos ? Math.hypot(me.x - lastPos.x, me.z - lastPos.z) : Infinity;
+    lastPos = { x: me.x, z: me.z };
+
+    if (now3 >= unstuckUntil) {
+      if (wantsToMove && distMoved < STUCK_DIST_EPS) stuckTicks++;
+      else stuckTicks = 0;
+
+      if (stuckTicks >= STUCK_TICKS_THRESHOLD) {
+        // escapa de lado (perpendicular ao movimento pretendido, lado sorteado) por um tempo curto
+        const side = Math.random() < 0.5 ? 1 : -1;
+        const perp = { x: -moveVec.z * side, z: moveVec.x * side };
+        const pl = Math.hypot(perp.x, perp.z) || 1;
+        unstuckDir = { x: perp.x / pl, z: perp.z / pl };
+        unstuckUntil = now3 + 350 + Math.random() * 350;
+        stuckTicks = 0;
+        unstuckLogged = false;
+      }
+    }
+
+    if (now3 < unstuckUntil) {
+      moveVec = unstuckDir;
+      if (BOT_VERBOSE && !unstuckLogged) {
+        unstuckLogged = true;
+        console.log(`[${name}] preso — escapando lateralmente`);
+      }
+    }
+
+    const payload: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean } = { x: moveVec.x, z: moveVec.z };
+    if (inCombat) {
+      if (aim) { payload.aimX = aim.aimX; payload.aimZ = aim.aimZ; }
+      if (fire) payload.fire = true;
+    }
+    room.send("input", payload);
 
     if (me.level > 1 + pickupsSeen) {
       pickupsSeen = me.level - 1;

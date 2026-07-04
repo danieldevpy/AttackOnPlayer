@@ -370,12 +370,13 @@ export class ArenaRoom extends Room<ArenaState> {
   }
 
   private emitDebug(type: string, payload: any) {
-    const isDebug = process.env.DEBUG === "1";
     const ev = { time: Date.now(), type, payload };
     this.debugEvents.push(ev);
     if (this.debugEvents.length > 200) this.debugEvents.shift();
-    if (isDebug) {
-      this.broadcast("debug_event", ev);
-    }
+    // Bugfix pós-teste manual: o feed do F3 é opt-in (a tecla já esconde o overlay por
+    // padrão) — exigir também DEBUG=1 no servidor pra alimentar esse feed era um segundo
+    // interruptor escondido que ninguém lembrava de ligar. Ring buffer/HTTP já eram sempre-on;
+    // agora o broadcast acompanha.
+    this.broadcast("debug_event", ev);
   }
 }

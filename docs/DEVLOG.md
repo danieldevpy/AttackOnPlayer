@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-04 — Sessão 5 (cont.): bugfix pós-teste manual (F3, ritmo de ataque, anti-stuck)
+- CD testou a SPEC-0003 completa no browser + bots e relatou 3 problemas (PROMPT-0019):
+  1. **F3 sem log:** o broadcast do feed de eventos exigia `DEBUG=1` no servidor além de abrir F3 no cliente — um segundo interruptor escondido. Removida a checagem; o feed agora sempre acompanha o ring buffer/`/debug/rooms`, que já eram sempre-on. `DEBUG=1` sobra só pro `dev_launcher` (T-012).
+  2. **Bot "impossível de matar":** o gatilho do bot ligava a cada tick no alcance, limitado só pelo cooldown da arma (igual humano/bot). Cada `SkillName` ganhou `fireIntervalMs: [min,max]` (`fraco` 1000–1900ms, `medio` 550–1050ms, `forte` 280–600ms); o bot sorteia o próximo intervalo a cada tiro (nunca fixo) — gate adicional ao cooldown da arma, nunca o ultrapassa.
+  3. **Bot grudando em obstáculo:** o movimento de combate era linha reta sem desvio (diferente da caça a coletável, que usa BFS). Novo anti-stuck: compara posição autoritativa tick a tick; se pretende andar e quase não desloca por ~500ms, força um desvio lateral por 350–700ms. Não depende de geometria do mapa, só da posição que o servidor já resolve.
+- Verificado: tsc limpo (server/bots); shared 5/5; server 4/4. Ao vivo: F3 mostrou `spawn` sem `DEBUG=1`; `npm run bots -- 3 30` — `fraco` 9 tiros vs. `medio`/`forte` 23 (antes: 200+ pra qualquer skill); `BOT_VERBOSE=1` mostrou `"preso — escapando lateralmente"` disparando várias vezes numa sessão de 6 bots, sem regressão de combate.
+
 ## 2026-07-04 — Sessão 5 (cont.): T-012 (ganchos de mobilidade) — SPEC-0003 fecha
 - **T-012** (PROMPT-0018), última task da spec: `LauncherDef` ganha `movement?` opcional (`selfSlowFactor`, `selfSlowMs`, `inheritVelocityFactor`) — ausente = neutro, `basic_shot` não muda.
 - `EffectSystem` ganhou o primeiro efeito de **magnitude dinâmica** (`launcher_slow`, campo `ActiveEffect.magnitude` + método `applySlow()`) — até aqui todo efeito tinha força/duração fixas em constante; agora cada lançador pode definir as suas. `inheritVelocityFactor` bende a direção do projétil somando uma fração do vetor de movimento do atirador (não muda a magnitude do tiro, só a direção).
