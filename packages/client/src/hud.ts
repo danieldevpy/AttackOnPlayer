@@ -93,6 +93,24 @@ export function hasOpenOffer(): boolean {
   return currentOffer !== null;
 }
 
+// ---------- Kill streak (T-018) ----------
+// Derivado do feed de eventos que o servidor já transmite (debug_event) — nenhum
+// tráfego novo. Streak = kills sem morrer; insumo visual do hit_streak do M2 (aura).
+let streak = 0;
+
+export function onCombatEvent(ev: { type: string; payload: any }, myId: string) {
+  if (!myId) return;
+  if (ev.type === "hit" && ev.payload?.isKill && ev.payload.shooterId === myId) {
+    streak += 1;
+    if (streak >= 2) {
+      flashLabel = `🔥 ${streak} kills sem morrer!`;
+      flashUntil = performance.now() + 2500;
+    }
+  } else if (ev.type === "death" && ev.payload?.playerId === myId) {
+    streak = 0;
+  }
+}
+
 // ---------- HUD principal + roster ----------
 
 let rosterNext = 0;
@@ -110,6 +128,7 @@ export function updateHud(now: number) {
     `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}  cad ${me?.attackSpeed?.toFixed(2) ?? "-"}  alc ${me?.reach?.toFixed(2) ?? "-"}` +
     (me?.skills?.length ? `\n★ ${Array.from(me.skills).join(" • ")}` : "") +
     `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • espaço/click=atirar)` +
+    (streak >= 2 ? `\n🔥 streak: ${streak}` : "") +
     (me?.pendingUpgrades > 1 ? `\n📶 +${me.pendingUpgrades - 1} level-up na fila` : "") +
     (now < flashUntil ? `\n${flashLabel}` : "") +
     (now < ctx.getAnnounceUntil() ? `\n🔥 farm_event na zona de guerra!` : "");

@@ -142,6 +142,11 @@ export function lossFraction(level: number): number {
   return Math.min(MAX_LEVEL_LOSS_FRACTION, MIN_LOSS_FRACTION + (level - 3) * 0.05);
 }
 
+// Faixas de poder (T-018, SPEC-0004): só FEEDBACK visual/leitura tática — nunca lógica de jogo.
+// nível 1–3: nada · 4–7: aro fraco · 8+: aro forte pulsante. Alimenta o "famar aura" do M2.
+export const POWER_BAND_MID = 4;
+export const POWER_BAND_HIGH = 8;
+
 // Efeitos (ADR-009)
 export const SPEED_BOOST_MULT = 1.5;
 export const SPEED_BOOST_MS = 8000;

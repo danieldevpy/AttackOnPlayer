@@ -89,7 +89,7 @@
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/launchers.ts · packages/server/src/systems/projectiles.ts · packages/server/src/rooms/ArenaRoom.ts · docs/mechanics/growth.md
 **Aceite:** Tiro Duplo spawna 2 projéteis com dano reduzido; Perfurante atravessa exatamente 1 alvo; skill aparece no card do marco e no F3; box concede skill em zona de guerra.
 
-## T-018 — Juice de poder 〔P〕 · depende: T-016
+## T-018 — Juice de poder 〔P〕 ✅ código (PROMPT-0024) · ⚠️ gates/screenshot pendentes de runtime · depende: T-016
 **Objetivo:** glow/aro por faixa de nível (1–3 nada, 4–7 fraco, 8+ forte + trail), números de dano com escala visual, kill streak no HUD, flash do card escolhido. Só `visuals.ts`/`hud.ts`, respeitando a fase visual atual.
 **Contexto:** specs/SPEC-0004-skills-atributos-escala.md · instrucoes/FASES_VISUAIS.md · packages/client/src/visuals.ts
 **Aceite:** glow por faixa visível; screenshot comparando faixas de nível; sem custo de draw calls perceptível.

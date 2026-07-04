@@ -2,6 +2,7 @@
 // Fases: 1 primitivas | 2 composição | 3 sprites 3D | 4 low-poly
 // Guia completo: instrucoes/FASES_VISUAIS.md
 import * as THREE from "three";
+import { POWER_BAND_MID, POWER_BAND_HIGH } from "@aop/shared";
 
 export const VISUAL_PHASE: 1 | 2 | 3 | 4 = 1;
 
@@ -64,6 +65,39 @@ export function createPlayerVisual(id: string, isSelf: boolean): THREE.Group {
   group.add(nose);
 
   return group;
+}
+
+/**
+ * T-018 (SPEC-0004): "sentir aura" — aro de poder por faixa de nível. Poder que não se
+ * vê não existe; também é leitura tática ("aquele ali é perigoso") e prepara o "famar
+ * aura" do M2. Faixas em shared/constants.ts (POWER_BAND_*) — o cliente só exibe.
+ */
+const powerRingGeo = new THREE.RingGeometry(0.62, 0.74, 24);
+export function updatePowerVisual(group: THREE.Group, level: number, t: number) {
+  let ring = group.userData.powerRing as THREE.Mesh | undefined;
+  if (!ring) {
+    ring = new THREE.Mesh(
+      powerRingGeo,
+      new THREE.MeshBasicMaterial({ color: 0xffd54f, transparent: true, opacity: 0, side: THREE.DoubleSide })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.035;
+    group.add(ring);
+    group.userData.powerRing = ring;
+  }
+  const mat = ring.material as THREE.MeshBasicMaterial;
+  if (level >= POWER_BAND_HIGH) {
+    // aro forte pulsante (placeholder de "trail" da fase F1 — arte de verdade é F3+)
+    mat.opacity = 0.7 + Math.sin(t * 3) * 0.2;
+    mat.color.setHex(0xffb300);
+    ring.scale.setScalar(1.1 + Math.sin(t * 3) * 0.08);
+  } else if (level >= POWER_BAND_MID) {
+    mat.opacity = 0.4;
+    mat.color.setHex(0xffd54f);
+    ring.scale.setScalar(1);
+  } else {
+    mat.opacity = 0;
+  }
 }
 
 export function createCollectibleVisual(kind: string): THREE.Mesh {

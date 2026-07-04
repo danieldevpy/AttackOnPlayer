@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
 import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts } from "./visuals";
-import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex } from "./hud";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual } from "./visuals";
+import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex, onCombatEvent } from "./hud";
 
 const hud = document.getElementById("hud")!;
 const debugOverlay = document.getElementById("debug-overlay")!;
@@ -203,6 +203,59 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
   localDebugEvents.push(ev);
   if (localDebugEvents.length > 200) localDebugEvents.shift();
   if (debugOpen) renderDebugEvent(ev);
+  // T-018: juice de combate — número de dano no alvo + streak no HUD
+  onCombatEvent(ev, mySessionId);
+  if (ev.type === "hit" && ev.payload?.damage > 0) {
+    const vis = playerVisuals.get(ev.payload.victimId);
+    if (vis) spawnDamagePopup(vis.position.x, vis.position.z, ev.payload.damage, ev.payload.isKill === true);
+  }
+}
+
+// ---------- Números de dano flutuantes (T-018) ----------
+// Sprite com CanvasTexture; orçamento fixo (máx. 24 vivos) — sem custo quando não há combate.
+const damagePopups: Array<{ sprite: THREE.Sprite; born: number }> = [];
+const POPUP_LIFE_MS = 900;
+
+function spawnDamagePopup(x: number, z: number, damage: number, kill: boolean) {
+  if (damagePopups.length >= 24) return;
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 64;
+  const g = canvas.getContext("2d")!;
+  // fonte cresce com o dano — golpe forte É visivelmente forte
+  const fontSize = Math.round(Math.min(46, 20 + damage * 0.6));
+  g.font = `bold ${fontSize}px monospace`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.strokeStyle = "#000";
+  g.lineWidth = 5;
+  g.fillStyle = kill ? "#ff5252" : damage >= 30 ? "#ffb300" : "#ffe082";
+  const text = kill ? `${Math.round(damage)} ☠` : `${Math.round(damage)}`;
+  g.strokeText(text, 64, 34);
+  g.fillText(text, 64, 34);
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false })
+  );
+  sprite.scale.set(1.7, 0.85, 1);
+  sprite.position.set(x, 1.35, z);
+  scene.add(sprite);
+  damagePopups.push({ sprite, born: performance.now() });
+}
+
+function updateDamagePopups(now: number) {
+  for (let i = damagePopups.length - 1; i >= 0; i--) {
+    const p = damagePopups[i];
+    const age = (now - p.born) / POPUP_LIFE_MS;
+    if (age >= 1) {
+      scene.remove(p.sprite);
+      p.sprite.material.map?.dispose();
+      p.sprite.material.dispose();
+      damagePopups.splice(i, 1);
+      continue;
+    }
+    p.sprite.position.y = 1.35 + age * 0.8; // sobe
+    p.sprite.material.opacity = 1 - age * age; // some no fim
+  }
 }
 
 function renderDebugEvent(ev: {time: number; type: string; payload: any}) {
@@ -381,6 +434,7 @@ function syncWorld() {
     // dir do servidor segue a convenção atan2(z,x); rotation.y = -dir alinha o
     // "nariz" (local +X) com essa direção no mundo (ver visuals.ts).
     vis.rotation.y += shortestAngleDiff(vis.rotation.y, -(p.dir ?? 0)) * 0.25;
+    updatePowerVisual(vis, p.level ?? 1, t); // T-018: aro de poder por faixa de nível
   });
   playerVisuals.forEach((vis, id) => {
     if (!seenP.has(id)) {
@@ -462,6 +516,7 @@ function animate() {
     mesh.position.y = 0.4 + Math.sin(t) * 0.08;
     mesh.rotation.y += 0.02;
   });
+  updateDamagePopups(performance.now()); // T-018
   updateHud(performance.now());
   // Atualiza painel de debug a ~10fps para não sobrecarregar DOM
   if (debugOpen && ++debugTick % 2 === 0) updateDebugState();
