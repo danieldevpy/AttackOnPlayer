@@ -16,3 +16,13 @@ Voz do Daniel. A IA registra aqui, mas o conteúdo é decisão dele.
 - Métricas: entender a sessão de cada jogador + visão coletiva.
 - Se der certo, vira portfólio.
 - Papel: Creative Director. A IA propõe/argumenta/registra; Daniel decide.
+
+## 2026-07-04 — Decisões que desbloqueiam T-004/T-006
+
+**Box "reset de MU":** quer permanência real durante a "sessão de vida" do jogador — ao trocar de sala/round, atributos (força etc.) podem se manter ou avançar, dentro de limites medidos, com balanceamento pensado para servidor grande (várias rooms, população escalando). Quer poder ver cada ponto de atributo acumulado, mas isso só aparece no **modo desenvolvimento** por enquanto — é peça de infraestrutura que contribui com a sessão e fica pronta para ser "acionada" (ligada de verdade na gameplay) depois.
+
+**Coins:** devem comprar algo já nesta task (não só acumular).
+
+**Perda de nível na morte:** nível baixo perde pouco atributo ao morrer; nível muito avançado tem perda muito maior (escala com o nível, não é fixo). Quer também o conceito de "crítico" e camadas de defesa — vida/atributo primeiro (simples), depois armadura, depois aura determinando chance de sobreviver — mantendo o jogo dinâmico. Reset total deve existir, mas como **opção ativável** (por room e/ou modo global), não comportamento único.
+
+**Registrado por:** IA, ver interpretação técnica e limites de escopo em `docs/LEAD_DESIGNER_NOTES.md` (mesma data) e ADR-012.

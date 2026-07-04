@@ -51,3 +51,8 @@ Toda arma é uma `LauncherDef` (dados em shared): projétil (velocidade, raio, a
 ## ADR-006 — Recursos valiosos nascem longe de jogadores
 **Data:** 2026-07-04 · **Status:** Aprovado (CD)
 O spawner divide o mapa em células, mede densidade de jogadores por célula e gera coletáveis nas vazias. Espalha jogadores naturalmente e cria mapa "vivo". Implementado desde M0 de forma simples (raio mínimo de distância).
+
+## ADR-012 — Scaffold de progressão persistente entre rooms (dev-mode only)
+**Data:** 2026-07-04 · **Status:** Aprovado (CD, PROMPT-0004) — escopo delimitado pela IA, ver LEAD_DESIGNER_NOTES
+CD quer que a box (T-004) contribua para progresso que sobrevive entre partidas, e não só dentro do round — tensiona com a constituição ("progressão por round") e com a recomendação anterior da IA (persistência só cosmética). Decisão do CD prevalece. Implementado como **scaffold**: `playerToken` gerado e persistido no cliente (localStorage), enviado no join; servidor mantém `PersistentProgress` (pontos de atributo acumulados) por token, em memória (sem DB ainda). Visível apenas com `DEV_MODE` ativo (painel no overlay F3, T-007).
+**Consequência:** NÃO afeta o poder dentro do round nem o balanceamento entre salas ainda — isso depende do sistema de matchmaking/múltiplas salas do M3. Quando M3 chegar, a peça já existe para ser "ligada" de fato (ex.: influenciar `mapSizeFor`/spawns por nível médio da sala). Até lá é só instrumentação visível em dev.

@@ -28,3 +28,13 @@ Voz da IA. Opiniões, riscos e sugestões. Status: proposta → aprovada/rejeita
 **Sugestão — Guardian único (não vários NPCs).** Um só NPC de elite que entra quando falta gente: vira treino, desafio, coop e evento com um único cérebro para manter. *Status: aprovado na concepção, implementar no M3.*
 
 **Alerta técnico — 45s/2–3min de partida exige tudo instantâneo.** Loading > 5s destrói o loop "mais um round". Manter bundle pequeno é requisito de design, não só técnico.
+
+## 2026-07-04 — Interpretação técnica das decisões de T-004/T-006 (escopo delimitado)
+
+O pedido do CD é maior que uma task — vou implementar a fatia buildável agora e registrar o resto como proposta para os marcos certos, em vez de meio-construir tudo.
+
+**Meta-progressão entre rooms (box):** tensiona direto com a constituição ("progressão por round") e com a recomendação anterior da IA em `progression.md` ("persistência só cosmética/rank, nunca poder"). CD decidiu por cima disso — registrado, é decisão dele. Escopo que vou construir agora: `PersistentProgress` por `playerToken` (id gerado no cliente, guardado em localStorage, enviado no join) acumulando pontos de atributo entre partidas; visível SÓ com `DEV_MODE` ligado (painel debug, integra com o overlay F3 do T-007). **Não vou** ligar isso ao poder real dentro do round nem ao balanceamento multi-sala (ADR-007/matchmaking) — isso exige o sistema de salas/matchmaking do M3, que não existe ainda. Fica a peça pronta para "acionar" quando M3 chegar (ADR-012).
+
+**Coins:** CD não especificou o quê. Proposta da IA (implementada): coins compram **reroll** da distribuição automática de atributos do último nível (ver T-003 auto-distribuição). Justificativa: reusa o sistema já existente (sem UI de loja nova), é testável por bot (gasta ao acumular um limiar), e é o precursor natural da "escolha manual" (v2) já prevista em growth.md.
+
+**Perda de nível / crítico / armadura / aura-sobrevivência:** vou implementar a curva de perda escalando com nível (piso baixo nos níveis iniciais, perda cresce com o nível) + toggle de reset total (por room, com default global). **Não vou** implementar armadura, crítico ou "aura decide sobrevivência" agora — são sistemas de combate/aura que dependem do M2 (Aura, ADR-005) e de combate já rodando de verdade (T-005/T-006 é o próprio combate nascendo). Registrado como proposta para quando Aura entrar em pauta, para não nascerem meio-prontos.

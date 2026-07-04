@@ -33,6 +33,6 @@ coins → economia paralela (uso a decidir)
 | `coin_buff` | campo | +coins / multiplicador de coins temporário |
 | `box` | zona de guerra, muito raro | skill/lançador + pontos de atributo |
 
-## ⚠️ Decisões pendentes do CD (bloqueiam T-004)
-1. **Box "reset de MU":** reset implica progresso PERMANENTE entre partidas — conflita com "progressão por round" da constituição. (a) box só vale no round; (b) criar meta-progressão permanente (mudar constituição). Recomendação da IA: (a) agora, discutir (b) no M3 junto com persistência.
-2. **Coins compram o quê?** Pode nascer como acumulador sem uso (métricas dirão o valor certo depois).
+## Decisões do CD (2026-07-04 — desbloqueiam T-004)
+1. **Box "reset de MU":** dá bônus forte só no round (atributos + skill, mesmo pipeline do EffectSystem) **e** soma pontos num acumulador persistente por `playerToken` (ADR-012). O acumulador só é visível com `DEV_MODE` ligado (painel debug) e não influencia o poder dentro do round nem o balanceamento entre salas ainda — isso é scaffold para o M3 (matchmaking/múltiplas salas).
+2. **Coins compram reroll:** ao juntar `COIN_REROLL_COST` coins, o jogador pode re-rolar a distribuição automática de atributos do nível mais recente (reusa o preset de T-003, sem UI de loja nova). Precursor da "escolha manual" (v2).

@@ -20,10 +20,14 @@
 **Aceite:** coletar dá XP e sobe nível pela curva; atributos refletem no estado; teste unitário da curva.
 
 ## T-004 — Coletáveis expandidos + spawn por zona 〔M〕 · depende: T-001, T-003
-**Objetivo:** xp_orb, farm_event, coin_buff, box (conforme growth.md); pesos de spawn por zona (guerra = raros).
-**⚠️ Antes:** CD decide box-reset (round-only vs meta) e papel dos coins — ver growth.md.
-**Contexto:** docs/mechanics/growth.md · docs/mechanics/collectibles.md · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/visuals.ts
-**Aceite:** box só nasce em zona de guerra; farm_event anunciado no HUD; métricas registram por kind.
+**Objetivo:** xp_orb, farm_event, coin_buff, box (conforme growth.md); pesos de spawn por zona (guerra = raros). Box: bônus forte no round + soma no acumulador persistente por playerToken (ADR-012, painel visível só em T-007/DEV_MODE). Coins: reroll de atributo (COIN_REROLL_COST).
+**Contexto:** docs/mechanics/growth.md · docs/DECISION_LOG.md (ADR-012) · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/visuals.ts
+**Aceite:** box só nasce em zona de guerra; farm_event anunciado no HUD; métricas registram por kind; reroll consome coins e reaplica preset de atributo.
+
+## T-004b — Scaffold de progressão persistente (ADR-012) 〔P〕 · depende: T-004
+**Objetivo:** playerToken gerado/persistido no cliente (localStorage), enviado no join; servidor guarda PersistentProgress em memória por token, alimentado pela box.
+**Contexto:** docs/DECISION_LOG.md (ADR-012) · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/main.ts
+**Aceite:** reconectar com o mesmo token mantém o acumulador; não afeta poder dentro do round; visível só com DEV_MODE (painel real chega em T-007).
 
 ## T-005 — Lançadores v1: tiro reto 〔G〕
 **Objetivo:** LauncherDef registry (shared), ProjectileSystem no servidor, input fire com cooldown, vida/dano (dano × força), projétil some em prop/alcance, feedback de hit no cliente.
@@ -31,10 +35,9 @@
 **Aceite:** bot atinge bot e a vida cai; projétil respeita alcance; zona safe bloqueia dano.
 
 ## T-006 — Morte, respawn e perda de nível 〔M〕 · depende: T-005
-**Objetivo:** vida 0 → morte, respawn em zona safe, perda de nível (regra a decidir: piso de proteção? perda proporcional?), kill dá XP escalado pelo nível da vítima.
-**⚠️ Antes:** CD decide a regra de perda (propostas em LEAD_DESIGNER_NOTES 2026-07-04).
+**Objetivo:** vida 0 → morte, respawn em zona safe, perda de nível por curva que escala com o nível (piso 1–3, cresce depois — ver progression.md) + flag `fullResetOnDeath` (por room/default global), kill dá XP escalado pelo nível da vítima.
 **Contexto:** docs/mechanics/progression.md · docs/mechanics/growth.md · packages/server/src/rooms/ArenaRoom.ts
-**Aceite:** morrer derruba nível conforme regra; métricas de kill/death.
+**Aceite:** morrer aplica a curva de perda (baixo nível quase não perde, alto nível perde muito); toggle de reset total funciona por room; métricas de kill/death.
 
 ## T-007 — Modo debug dinâmico 〔M〕
 **Objetivo:** overlay F3 (zonas, entidades, timers, feed de eventos), canal debug no servidor, /debug/rooms, ring buffer, BOT_VERBOSE.
