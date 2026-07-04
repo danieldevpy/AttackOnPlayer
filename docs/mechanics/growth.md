@@ -15,15 +15,18 @@ coins → economia paralela (uso a decidir)
 - Curva: `xpParaNivel(n) = XP_BASE × n^XP_EXP` — 2 constantes controlam TODO o pacing (balance por dados, ver metrics.md).
 - Subir de nível → +PONTOS_POR_NIVEL pontos de atributo.
 
-## Atributos (T-003 ✅)
+## Atributos (T-003 ✅ · expandidos na T-015, SPEC-0004/ADR-013)
 | Atributo | Efeito | Interage com |
 |---|---|---|
-| Força | multiplica dano do lançador | combat.md |
-| Velocidade | multiplica velocidade base (empilha com efeitos, respeita teto ADR-009) | movement.md |
-| Vitalidade | vida máxima | combat.md |
+| Força | multiplica dano do lançador (+6%/pt, teto ×3.0) | combat.md |
+| Vitalidade | vida máxima (+4%/pt, teto ×2.5) | combat.md |
+| Agilidade (ex-Velocidade) | multiplica velocidade base (+3%/pt; empilha com efeitos, teto ADR-009) | movement.md |
+| Cadência 🆕 | reduz cooldown do lançador (−4%/pt, piso 55% do cd) | combat.md |
+| Alcance 🆕 | multiplica range do projétil (+5%/pt, teto ×1.75) | combat.md |
 
-- v1: auto-distribuição (preset equilibrado) para não travar o fluxo de 2–3 min.
-- v2: escolha manual rápida (3 botões no respawn/level-up).
+- Valores/tetos na tabela `ATTR_DEFS` (`constants.ts`) — data-driven, tabela completa em mechanics/skills.md.
+- v1: auto-distribuição (preset equilibrado, só atributos-base) para não travar o fluxo de 2–3 min.
+- v2 (T-016): escolha por cards no level-up — 3 opções, timeout 5s → auto-pick.
 - Implementação: atributos entram no `EffectSystem` como camada "permanente do round" (ADR-009) — mesmo pipeline, sem código novo de recompute.
 
 ## Coletáveis expandidos (T-004 ✅ — tabela completa em mechanics/collectibles.md)

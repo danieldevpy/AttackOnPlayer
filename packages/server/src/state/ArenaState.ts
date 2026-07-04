@@ -11,6 +11,8 @@ export class Player extends Schema {
   @type("number") speed = 1; // multiplicador efetivo (ADR-009) — servidor calcula
   @type("number") strength = 1; // multiplica dano (combat.md, T-005)
   @type("number") vitality = 1; // multiplica vida máxima (combat.md, T-006)
+  @type("number") attackSpeed = 1; // T-015 (cadência): multiplica cooldown do lançador — <1 = atira mais rápido
+  @type("number") reach = 1; // T-015 (alcance): multiplica range do projétil
   @type("number") xpMult = 1; // farm_event (T-004): XP em dobro por 20s
   @type(["string"]) effects = new ArraySchema<string>(); // kinds ativos, só p/ HUD
   @type("number") hp = 100; // T-005
@@ -42,6 +44,7 @@ export class Projectile extends Schema {
   dirZ = 0;
   ownerId = "";
   distanceTraveled = 0;
+  maxRange = 0; // T-015: range efetivo congelado no disparo (launcher.range × reach do atirador)
 }
 
 export class ArenaState extends Schema {

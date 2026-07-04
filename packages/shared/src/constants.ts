@@ -69,9 +69,33 @@ export function pickWeighted<T extends string>(rnd: () => number, weights: Array
 export const XP_BASE = 20;
 export const XP_EXP = 1.35; // as 2 constantes controlam todo o pacing (balance por dados, T-009)
 export const XP_PICKUP_AMOUNT = 8; // XP de um coletável comum (xp_orb)
-export const ATTR_POINTS_PER_LEVEL_EACH = 1; // preset equilibrado v1: mesmo tanto em cada atributo por nível
-export const ATTR_POINT_VALUE = 0.04; // cada ponto = +4% no multiplicador do atributo
+export const ATTR_POINTS_PER_LEVEL_EACH = 1; // preset equilibrado: 1 pt em cada atributo-base por nível
 export const COIN_REROLL_COST = 15; // T-004: coins compram reroll do preset de atributo do último nível
+
+// Atributos data-driven (SPEC-0004/ADR-013, T-015) — valor por ponto e teto PRÓPRIOS
+// por atributo (substitui o ATTR_POINT_VALUE único de 4%). Escala assimétrica: dano
+// cresce mais rápido que HP ⇒ especializar em força derruba o TTK (5 → 3-4 tiros);
+// tetos individuais são o guardrail anti-snowball (ADR-013 §9).
+export type AttrKey = "forca" | "vitalidade" | "agilidade" | "cadencia" | "alcance";
+export interface AttrDef {
+  perPoint: number; // contribuição de cada ponto no multiplicador (negativo = reduz, ex.: cooldown)
+  min: number; // piso do multiplicador efetivo
+  max: number; // teto do multiplicador efetivo (anti-snowball)
+}
+export const ATTR_DEFS: Record<AttrKey, AttrDef> = {
+  forca: { perPoint: 0.06, min: 1, max: 3.0 }, // × dano do lançador
+  vitalidade: { perPoint: 0.04, min: 1, max: 2.5 }, // × maxHp
+  agilidade: { perPoint: 0.03, min: 1, max: 2.0 }, // × velocidade (teto = SPEED_MAX_MULT, ADR-009)
+  cadencia: { perPoint: -0.04, min: 0.55, max: 1 }, // × cooldown do lançador (mín. 55% ⇒ 600→330ms)
+  alcance: { perPoint: 0.05, min: 1, max: 1.75 }, // × range do projétil (8u → máx. 14u)
+};
+/** Atributos-base do preset equilibrado (level-up automático); cadência/alcance só via escolha (T-016). */
+export const BASE_ATTRS: AttrKey[] = ["forca", "vitalidade", "agilidade"];
+/** Multiplicador efetivo de um atributo para N pontos, já com piso/teto aplicados. */
+export function attrMult(key: AttrKey, points: number): number {
+  const d = ATTR_DEFS[key];
+  return Math.min(d.max, Math.max(d.min, 1 + points * d.perPoint));
+}
 
 /** XP necessário para sair de `level` e chegar ao próximo — curva de pacing (T-003). */
 export function xpToNext(level: number): number {

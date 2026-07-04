@@ -1,17 +1,20 @@
 // ADR-009: atributo efetivo = base × efeitos ativos, sempre no servidor.
 // T-003: atributos de nível (força/velocidade/vitalidade) entram como camada
 // PERMANENTE do round no mesmo pipeline — nunca lógica de atributo solta no Room.
+// T-015 (SPEC-0004/ADR-013): atributos viram tabela data-driven (ATTR_DEFS, 5 atributos
+// com valor/pt e teto próprios) — inclui cadência (cooldown) e alcance (range).
 import { ArraySchema } from "@colyseus/schema";
 import { Player } from "../state/ArenaState";
 import {
   SPEED_BOOST_MULT,
   SPEED_BOOST_MS,
   SPEED_MAX_MULT,
-  ATTR_POINT_VALUE,
   XP_BOOST_MULT,
   XP_BOOST_MS,
   ATTR_POINTS_PER_LEVEL_EACH,
   PLAYER_BASE_HP,
+  attrMult,
+  AttrKey,
 } from "@aop/shared";
 
 export type EffectKind = "speed_up" | "xp_boost" | "launcher_slow";
@@ -22,11 +25,7 @@ interface ActiveEffect {
   magnitude?: number; // T-012: multiplicador dinâmico (ex.: lentidão por lançador) — kinds de valor fixo ignoram
 }
 
-interface AttrPoints {
-  velocidade: number;
-  forca: number;
-  vitalidade: number;
-}
+export type AttrPoints = Record<AttrKey, number>;
 
 interface PlayerEffectState {
   active: ActiveEffect[];
@@ -39,13 +38,17 @@ const DURATION: Record<EffectKind, number> = {
   launcher_slow: 0, // não usado — duração vem do LauncherDef via applySlow()
 };
 
+function zeroAttr(): AttrPoints {
+  return { forca: 0, vitalidade: 0, agilidade: 0, cadencia: 0, alcance: 0 };
+}
+
 export class EffectSystem {
   private byPlayer = new Map<string, PlayerEffectState>();
 
   private stateFor(playerId: string): PlayerEffectState {
     let s = this.byPlayer.get(playerId);
     if (!s) {
-      s = { active: [], attr: { velocidade: 0, forca: 0, vitalidade: 0 } };
+      s = { active: [], attr: zeroAttr() };
       this.byPlayer.set(playerId, s);
     }
     return s;
@@ -78,32 +81,48 @@ export class EffectSystem {
     this.recompute(player, s);
   }
 
-  /** Soma pontos de atributo permanentes do round (level-up e box chamam isto — T-003/T-004). */
+  /** Soma pontos de atributo permanentes do round (level-up, cards e box chamam isto — T-003/T-004/T-016). */
   addAttrPoints(playerId: string, player: Player, points: Partial<AttrPoints>) {
     const s = this.stateFor(playerId);
-    s.attr.velocidade += points.velocidade ?? 0;
-    s.attr.forca += points.forca ?? 0;
-    s.attr.vitalidade += points.vitalidade ?? 0;
+    (Object.keys(points) as AttrKey[]).forEach((k) => {
+      s.attr[k] += points[k] ?? 0;
+    });
     this.recompute(player, s);
   }
 
-  /** Coins compram isto (T-004): redistribui o TOTAL de pontos já ganho entre os 3 atributos. */
+  /** Coins compram isto (T-004): redistribui o TOTAL de pontos já ganho entre os 5 atributos (T-015). */
   rerollAttrPoints(playerId: string, player: Player) {
     const s = this.stateFor(playerId);
-    const total = s.attr.velocidade + s.attr.forca + s.attr.vitalidade;
-    const cuts = [Math.random(), Math.random()].sort((a, b) => a - b);
-    const velocidade = Math.round(total * cuts[0]);
-    const forca = Math.round(total * (cuts[1] - cuts[0]));
-    const vitalidade = total - velocidade - forca;
-    s.attr = { velocidade, forca, vitalidade };
+    const keys = Object.keys(s.attr) as AttrKey[];
+    const total = keys.reduce((sum, k) => sum + s.attr[k], 0);
+    // n−1 cortes ordenados dividem o total em n fatias; piso + distribuição do resto
+    // garante soma EXATA e nenhuma fatia negativa (Math.round podia estourar o total).
+    const cuts = Array.from({ length: keys.length - 1 }, () => Math.random()).sort((a, b) => a - b);
+    const bounds = [0, ...cuts, 1];
+    const next = zeroAttr();
+    let used = 0;
+    keys.forEach((k, i) => {
+      const share = Math.floor(total * (bounds[i + 1] - bounds[i]));
+      next[k] = share;
+      used += share;
+    });
+    for (let i = 0; used < total; i = (i + 1) % keys.length) {
+      next[keys[i]] += 1;
+      used += 1;
+    }
+    s.attr = next;
     this.recompute(player, s);
   }
 
-  /** Reseta atributos para o padrão do nível (T-006: morte). Perde customizações (rerolls) do round. */
+  /**
+   * Reseta atributos para o preset equilibrado do nível (T-006: morte). Perde
+   * customizações (rerolls/cards) do round; cadência/alcance zeram — só voltam
+   * por escolha (T-016). Pilar "risco real": a build é o que se perde ao morrer.
+   */
   resetAttrToLevel(playerId: string, player: Player, level: number) {
     const s = this.stateFor(playerId);
     const points = (level - 1) * ATTR_POINTS_PER_LEVEL_EACH;
-    s.attr = { velocidade: points, forca: points, vitalidade: points };
+    s.attr = { ...zeroAttr(), forca: points, vitalidade: points, agilidade: points };
     this.recompute(player, s);
   }
 
@@ -124,16 +143,24 @@ export class EffectSystem {
     this.byPlayer.delete(playerId);
   }
 
+  /** Cópia dos pontos atuais (testes e painel debug F3 — nunca usar para lógica de jogo no Room). */
+  attrPointsFor(playerId: string): AttrPoints {
+    return { ...this.stateFor(playerId).attr };
+  }
+
   private recompute(player: Player, s: PlayerEffectState) {
-    let speed = 1 + s.attr.velocidade * ATTR_POINT_VALUE;
+    // T-015: cada atributo com valor/pt e teto próprios (ATTR_DEFS) — escala assimétrica ADR-013
+    let speed = attrMult("agilidade", s.attr.agilidade);
     if (s.active.some((e) => e.kind === "speed_up")) speed *= SPEED_BOOST_MULT;
     speed = Math.min(speed, SPEED_MAX_MULT);
     // T-012: lentidão de lançador se aplica por cima do teto — reduz o efetivo, não o disputa
     const slow = s.active.find((e) => e.kind === "launcher_slow");
     if (slow?.magnitude) speed *= slow.magnitude;
     player.speed = speed;
-    player.strength = 1 + s.attr.forca * ATTR_POINT_VALUE;
-    player.vitality = 1 + s.attr.vitalidade * ATTR_POINT_VALUE;
+    player.strength = attrMult("forca", s.attr.forca);
+    player.vitality = attrMult("vitalidade", s.attr.vitalidade);
+    player.attackSpeed = attrMult("cadencia", s.attr.cadencia); // <1 = cooldown menor (T-015)
+    player.reach = attrMult("alcance", s.attr.alcance); // >1 = projétil vai mais longe (T-015)
     player.maxHp = Math.round(PLAYER_BASE_HP * player.vitality);
     player.hp = Math.min(player.hp, player.maxHp);
     player.xpMult = s.active.some((e) => e.kind === "xp_boost") ? XP_BOOST_MULT : 1;

@@ -5,7 +5,7 @@ import { EffectSystem } from "../systems/effects";
 import { ProjectileSystem } from "../systems/projectiles";
 interface PersistentProgress {
   forca: number;
-  velocidade: number;
+  agilidade: number; // T-015: renomeado de `velocidade` (scaffold ADR-012, dev-only — sem migração de dados: memória volátil)
   vitalidade: number;
 }
 const memDB = new Map<string, PersistentProgress>();
@@ -251,16 +251,16 @@ export class ArenaRoom extends Room<ArenaState> {
           case "box":
             // bônus forte no round (vs. 1 do level-up normal)
             this.effects.addAttrPoints(pid, p, {
-              velocidade: BOX_ATTR_BONUS_EACH,
+              agilidade: BOX_ATTR_BONUS_EACH,
               forca: BOX_ATTR_BONUS_EACH,
               vitalidade: BOX_ATTR_BONUS_EACH,
             });
             // T-004b: persistência entre partidas (ADR-012)
             if (!p.isBot) {
               let prog = memDB.get(p.playerToken);
-              if (!prog) prog = { forca: 0, velocidade: 0, vitalidade: 0 };
+              if (!prog) prog = { forca: 0, agilidade: 0, vitalidade: 0 };
               prog.forca += BOX_ATTR_BONUS_EACH;
-              prog.velocidade += BOX_ATTR_BONUS_EACH;
+              prog.agilidade += BOX_ATTR_BONUS_EACH;
               prog.vitalidade += BOX_ATTR_BONUS_EACH;
               memDB.set(p.playerToken, prog);
               console.log(`[arena] ${p.name} progresso persistente:`, prog);
@@ -323,7 +323,7 @@ export class ArenaRoom extends Room<ArenaState> {
       p.xp -= xpToNext(p.level);
       p.level += 1;
       this.effects.addAttrPoints(id, p, {
-        velocidade: ATTR_POINTS_PER_LEVEL_EACH,
+        agilidade: ATTR_POINTS_PER_LEVEL_EACH,
         forca: ATTR_POINTS_PER_LEVEL_EACH,
         vitalidade: ATTR_POINTS_PER_LEVEL_EACH,
       });

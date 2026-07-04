@@ -25,7 +25,9 @@ export class ProjectileSystem {
       const launcher = LAUNCHERS[p.launcher];
       if (!launcher) return;
 
-      if (now - p.lastFireAt < launcher.fire.cooldownMs) return;
+      // T-015 (cadência): cooldown efetivo = base do lançador × attackSpeed do atirador
+      // (attrMult já garante piso de 55% — nunca vira metralhadora).
+      if (now - p.lastFireAt < launcher.fire.cooldownMs * p.attackSpeed) return;
 
       p.lastFireAt = now;
 
@@ -51,6 +53,9 @@ export class ProjectileSystem {
       proj.ownerId = id;
       proj.dirX = dirX;
       proj.dirZ = dirZ;
+      // T-015 (alcance): range efetivo congelado no disparo — trocar de build depois
+      // não alonga projéteis já voando (servidor autoritativo, sem surpresa retroativa).
+      proj.maxRange = launcher.projectile.range * p.reach;
 
       state.projectiles.set(`p${++_projId}`, proj);
 
@@ -76,8 +81,8 @@ export class ProjectileSystem {
       proj.z += proj.dirZ * dist;
       proj.distanceTraveled += dist;
 
-      // check range
-      if (proj.distanceTraveled >= launcher.projectile.range) {
+      // check range (T-015: usa o range efetivo do disparo; fallback = base do lançador)
+      if (proj.distanceTraveled >= (proj.maxRange || launcher.projectile.range)) {
         toRemove.push(pid);
         return;
       }

@@ -241,6 +241,8 @@ function updateDebugState() {
     rows.push(`<tr><td>nível / xp</td><td>${me.level} / ${me.xp?.toFixed(0)}</td></tr>`);
     rows.push(`<tr><td>força</td><td>${me.strength?.toFixed(3)}</td></tr>`);
     rows.push(`<tr><td>velocidade</td><td>${me.speed?.toFixed(3)}</td></tr>`);
+    rows.push(`<tr><td>cadência (×cd)</td><td>${me.attackSpeed?.toFixed(3)}</td></tr>`);
+    rows.push(`<tr><td>alcance (×range)</td><td>${me.reach?.toFixed(3)}</td></tr>`);
     rows.push(`<tr><td>launcher</td><td>${me.launcher}</td></tr>`);
     rows.push(`<tr><td>coins</td><td>${me.coins}</td></tr>`);
     const fx: string[] = me.effects ? Array.from(me.effects) : [];
@@ -444,7 +446,7 @@ function updateHud(now: number) {
     `nível: ${me?.level ?? "-"} (xp ${me?.xp ?? 0}/${xpNeed})  HP: ${Math.ceil(me?.hp ?? 0)}/${me?.maxHp ?? 100}` +
     (fx.includes("speed_up") ? `  ⚡x${me.speed?.toFixed(1)}` : "") +
     (fx.includes("xp_boost") ? `  2xXP` : "") +
-    `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}` +
+    `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}  cad ${me?.attackSpeed?.toFixed(2) ?? "-"}  alc ${me?.reach?.toFixed(2) ?? "-"}` +
     `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • espaço/click=atirar)` +
     (now < announceUntil ? `\n🔥 farm_event na zona de guerra!` : "");
 
