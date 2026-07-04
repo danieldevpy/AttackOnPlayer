@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-04 — Sessão 6 (design): SPEC-0004 — escala de poder, builds e skills
+- Pedido do CD: dano "aumenta devagar", difícil eliminar players; planejar sistema de skills/atributos gamificado antes de implementar.
+- Diagnóstico (PROPOSAL-0001): dano não aumenta devagar — **TTK é matematicamente constante** (10 tiros em qualquer nível) porque força e vitalidade escalam na mesma taxa (+4%/pt, pontos iguais). Verificado por conta: `10×(1+0.04p)` vs `100×(1+0.04p)`.
+- CD aprovou a proposta → formalizada como `specs/SPEC-0004-skills-atributos-escala.md` + ADR-013 + tasks **T-014..T-018** no BACKLOG (nova seção M1.5), adendos em T-008b (política de cards por perfil, boss) e T-OPTIONAL 1 (relatório TTK).
+- Resumo: TTK alvo 5 tiros (dano base 20), `ATTR_DEFS` assimétrica (+Cadência/+Alcance, tetos por atributo), cards de level-up determinísticos (timeout 5s, sem pausa), multishot/pierce como skills de marco (nunca atributo linear), juice visual de poder, bots no mesmo pipeline com escolha determinística — player protagonista.
+- Sem mudança de código nesta entrada — só design/documentação. Próximo: `Executar T-014 do docs/BACKLOG.md`.
+
 ## 2026-07-04 — Sessão 5 (cont., docs): correção de documentação desatualizada
 - Pedido do CD: documentar corretamente o bugfix anterior seguindo o padrão do projeto, e relatar estado atual + próximos passos.
 - Ao revisar contra `AGENTS.md`/`DOC_MAP.md`, achado: `ROADMAP.md`, `VISAO-ATUAL.md` e `mechanics/PLAYER_LOOP.md` estavam **desatualizados de várias entregas atrás** — ainda diziam "T-008 pendente" e "bots não atiram sozinhos", quando T-008 (bots de combate) e a SPEC-0003 inteira (facing/mira/gatilhos) já estavam prontas e testadas. `QA.md` também não documentava o gate `npx vitest run` do `server` (existia e já rodava nesta sessão, só não estava no checklist).

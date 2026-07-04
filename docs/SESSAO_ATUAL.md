@@ -4,62 +4,54 @@
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
 **Atualizado em:** 2026-07-04
-**Branch:** `movimento_e_direcao` (SPEC-0003 completa + bugfix pós-teste manual). Merge para `main` continua pendente (checklist em `QA.md`).
-**Marco:** M1 — combate base pronto (T-001..T-008); SPEC-0003 (facing/mira/gatilhos) implementada por completo (T-009..T-013) e com bugfix pós-teste do CD.
+**Branch:** `movimento_e_direcao` — merge para `main` **ainda pendente** (checklist em `QA.md`; herdado da sessão anterior, ver Veredito abaixo).
+**Marco:** M1 entregue (aguardando veredito/merge) → **M1.5 planejado e aprovado** (SPEC-0004, sem código ainda).
 
 ---
 
 ## Onde paramos
 
-`specs/SPEC-0003-facing-mira-gatilhos.md` está com as 5 tasks ✅ (ver `PROMPT-0014.md` a `0018.md`). Depois disso, o CD testou ao vivo e relatou 3 problemas, corrigidos nesta entrega (`PROMPT-0019.md`):
+**Sessão de design (sem mudança de código).** O CD relatou que o dano escala devagar e é difícil eliminar players. Diagnóstico: o TTK era **matematicamente constante** — 10 tiros em qualquer nível, porque força e vitalidade escalam na mesma taxa (+4%/pt, pontos iguais por nível).
 
-- **F3 sem log** — corrigido: o feed de eventos ao vivo não dependia mais só do F3 do cliente, exigia também `DEBUG=1` no servidor (removido; agora é sempre-on, igual ao ring buffer e `/debug/rooms`).
-- **Bot "impossível de matar"** — corrigido: bot atirava a cada tick no alcance, limitado só pelo cooldown da arma (igual pra humano/bot). Agora cada skill (`fraco|medio|forte`) tem seu próprio ritmo de ataque (`fireIntervalMs`), sorteado a cada tiro dentro da faixa — nunca 100% fixo, e nunca mais rápido que o cooldown real da arma permite.
-- **Bot grudando em obstáculo** — corrigido: novo anti-stuck em `packages/bots/src/bot.ts` — compara posição autoritativa tick a tick; se o bot pretende andar e quase não desloca por ~500ms, força um desvio lateral temporário. Não depende de geometria do mapa.
+Produzido e aprovado pelo CD nesta sessão:
 
-Detalhe completo: `docs/prompts/PROMPT-0019.md`.
-
-**Correção de documentação (pedido explícito do CD):** `ROADMAP.md`, `VISAO-ATUAL.md` e `mechanics/PLAYER_LOOP.md` estavam desatualizados havia várias entregas (ainda diziam "T-008 pendente" e "bots não atiram", quando T-008 e a SPEC-0003 inteira já estavam prontas) — trazidos de volta à realidade. `QA.md` ganhou o gate que faltava (`npx vitest run` do `server`, que já existia mas não estava documentado) e a matriz de features atualizada.
+- `docs/proposals/PROPOSAL-0001-skills-atributos-escala.md` — diagnóstico completo, matemática, alternativas.
+- `specs/SPEC-0004-skills-atributos-escala.md` — spec aprovada: TTK alvo 5 tiros, tabela `ATTR_DEFS` assimétrica (Força/Vitalidade/Agilidade + **Cadência** e **Alcance** novos, tetos por atributo), level-up por **cards de escolha** (3 pts, determinísticos, timeout 5s sem pausa), **skills de projétil** em marcos (Tiro Duplo/Leque/Perfurante/Fôlego/Impulso), juice de poder, bots com política de card por perfil.
+- **ADR-013** no `DECISION_LOG.md`; linha **M1.5** no `ROADMAP.md`.
+- Tasks **T-014..T-018** no `BACKLOG.md` (seção M1.5) + adendos em **T-008b** (política de cards por perfil, boss) e **T-OPTIONAL 1** (relatório TTK).
 
 ## Próximo passo sugerido
 
-Nenhuma pendência de código conhecida. Falta só:
+1. **Herdado:** veredito do CD nos fluxos da SPEC-0003 + merge `movimento_e_direcao` → `main` (idealmente antes de abrir código novo do M1.5).
+2. **Implementação M1.5, em ordem** (cada task jogável e testável sozinha):
+   `Executar T-014 do docs/BACKLOG.md` → T-015 → T-016 → T-017 → T-018 → T-008b.
 
-1. **Veredito do CD** nos fluxos desta entrega e das anteriores (facing, gatilhos, nariz visível, `heavy_shot_dev`, F3 sem `DEBUG=1`, ritmo de ataque por skill, anti-stuck) — testar ao vivo no browser.
-2. **Merge `movimento_e_direcao` → `main`** — checklist em `docs/QA.md` (gates automáticos já rodados e limpos nesta sessão).
-3. Se quiser continuar construindo: nova spec, ou `T-OPTIONAL 1` do `BACKLOG.md` (balance/métricas).
-
-Prompt típico: `Testar tudo no browser e dar veredito` ou `Preparar merge de movimento_e_direcao para main`
+Prompt típico: `Executar T-014 do docs/BACKLOG.md`
 
 ## Veredito do Creative Director
 
 | Fluxo | Status | Notas |
 |---|---|---|
-| Facing por mouse/teclado/parado (T-009) | ⬜ pendente teste do CD | verificado por IA via preview no browser |
-| Disparo por espaço/clique idênticos (T-010) | ⬜ pendente teste do CD | verificado por IA via preview no browser |
-| Nariz visível girando (T-011) | ⬜ pendente teste do CD | verificado por IA via preview no browser |
-| Bots atirando/matando de novo (T-013) | ✅ verificado (headless) | |
-| `heavy_shot_dev` reduz velocidade e expira sozinho (T-012) | ✅ verificado (teste unitário determinístico) | |
-| F3 mostra log sem `DEBUG=1` | ⬜ pendente teste do CD | verificado por IA via preview no browser |
-| Ritmo de ataque por skill (fraco/medio/forte) | ⬜ pendente teste do CD | verificado por IA via `npm run bots` |
-| Anti-stuck do bot | ⬜ pendente teste do CD | verificado por IA via `BOT_VERBOSE=1` |
-| Merge para `main` | ⬜ pendente | checklist em `QA.md` — gates locais já limpos |
+| PROPOSAL-0001 / SPEC-0004 (design M1.5) | ✅ aprovado (2026-07-04) | defaults da spec valem até dados de bots dizerem o contrário |
+| Facing por mouse/teclado/parado (T-009) | ⬜ pendente teste do CD | herdado da sessão anterior |
+| Disparo por espaço/clique idênticos (T-010) | ⬜ pendente teste do CD | herdado |
+| Nariz visível girando (T-011) | ⬜ pendente teste do CD | herdado |
+| F3 mostra log sem `DEBUG=1` | ⬜ pendente teste do CD | herdado |
+| Ritmo de ataque por skill + anti-stuck | ⬜ pendente teste do CD | herdado |
+| Merge para `main` | ⬜ pendente | checklist em `QA.md` — gates locais limpos na sessão anterior |
 
 ## Comandos úteis agora
 
 ```bash
-npm run test                        # 5/5
-npm run dev:server                  # F3 já funciona sem DEBUG=1; DEBUG=1 só pro dev_launcher (T-012)
-npm run dev:client
-npm run bots -- 3 30                # combate pausado por skill agora (fraco nitidamente mais devagar)
-BOT_VERBOSE=1 npm run bots -- 6 30  # loga "preso — escapando lateralmente" quando o anti-stuck aciona
+npm run test                        # 5/5 (nenhum código mudou nesta sessão)
+npm run dev:server && npm run dev:client
+npm run bots -- 3 30                # baseline de TTK/kills — comparar após T-014
 ```
 
 ## Leituras se a sessão nova for só conversa
 
-- Spec ativa (fechada, aguardando veredito) → `specs/SPEC-0003-facing-mira-gatilhos.md`
-- Facing/movimento → `docs/mechanics/movement.md`
-- Mira/gatilho/combate/ganchos de mobilidade → `docs/mechanics/combat.md`
-- Debug F3 / `/debug/rooms` → `docs/mechanics/debug-mode.md`
-- Bots / combate / anti-stuck / ritmo de ataque → `docs/ai/bots.md`
-- Testes / merge → `docs/QA.md` (tem a guarda contra `.js` órfão)
+- Spec ativa (aprovada, não iniciada) → `specs/SPEC-0004-skills-atributos-escala.md`
+- Diagnóstico e alternativas do M1.5 → `docs/proposals/PROPOSAL-0001-skills-atributos-escala.md`
+- Decisão consolidada → `DECISION_LOG.md` (ADR-013)
+- Tasks prontas para executar → `docs/BACKLOG.md` (seção M1.5)
+- Spec anterior (fechada, aguardando veredito) → `specs/SPEC-0003-facing-mira-gatilhos.md`

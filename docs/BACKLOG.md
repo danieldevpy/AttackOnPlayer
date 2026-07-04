@@ -51,15 +51,48 @@
 **Contexto:** docs/ai/bots.md · packages/bots/src/bot.ts · packages/shared/src/launchers.ts (alcance/cooldown) · packages/shared/src/map.ts (zoneAt)
 **Aceite:** 4 bots geram kills entre si; skill parametrizável (fraco/médio/forte).
 
-## T-008b — Personalidade, atributos e boss 〔M〕 · depende: T-008
+## T-008b — Personalidade, atributos e boss 〔M〕 · depende: T-008, T-016
 **Objetivo:** perfis de bot (agressivo/cauteloso/caçador…) sorteados por sessão via a base de skill da T-008; atributos iniciais por perfil; um modo "boss" personalizado (skill alta, HP/atributos elevados, comportamento distinto). Gancho para futuramente o cérebro do bot ser acionado por um modelo (Guardian, M3).
-**Contexto:** docs/ai/bots.md · packages/bots/src/bot.ts
-**Aceite:** perfis visivelmente diferentes numa mesma sessão; boss sobrevive/ameaça mais que bots comuns.
+**Adendo SPEC-0004:** perfis ganham **política de escolha de cards** (bruto = Força/Cadência, tanque = Vitalidade/Agilidade, caçador = Alcance/Agilidade, equilibrado = auto-pick) — determinística e explorável pelo player (habilidade > sorte). Boss nasce nível 6–8 com build concentrada + 1 skill de marco + combate `forte`.
+**Contexto:** docs/ai/bots.md · specs/SPEC-0004-skills-atributos-escala.md · packages/bots/src/bot.ts
+**Aceite:** perfis visivelmente diferentes numa mesma sessão; boss sobrevive/ameaça mais que bots comuns; políticas de card por perfil observáveis no F3.
 
 ## T-OPTIONAL 1 — Passe de balance + métricas de combate 〔P〕 · depende: T-006
 **Objetivo:** métricas TTK, XP/min, dano por arma; ajustar curvas com dados de 10 partidas de bots.
 **Contexto:** docs/observability/metrics.md · packages/server/src/metrics/SessionMetrics.ts
 **Aceite:** relatório em docs/ai/ com números reais e ajustes aplicados.
+**Adendo SPEC-0004:** o relatório da T-014 é a primeira metade deste passe; re-rodar após T-017 (skills mudam o DPS efetivo).
+
+---
+
+# M1.5 — Escala de poder & builds (SPEC-0004, ADR-013)
+
+> Origem: `docs/proposals/PROPOSAL-0001-skills-atributos-escala.md` (diagnóstico: TTK constante de 10 tiros — força e vitalidade escalam na mesma taxa). Spec: `specs/SPEC-0004-skills-atributos-escala.md`. Cada task é jogável e testável sozinha (Debug First); executar em ordem.
+
+## T-014 — Rebalance TTK: dano base e relatório 〔P〕
+**Objetivo:** `basic_shot.damage` 10→20 (TTK base 5 tiros, ver TTK alvo na spec); rodada de bots medindo TTK/kills por round antes/depois; relatório curto em `docs/ai/`. Ajustar testes existentes.
+**Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/launchers.ts · packages/server/src/metrics/SessionMetrics.ts · docs/observability/metrics.md
+**Aceite:** kills por partida de bots sobem visivelmente; TTK médio cai ~metade; relatório com números reais em docs/ai/.
+
+## T-015 — ATTR_DEFS: tabela de atributos + Cadência e Alcance 〔M〕 · depende: T-014
+**Objetivo:** substituir `ATTR_POINT_VALUE` único pela tabela `ATTR_DEFS` (valor/pt + teto por atributo, escala assimétrica: Força +6%/×3.0, Vitalidade +4%/×2.5, Agilidade +3%/×2.0, Cadência −4%/mín. 55% cd, Alcance +5%/×1.75); `Player` ganha `attackSpeed` e `reach`; `EffectSystem.recompute()` calcula os 5; `ProjectileSystem` usa cooldown e range efetivos; reroll redistribui entre 5 (4 cortes). Atualizar `docs/mechanics/skills.md` e `growth.md`.
+**Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/constants.ts · packages/server/src/systems/effects.ts · packages/server/src/systems/projectiles.ts · packages/server/src/state/ArenaState.ts
+**Aceite:** testes unitários de valores/tetos e do caso "full-Força n8 mata equilibrado n8 em 3 tiros"; cadência/alcance visíveis no F3.
+
+## T-016 — Cards de level-up (escolha manual v2) 〔G〕 · depende: T-015
+**Objetivo:** level-up gera oferta determinística de 3 cards (3 pts cada, tabela por nível em shared); mensagem `choose_upgrade` validada no servidor (escolha inválida ignorada); timeout 5s → auto-pick equilibrado (jogo nunca pausa); HUD de cards (teclas 1/2/3) — extrair `hud.ts` do `main.ts` nesta task (dívida LEAD_DESIGNER_NOTES); bots respondem com auto-pick. Morte reseta para preset do novo nível. Atualizar `docs/mechanics/growth.md` e `PLAYER_LOOP.md`.
+**Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/constants.ts · packages/server/src/rooms/ArenaRoom.ts · packages/server/src/systems/effects.ts · packages/client/src/main.ts · packages/bots/src/bot.ts
+**Aceite:** escolha inválida ignorada; timeout aplica auto-pick; morrer reseta build; bots sem regressão de kills.
+
+## T-017 — Skills de projétil: patterns, marcos e box 〔G〕 · depende: T-016
+**Objetivo:** `LauncherDef.fire` ganha `projectilesPerShot/spreadRad/damageFactor` + `pierce`; função de pattern `spread`; pierce no `ProjectileSystem`; 5 skills iniciais data-driven (Tiro Duplo, Leque, Perfurante, Fôlego, Impulso — tabela na spec) como modificadores por player; marcos (`SKILL_MILESTONE_LEVELS`, default 4/8/12) trocam 1 card por escolha de skill (1 de 2); box sorteia skill (fecha decisão do CD em growth.md). Atualizar `docs/mechanics/combat.md`.
+**Contexto:** specs/SPEC-0004-skills-atributos-escala.md · packages/shared/src/launchers.ts · packages/server/src/systems/projectiles.ts · packages/server/src/rooms/ArenaRoom.ts · docs/mechanics/growth.md
+**Aceite:** Tiro Duplo spawna 2 projéteis com dano reduzido; Perfurante atravessa exatamente 1 alvo; skill aparece no card do marco e no F3; box concede skill em zona de guerra.
+
+## T-018 — Juice de poder 〔P〕 · depende: T-016
+**Objetivo:** glow/aro por faixa de nível (1–3 nada, 4–7 fraco, 8+ forte + trail), números de dano com escala visual, kill streak no HUD, flash do card escolhido. Só `visuals.ts`/`hud.ts`, respeitando a fase visual atual.
+**Contexto:** specs/SPEC-0004-skills-atributos-escala.md · instrucoes/FASES_VISUAIS.md · packages/client/src/visuals.ts
+**Aceite:** glow por faixa visível; screenshot comparando faixas de nível; sem custo de draw calls perceptível.
 
 ---
 Concluiu tudo? Reler `docs/VISAO-ATUAL.md` e abrir nova sessão de ideias (PROMPT-0004).
