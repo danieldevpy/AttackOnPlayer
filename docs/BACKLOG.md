@@ -9,7 +9,7 @@
 **Contexto:** docs/mechanics/world.md · packages/shared/src/map.ts · packages/server/src/rooms/ArenaRoom.ts · packages/client/src/main.ts
 **Aceite:** bots BFS continuam coletando; chão muda de cor por zona; nenhum prop bloqueia spawn.
 
-## T-002 — Pré-modelos de props (fase F2) 〔P〕 · depende: T-001
+## T-002 — Pré-modelos de props (fase F2) 〔P〕 ✅ (PROMPT-0005) · depende: T-001
 **Objetivo:** pedra/árvore/caixa/muro/bandeira compostos de primitivas em visuals.ts, renderizados por tipo do grid.
 **Contexto:** docs/mechanics/world.md (tabela) · instrucoes/FASES_VISUAIS.md · packages/client/src/visuals.ts · packages/client/src/main.ts
 **Aceite:** cada tipo visualmente distinto; draw calls sob controle (instancing por tipo).

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
 import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual } from "./visuals";
+import { createPlayerVisual, createCollectibleVisual, propParts } from "./visuals";
 
 const hud = document.getElementById("hud")!;
 const roster = document.getElementById("roster")!;
@@ -70,31 +70,39 @@ function buildWorld(w: number, h: number, seed: number) {
   });
   scene.add(border);
 
-  // props esparsos: placeholder por tipo (pré-modelos chegam em T-002)
-  const PROP_COLOR: Record<string, number> = {
-    pedra: 0x9e9e9e,
-    arvore: 0x33691e,
-    caixa: 0x8d6e63,
-    muro: 0x4e4e4e,
-  };
+  // props esparsos (F2 — composição de primitivas, T-002): 1 InstancedMesh POR PARTE
+  // do tipo, não por instância — N pedras/árvores continuam poucos draw calls.
   const byType = new Map<string, typeof map.props>();
   map.props.forEach((p) => {
     if (!byType.has(p.type)) byType.set(p.type, []);
     byType.get(p.type)!.push(p);
   });
   byType.forEach((list, type) => {
-    const mesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshLambertMaterial({ color: PROP_COLOR[type] ?? 0x757575 }),
-      list.length
-    );
-    list.forEach((p, i) => {
-      m.makeScale(p.w, 1, p.h);
-      m.setPosition(p.x + p.w / 2, 0.5, p.z + p.h / 2);
-      mesh.setMatrixAt(i, m);
+    const parts = propParts(type as "pedra" | "arvore" | "caixa" | "muro");
+    parts.forEach((part) => {
+      const mesh = new THREE.InstancedMesh(part.geometry, part.material, list.length);
+      list.forEach((p, i) => {
+        const cx = p.x + p.w / 2 + part.offset.x;
+        const cy = part.offset.y;
+        const cz = p.z + p.h / 2 + part.offset.z;
+        const scale = part.scale ?? new THREE.Vector3(1, 1, 1);
+        m.compose(new THREE.Vector3(cx, cy, cz), new THREE.Quaternion(), scale);
+        mesh.setMatrixAt(i, m);
+      });
+      scene.add(mesh);
     });
-    scene.add(mesh);
   });
+
+  // bandeiras: decorativas, marcam o centro de cada zona de guerra (não colidem — world.md)
+  map.zones
+    .filter((z) => z.kind === "war")
+    .forEach((z) => {
+      propParts("bandeira").forEach((part) => {
+        const mesh = new THREE.Mesh(part.geometry, part.material);
+        mesh.position.set(z.cx + part.offset.x, part.offset.y, z.cz + part.offset.z);
+        scene.add(mesh);
+      });
+    });
 
   // zonas: cliente pinta o chão a partir do mesmo seed (ADR-010), sem tráfego extra
   const ZONE_COLOR = { safe: 0x2f6fa8, war: 0x8a2f2f } as const;

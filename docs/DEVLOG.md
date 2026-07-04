@@ -1,5 +1,10 @@
 # Devlog
 
+## 2026-07-04 — Sessão 3 (cont.): T-002
+- Props ganharam pré-modelos F2 (pedra/árvore/caixa/muro/bandeira) compostos de primitivas em `visuals.ts`. Técnica: 1 InstancedMesh por parte-tipo (não por instância) — mantém draw calls baixos mesmo com composição.
+- Verificado via preview (screenshot): zona safe pintada + pedra/caixa/muro distintos; bots sem regressão. Detalhe em PROMPT-0005.md.
+- Próximo: T-003 (XP/nível/atributos).
+
 ## 2026-07-04 — Sessão 3: T-001 (backlog)
 - Pivô ADR-010 executado: labirinto (pilares em coord. pares) → campo aberto. Só borda colide; props (~4%, pedra/árvore/caixa/muro) nascem isolados uns dos outros — garante 0 regiões fechadas sem precisar de checagem de conectividade em runtime.
 - Zonas safe/guerra/campo derivam do seed (`zoneAt`), cliente pinta o chão sem tráfego extra na rede.

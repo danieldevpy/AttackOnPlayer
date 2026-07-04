@@ -56,3 +56,57 @@ export function createCollectibleVisual(kind: string): THREE.Mesh {
     ? new THREE.Mesh(speedUpGeo, speedUpMat)
     : new THREE.Mesh(levelUpGeo, levelUpMat);
 }
+
+/**
+ * Props (T-002, fase F2 — só para cenário): cada tipo é 1+ "partes" de primitivas.
+ * main.ts monta 1 InstancedMesh POR PARTE (não por prop), então N pedras/árvores
+ * continuam custando poucos draw calls — a composição não fura o orçamento (< 200).
+ */
+export interface PropPart {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  offset: THREE.Vector3; // relativo ao centro do footprint do prop, no chão (y=0)
+  scale?: THREE.Vector3;
+}
+
+const propGeo = {
+  pedra: new THREE.IcosahedronGeometry(0.4, 0),
+  troncoArvore: new THREE.CylinderGeometry(0.12, 0.15, 0.6, 6),
+  folhaArvore: new THREE.ConeGeometry(0.4, 0.7, 8),
+  caixa: new THREE.BoxGeometry(0.8, 0.8, 0.8),
+  muro: new THREE.BoxGeometry(1.8, 1.1, 0.9),
+  haste: new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6),
+  pano: new THREE.BoxGeometry(0.5, 0.3, 0.02),
+};
+
+const propMat = {
+  pedra: new THREE.MeshLambertMaterial({ color: 0x9e9e9e }),
+  tronco: new THREE.MeshLambertMaterial({ color: 0x6d4c30 }),
+  folha: new THREE.MeshLambertMaterial({ color: 0x2e7d32 }),
+  caixa: new THREE.MeshLambertMaterial({ color: 0x8d6e63 }),
+  muro: new THREE.MeshLambertMaterial({ color: 0x4e4e4e }),
+  haste: new THREE.MeshLambertMaterial({ color: 0x5d4037 }),
+  pano: new THREE.MeshLambertMaterial({ color: 0xef5350 }),
+};
+
+/** Bandeira não colide (world.md) — só marca zona de guerra, montada à parte em main.ts. */
+export function propParts(type: "pedra" | "arvore" | "caixa" | "muro" | "bandeira"): PropPart[] {
+  switch (type) {
+    case "pedra":
+      return [{ geometry: propGeo.pedra, material: propMat.pedra, offset: new THREE.Vector3(0, 0.25, 0), scale: new THREE.Vector3(1, 0.6, 1) }];
+    case "arvore":
+      return [
+        { geometry: propGeo.troncoArvore, material: propMat.tronco, offset: new THREE.Vector3(0, 0.3, 0) },
+        { geometry: propGeo.folhaArvore, material: propMat.folha, offset: new THREE.Vector3(0, 0.95, 0) },
+      ];
+    case "caixa":
+      return [{ geometry: propGeo.caixa, material: propMat.caixa, offset: new THREE.Vector3(0, 0.4, 0) }];
+    case "muro":
+      return [{ geometry: propGeo.muro, material: propMat.muro, offset: new THREE.Vector3(0, 0.5, 0) }];
+    case "bandeira":
+      return [
+        { geometry: propGeo.haste, material: propMat.haste, offset: new THREE.Vector3(0, 0.7, 0) },
+        { geometry: propGeo.pano, material: propMat.pano, offset: new THREE.Vector3(0.28, 1.15, 0) },
+      ];
+  }
+}

@@ -9,7 +9,7 @@ Do mesmo seed sincronizado derivam:
    - **Campo** (resto): neutro.
 3. Corredores de respiro: nenhuma região fechada (props nunca formam paredes contínuas > N tiles).
 
-## Pré-modelos de props (T-002, em visuals.ts — fase F2)
+## Pré-modelos de props (T-002 ✅, em visuals.ts — fase F2)
 | Prop | Composição (primitivas) | Colide? |
 |---|---|---|
 | Pedra | icosaedro achatado cinza | sim |
