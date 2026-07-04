@@ -1,6 +1,14 @@
 # Coletáveis (mapa vivo — ADR-006)
 
-- Spawner roda no tick do servidor: mantém até 5 coletáveis.
+## Tipos (desde SPEC-0002)
+| Kind | Visual (F1) | Efeito |
+|---|---|---|
+| `level_up` | esfera dourada | +1 nível |
+| `speed_up` | octaedro ciano | velocidade ×1.5 por 8s (ver mechanics/skills.md) |
+
+Proporção de spawn: 70% level_up / 30% speed_up.
+
+- Spawner roda no tick do servidor: orçamento escala com a área (~1 por 160 tiles, mín. 5).
 - Célula candidata: livre (sem parede) e a ≥ 4 tiles (Manhattan) de qualquer jogador.
 - Coleta: distância < 0.6 do centro → +1 nível (M0) e evento de métrica.
 - Respawn com atraso de 2–5s para criar deslocamento constante.

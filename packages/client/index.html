@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>AttackOnPlayer — M0</title>
+    <title>AttackOnPlayer — M0.5</title>
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #111; }
       #hud {
@@ -12,10 +12,30 @@
         background: rgba(0,0,0,.55); padding: 8px 10px; border-radius: 6px;
         pointer-events: none; white-space: pre;
       }
+      /* Lista de players — design neutro em desenvolvimento (SPEC-0002) */
+      #roster {
+        position: fixed; top: 8px; right: 8px; z-index: 10;
+        min-width: 170px; max-height: 45vh; overflow: hidden;
+        font-family: monospace; font-size: 12px; color: #ccc;
+        background: rgba(12,12,16,.7); border: 1px solid #333;
+        border-radius: 8px; padding: 6px 0; pointer-events: none;
+      }
+      #roster .title {
+        padding: 2px 10px 6px; color: #888; letter-spacing: 2px;
+        border-bottom: 1px solid #2a2a2a; margin-bottom: 4px;
+      }
+      #roster .row { display: flex; align-items: center; gap: 6px; padding: 2px 10px; }
+      #roster .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+      #roster .dot.self { background: #42a5f5; }
+      #roster .dot.enemy { background: #ef5350; }
+      #roster .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #roster .tag { color: #777; font-size: 10px; }
+      #roster .lvl { color: #ffd54f; }
     </style>
   </head>
   <body>
     <div id="hud">conectando...</div>
+    <div id="roster"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -32,6 +32,9 @@ Para economizar tokens, cada especialista lê APENAS seus arquivos:
 3. Implementar com placeholders (ver Princípios).
 4. Testar com bots headless.
 5. DEVLOG + atualizar ROADMAP.
+6. **Log de prompt:** cada prompt de desenvolvimento gera `docs/prompts/PROMPT-NNNN.md` (pedido, decisões, resultado verificado, regras novas). Ver `instrucoes/REGRAS_DE_PROMPT.md`.
+
+O Creative Director tem sua pasta de referência em `instrucoes/` — mantê-la atualizada quando processos mudarem.
 
 ## Princípios inegociáveis
 

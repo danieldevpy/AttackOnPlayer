@@ -1,27 +1,21 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
-import {
-  buildMap,
-  isWall,
-  MAP_W,
-  MAP_H,
-  ROOM_NAME,
-  SERVER_PORT,
-} from "@aop/shared";
+import { buildMap, TILE_WALL, ROOM_NAME, SERVER_PORT } from "@aop/shared";
+import { createPlayerVisual, createCollectibleVisual } from "./visuals";
 
 const hud = document.getElementById("hud")!;
+const roster = document.getElementById("roster")!;
 
-// ---------- Cena (placeholders — Debug First) ----------
+// ---------- Cena base ----------
+const BG = 0x181820;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x181820);
+scene.background = new THREE.Color(BG);
+scene.fog = new THREE.Fog(BG, 22, 48); // "indo longe": o mundo some na névoa (ADR-007)
 
-const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 100);
-camera.position.set(MAP_W / 2, 14, MAP_H / 2 + 7); // de cima, leve inclinação
-camera.lookAt(MAP_W / 2, 0, MAP_H / 2);
-
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 120);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); // leveza em mobile
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
@@ -34,50 +28,56 @@ const sun = new THREE.DirectionalLight(0xffffff, 0.8);
 sun.position.set(5, 10, 3);
 scene.add(sun);
 
-// chão
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(MAP_W, MAP_H),
-  new THREE.MeshLambertMaterial({ color: 0x2e7d32 })
-);
-floor.rotation.x = -Math.PI / 2;
-floor.position.set(MAP_W / 2, 0, MAP_H / 2);
-scene.add(floor);
+// ---------- Mundo (construído após receber mapW/mapH/mapSeed do servidor) ----------
+let worldBuilt = false;
+function buildWorld(w: number, h: number, seed: number) {
+  const map = buildMap(w, h, seed); // mesmo seed = mesmo mapa do servidor (ADR-007)
 
-// paredes (InstancedMesh = 1 draw call)
-const grid = buildMap();
-const wallCells: Array<[number, number]> = [];
-for (let z = 0; z < MAP_H; z++)
-  for (let x = 0; x < MAP_W; x++) if (isWall(grid, x, z)) wallCells.push([x, z]);
-const walls = new THREE.InstancedMesh(
-  new THREE.BoxGeometry(1, 1, 1),
-  new THREE.MeshLambertMaterial({ color: 0x616161 }),
-  wallCells.length
-);
-const m = new THREE.Matrix4();
-wallCells.forEach(([x, z], i) => {
-  m.setPosition(x + 0.5, 0.5, z + 0.5);
-  walls.setMatrixAt(i, m);
-});
-scene.add(walls);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshLambertMaterial({ color: 0x2e7d32 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(w / 2, 0, h / 2);
+  scene.add(floor);
 
-// ---------- Meshes dinâmicos (diff por chave a cada frame) ----------
-const playerMeshes = new Map<string, THREE.Mesh>();
-const collectibleMeshes = new Map<string, THREE.Mesh>();
-const playerGeo = new THREE.CapsuleGeometry(0.35, 0.5, 4, 8);
-const collectGeo = new THREE.SphereGeometry(0.25, 12, 12);
-const collectMat = new THREE.MeshLambertMaterial({ color: 0xffd54f, emissive: 0x7a5c00 });
+  // grid sutil: referência visual de deslocamento no mapa grande
+  const grid = new THREE.GridHelper(Math.max(w, h), Math.max(w, h), 0x3a8a3e, 0x3a8a3e);
+  (grid.material as THREE.Material).opacity = 0.25;
+  (grid.material as THREE.Material).transparent = true;
+  grid.position.set(w / 2, 0.01, h / 2);
+  scene.add(grid);
 
-function colorFor(id: string): number {
-  let h = 0;
-  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) % 360;
-  return new THREE.Color().setHSL(h / 360, 0.7, 0.55).getHex();
+  const wallCells: Array<[number, number]> = [];
+  for (let z = 0; z < h; z++)
+    for (let x = 0; x < w; x++) if (map.cells[z * w + x] === TILE_WALL) wallCells.push([x, z]);
+  const walls = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshLambertMaterial({ color: 0x616161 }),
+    wallCells.length
+  );
+  const m = new THREE.Matrix4();
+  wallCells.forEach(([x, z], i) => {
+    m.setPosition(x + 0.5, 0.5, z + 0.5);
+    walls.setMatrixAt(i, m);
+  });
+  scene.add(walls);
+
+  camera.position.set(w / 2, 15, h / 2 + 8);
+  camera.lookAt(w / 2, 0, h / 2);
+  worldBuilt = true;
+  console.log(`[client] mundo ${w}x${h} (seed ${seed}), ${wallCells.length} blocos`);
 }
+
+// ---------- Entidades dinâmicas ----------
+const playerVisuals = new Map<string, THREE.Group>();
+const collectibleMeshes = new Map<string, THREE.Mesh>();
 
 // ---------- Rede ----------
 const url =
   location.hostname === "localhost" || location.hostname.startsWith("192.")
     ? `ws://${location.hostname}:${SERVER_PORT}`
-    : `wss://${location.host}`; // produção atrás de proxy TLS
+    : `wss://${location.host}`;
 
 const client = new Client(url);
 let room: Room | undefined;
@@ -97,7 +97,7 @@ async function connect() {
 }
 connect();
 
-// ---------- Input (teclado; touch entra no M1) ----------
+// ---------- Input (teclado; touch no M1) ----------
 const keys = new Set<string>();
 addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
 addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
@@ -109,43 +109,42 @@ function sendInput() {
     lastInput = { x, z };
     room?.send("input", lastInput);
   } else if (x !== 0 || z !== 0) {
-    room?.send("input", lastInput); // keepalive de input
+    room?.send("input", lastInput);
   }
 }
 
-// ---------- Render loop ----------
-function syncMeshes() {
-  if (!room?.state?.players) return;
+// ---------- Sincronização estado → cena ----------
+function syncWorld() {
+  const st: any = room?.state;
+  if (!st) return;
+  if (!worldBuilt && st.mapW > 0) buildWorld(st.mapW, st.mapH, st.mapSeed);
+  if (!worldBuilt) return;
 
   const seenP = new Set<string>();
-  room.state.players.forEach((p: any, id: string) => {
+  st.players.forEach((p: any, id: string) => {
     seenP.add(id);
-    let mesh = playerMeshes.get(id);
-    if (!mesh) {
-      mesh = new THREE.Mesh(
-        playerGeo,
-        new THREE.MeshLambertMaterial({ color: id === mySessionId ? 0x42a5f5 : colorFor(id) })
-      );
-      mesh.position.set(p.x, 0.6, p.z);
-      scene.add(mesh);
-      playerMeshes.set(id, mesh);
+    let vis = playerVisuals.get(id);
+    if (!vis) {
+      vis = createPlayerVisual(id, id === mySessionId);
+      vis.position.set(p.x, 0, p.z);
+      scene.add(vis);
+      playerVisuals.set(id, vis);
     }
-    // interpolação até a posição autoritativa
-    mesh.position.x += (p.x - mesh.position.x) * 0.25;
-    mesh.position.z += (p.z - mesh.position.z) * 0.25;
+    vis.position.x += (p.x - vis.position.x) * 0.25;
+    vis.position.z += (p.z - vis.position.z) * 0.25;
   });
-  playerMeshes.forEach((mesh, id) => {
+  playerVisuals.forEach((vis, id) => {
     if (!seenP.has(id)) {
-      scene.remove(mesh);
-      playerMeshes.delete(id);
+      scene.remove(vis);
+      playerVisuals.delete(id);
     }
   });
 
   const seenC = new Set<string>();
-  room.state.collectibles.forEach((c: any, id: string) => {
+  st.collectibles.forEach((c: any, id: string) => {
     seenC.add(id);
     if (!collectibleMeshes.has(id)) {
-      const mesh = new THREE.Mesh(collectGeo, collectMat);
+      const mesh = createCollectibleVisual(c.kind);
       mesh.position.set(c.x, 0.4, c.z);
       scene.add(mesh);
       collectibleMeshes.set(id, mesh);
@@ -159,20 +158,60 @@ function syncMeshes() {
   });
 }
 
+// câmera segue o jogador suavemente
+function followCamera() {
+  const me = playerVisuals.get(mySessionId);
+  if (!me) return;
+  const tx = me.position.x;
+  const tz = me.position.z;
+  camera.position.x += (tx - camera.position.x) * 0.06;
+  camera.position.z += (tz + 8 - camera.position.z) * 0.06;
+  camera.position.y += (15 - camera.position.y) * 0.06;
+  camera.lookAt(camera.position.x, 0, camera.position.z - 8);
+}
+
+// ---------- HUD + roster ----------
+let rosterNext = 0;
+function updateHud(now: number) {
+  const st: any = room?.state;
+  const me = st?.players?.get?.(mySessionId);
+  const fx: string[] = me?.effects ? Array.from(me.effects) : [];
+  hud.textContent =
+    `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
+    `nível: ${me?.level ?? "-"}` +
+    (fx.includes("speed_up") ? `  ⚡x${me.speed}` : "") +
+    `\nmapa: ${st?.mapW ?? "?"}x${st?.mapH ?? "?"}\n` +
+    `WASD/setas para mover`;
+
+  if (now < rosterNext || !st?.players) return;
+  rosterNext = now + 250;
+  let html = `<div class="title">PLAYERS</div>`;
+  st.players.forEach((p: any, id: string) => {
+    const self = id === mySessionId;
+    const fx2: string[] = p.effects ? Array.from(p.effects) : [];
+    html += `<div class="row">
+      <span class="dot ${self ? "self" : "enemy"}"></span>
+      <span class="name">${p.name}${self ? " (você)" : ""}</span>
+      ${p.isBot ? `<span class="tag">BOT</span>` : ""}
+      ${fx2.includes("speed_up") ? `<span class="tag">⚡</span>` : ""}
+      <span class="lvl">lv${p.level}</span>
+    </div>`;
+  });
+  roster.innerHTML = html;
+}
+
+// ---------- Loop ----------
 let t = 0;
 function animate() {
   requestAnimationFrame(animate);
   t += 0.05;
-  syncMeshes();
-  collectibleMeshes.forEach((mesh) => (mesh.position.y = 0.4 + Math.sin(t) * 0.08));
-
-  const me: any = room?.state?.players?.get?.(mySessionId);
-  hud.textContent =
-    `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
-    `nível: ${me?.level ?? "-"}\n` +
-    `jogadores: ${room?.state?.players?.size ?? 0}\n` +
-    `WASD/setas para mover`;
-
+  syncWorld();
+  followCamera();
+  collectibleMeshes.forEach((mesh) => {
+    mesh.position.y = 0.4 + Math.sin(t) * 0.08;
+    mesh.rotation.y += 0.02;
+  });
+  updateHud(performance.now());
   renderer.render(scene, camera);
 }
 animate();

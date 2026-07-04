@@ -11,6 +11,7 @@ export interface PlayerSession {
   durationS?: number;
   distance: number;
   pickups: number;
+  pickupsSpeed: number;
   levelStart: number;
   levelEnd?: number;
 }
@@ -30,6 +31,7 @@ export class MetricsRecorder {
       joinedAt: Date.now(),
       distance: 0,
       pickups: 0,
+      pickupsSpeed: 0,
       levelStart: level,
     });
   }
@@ -39,9 +41,11 @@ export class MetricsRecorder {
     if (s) s.distance += d;
   }
 
-  addPickup(playerId: string) {
+  addPickup(playerId: string, kind: string = "level_up") {
     const s = this.sessions.get(playerId);
-    if (s) s.pickups += 1;
+    if (!s) return;
+    s.pickups += 1;
+    if (kind === "speed_up") s.pickupsSpeed += 1;
   }
 
   end(playerId: string, levelEnd: number) {

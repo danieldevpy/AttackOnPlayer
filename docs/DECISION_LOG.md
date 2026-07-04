@@ -25,6 +25,19 @@ Em vez de instalar ferramentas externas: `specs/` (especificações curtas com t
 **Data:** 2026-07-04 · **Status:** Aprovado (CD, via discussão de concepção)
 Aura é ganha executando bem mecânicas (esquivas, streaks, precisão) e aumenta a **qualidade potencial** de drops em áreas vazias — não dá poder direto nem multiplica RNG bruto. Anti pay-to-win, anti snowball.
 
+## ADR-007 — Mapa dinâmico com mínimo 5× o base
+**Data:** 2026-07-04 · **Status:** Aprovado (CD, PROMPT-0002)
+Tamanho decidido na criação da sala via `mapSizeFor(players)`: mínimo 75×65 (5× o 15×13), cresce com jogadores esperados. Gerado por seed sincronizado — cliente reconstrói o mapa idêntico localmente (payload mínimo: 3 números). Obstáculos extras só em cruzamentos e nunca adjacentes (preserva conectividade sem pathfinding). Sensação de distância: câmera follow + fog + grid.
+**Consequência:** mapa NUNCA redimensiona no meio do round; ajuste por população acontece entre rounds (matchmaking, M3). Coletáveis escalam com a área.
+
+## ADR-008 — Evolução visual em 4 fases com ponto de troca único
+**Data:** 2026-07-04 · **Status:** Aprovado (CD, PROMPT-0002)
+F1 primitivas → F2 composição → F3 sprites 3D (billboards) → F4 low-poly GLTF. Detalhes em `instrucoes/FASES_VISUAIS.md`. Toda criação de visual passa pelas fábricas de `packages/client/src/visuals.ts`; trocar de fase = editar um arquivo.
+
+## ADR-009 — Skills/atributos via EffectSystem servidor-autoritativo
+**Data:** 2026-07-04 · **Status:** Aprovado (CD, PROMPT-0002)
+Atributo efetivo = base × efeitos ativos, recalculado no servidor a cada tick. Efeitos têm duração, renovação e teto (speed máx 2×). Lista de efeitos sincronizada só para HUD. Nova skill = novo `EffectKind` — proibido lógica de atributo solta no Room.
+
 ## ADR-006 — Recursos valiosos nascem longe de jogadores
 **Data:** 2026-07-04 · **Status:** Aprovado (CD)
 O spawner divide o mapa em células, mede densidade de jogadores por célula e gera coletáveis nas vazias. Espalha jogadores naturalmente e cria mapa "vivo". Implementado desde M0 de forma simples (raio mínimo de distância).
