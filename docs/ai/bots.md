@@ -7,7 +7,6 @@
 
 ## Bots de combate (M1 — T-008, mínimo do aceite; substituído pela arquitetura em camadas na T-020)
 Mesma base headless; ganham camada de combate sobre a caça a coletáveis:
-- **Skill parametrizável** `fraco | medio | forte` (env `BOT_SKILL`; se ausente, sorteada por bot). A skill controla: erro de mira (spread em rad), alcance de engajamento, limiar de fuga (fração de HP) e agressividade.
 - **Mirar e atirar (T-013 — protocolo `{x, z, aimX?, aimZ?, fire?}`):** miram no alvo engajado continuamente (`aimX/aimZ`, com chumbo/lead) mesmo fora do alcance do launcher — só o gatilho (`fire: true`) liga quando de fato dentro de `LAUNCHERS[launcher].projectile.range`, respeitando o cooldown (controlado pelo servidor). A direção real do tiro sai do facing (`dir`) que o servidor resolve a partir dessa mira — mesmo contrato `{move, aim, fire}` dos perfis de controle humanos (ADR-015). Não atiram de dentro de zona safe nem contra alvo em safe.
 - Fonte única de números de combate: `packages/shared/src/launchers.ts`. Zona: `zoneAt` de `packages/shared/src/map.ts`.
 
@@ -22,7 +21,7 @@ O FSM implícito (`fugir → engajar → coletar`) virou um pipeline de 6 camada
 | `decision.ts` | 3. Decisão (Utility AI) | **função pura** — `decide(perception, personality, prevAction)`; testada em `decision.test.ts` |
 | `steering.ts` | 4. Context steering | **função pura** — `steer({desired, lateralBias, danger})`; testada em `steering.test.ts` |
 | `humanizer.ts` | 5. Humanizador | classe com estado local (atraso de reação, mira com lerp+erro decrescente, cadência com jitter, pausas de perambulação) |
-| `personality.ts` | Personalidade | `PERSONALITY_BY_SKILL` — ponte temporária dos 3 níveis de skill (T-008) para o vetor de pesos; **T-008b troca por presets nomeados + boss, sem mexer na pipeline** |
+| `personality.ts` | Personalidade | `BOT_PROFILES` — presets nomeados (T-008b); testado em `personality.test.ts` |
 
 `bot.ts` (camada 6, Atuação) só orquestra: monta a percepção, aplica stickiness de memória,
 decide, deixa o humanizador atrasar a reação e suavizar a mira, resolve o movimento local
@@ -35,9 +34,30 @@ de esbarrão em borda/prop antes de precisar dele.
 `manter_posição` (previstos no doc teórico) ficam de fora até a bandeira existir no jogo
 (T-021) — sem dado, sem consideração de utility (Gameplay First).
 
-**Gancho para T-008b:** trocar `PERSONALITY_BY_SKILL` por presets nomeados (agressivo/cauteloso/
-caçador/equilibrado) sorteados por sessão + um preset de boss (aggression/caution extremos +
-atributos altos) — dado novo, zero mudança em `decision.ts`/`steering.ts`/`humanizer.ts`.
+## Perfis nomeados, política de cards e boss (T-008b, SPEC-0004 addendum)
+`packages/bots/src/ai/personality.ts` define `BOT_PROFILES` — cada perfil combina um vetor
+`Personality` (como o bot **luta**) com uma `CardPolicy` (como o bot **constrói**), sorteado
+por sessão (`BOT_PROFILE` env fixa um; ausente = sorteio):
+
+| Perfil | Comportamento | Build (cards preferidos) |
+|---|---|---|
+| `agressivo` | alta agressão, foge tarde, engaja de longe | **bruto**: Força → Cadência |
+| `cauteloso` | foge cedo, alcance de engajamento curto | **tanque**: Vitalidade → Agilidade |
+| `cacador` | persegue o mapa todo, quase não desiste | **caçador**: Alcance → Agilidade |
+| `equilibrado` | mediano em tudo | auto-pick (card `equilibrado`, como sempre foi) |
+
+`pickCard(policy, ofertaDoNível)` é **determinística** (nunca sorteio) — o mesmo perfil
+sempre escolhe o mesmo card quando disponível, tornando o build do bot **observável e
+explorável** pelo player (habilidade > sorte). Testado em `personality.test.ts`.
+
+**Boss:** `BOT_BOSS=1` marca o bot de índice 0 como boss — o *comportamento* vem de
+`BOSS_PROFILE` (quase tão afiado quanto `cacador`, mas quase não foge), e os *números* de
+verdade (nível 6–8, build concentrada, 1 skill de marco) são decididos e aplicados pelo
+**servidor** (`ArenaRoom.initBoss`, autoridade — o bot só pede `boss: true` no join).
+
+## Gancho para o Guardian (M3, pós-V1)
+`decision.ts`/`steering.ts` continuam as mesmas — só a camada de decisão trocaria por algo
+maior (ou um preset de `Personality` mais extremo que o boss). Nenhuma mudança estrutural.
 
 ## Guardian (M3)
 Um único NPC de elite (não vários genéricos):

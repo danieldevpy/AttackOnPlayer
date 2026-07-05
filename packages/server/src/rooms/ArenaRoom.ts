@@ -51,6 +51,9 @@ import {
   SKILL_MILESTONE_LEVELS,
   SKILL_MILESTONE_CHOICES,
   combinedSkillMods,
+  UPGRADE_CARD_POOL,
+  BOSS_LEVEL_MIN,
+  BOSS_LEVEL_MAX,
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
 
@@ -151,7 +154,7 @@ export class ArenaRoom extends Room<ArenaState> {
     );
   }
 
-  onJoin(client: Client, options: { name?: string; bot?: boolean; token?: string }) {
+  onJoin(client: Client, options: { name?: string; bot?: boolean; token?: string; boss?: boolean }) {
     const p = new Player();
     p.name = String(options?.name ?? "player").slice(0, 16);
     p.isBot = Boolean(options?.bot);
@@ -161,9 +164,27 @@ export class ArenaRoom extends Room<ArenaState> {
     p.x = spawn.x;
     p.z = spawn.z;
     p.spawnProtectedUntil = Date.now() + SPAWN_PROTECTION_MS; // SPEC-0005: imune ao nascer
+    if (options?.boss) this.initBoss(client.sessionId, p);
     this.state.players.set(client.sessionId, p);
     this.metrics.start(client.sessionId, p.name, p.isBot, this.roomId, p.level);
-    console.log(`[arena] + ${p.name} (${client.sessionId})${p.isBot ? " [bot]" : ""}`);
+    console.log(`[arena] + ${p.name} (${client.sessionId})${p.isBot ? " [bot]" : ""}${options?.boss ? " [BOSS]" : ""}`);
+  }
+
+  /**
+   * T-008b: boss de bot nasce nível 6–8 já com build CONCENTRADA (1 card não-equilibrado
+   * repetido — nunca o preset espalhado) + 1 skill de marco (nível 4, que o boss já passou
+   * ao nascer alto). Autoridade 100% no servidor: o bot só pede `boss: true` no join, os
+   * números concretos (nível, atributos, skill) são decididos e aplicados aqui.
+   */
+  private initBoss(id: string, p: Player) {
+    p.level = BOSS_LEVEL_MIN + Math.floor(Math.random() * (BOSS_LEVEL_MAX - BOSS_LEVEL_MIN + 1));
+
+    const concentrated = UPGRADE_CARD_POOL.filter((c) => c.id !== "equilibrado" && !c.skill);
+    const card = concentrated[Math.floor(Math.random() * concentrated.length)];
+    for (let lvl = 1; lvl < p.level; lvl++) this.effects.addAttrPoints(id, p, card.points);
+
+    const skillIds = Object.keys(SKILLS);
+    p.skills.push(skillIds[Math.floor(Math.random() * skillIds.length)]);
   }
 
   onLeave(client: Client) {

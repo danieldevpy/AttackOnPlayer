@@ -51,7 +51,7 @@
 **Contexto:** docs/ai/bots.md · packages/bots/src/bot.ts · packages/shared/src/launchers.ts (alcance/cooldown) · packages/shared/src/map.ts (zoneAt)
 **Aceite:** 4 bots geram kills entre si; skill parametrizável (fraco/médio/forte).
 
-## T-008b — Personalidade, atributos e boss 〔M〕 · depende: T-008, T-016
+## T-008b — Personalidade, atributos e boss 〔M〕 ✅ (PROMPT-0030) · depende: T-008, T-016
 **Objetivo:** perfis de bot (agressivo/cauteloso/caçador…) sorteados por sessão via a base de skill da T-008; atributos iniciais por perfil; um modo "boss" personalizado (skill alta, HP/atributos elevados, comportamento distinto). Gancho para futuramente o cérebro do bot ser acionado por um modelo (Guardian, M3).
 **Adendo SPEC-0004:** perfis ganham **política de escolha de cards** (bruto = Força/Cadência, tanque = Vitalidade/Agilidade, caçador = Alcance/Agilidade, equilibrado = auto-pick) — determinística e explorável pelo player (habilidade > sorte). Boss nasce nível 6–8 com build concentrada + 1 skill de marco + combate `forte`.
 **Contexto:** docs/ai/bots.md · specs/SPEC-0004-skills-atributos-escala.md · packages/bots/src/bot.ts
@@ -107,7 +107,7 @@
 - **T-019** 〔M〕 ✅ (PROMPT-0027) Camada de **perfis de controle** (ADR-015: todo perfil → `{move, aim, fire}`) + perfil `mouse` (WASD strafe, crosshair 360°, câmera com offset de mira)
 - **T-019b** 〔M〕 ✅ (PROMPT-0028) Perfis `keyboard` (rotação de mira por teclas, notebook sem mouse) e `touch` v1 (twin-stick virtual) + auto-detecção e seletor · depende: T-019
 - **T-020** 〔G〕 ✅ (PROMPT-0029) **Arquitetura de IA dos bots** (`docs/ai/bot-architecture.md`): percepção filtrada → memória → decisão utility → context steering (fim do esbarrão na borda; strafe orbital) → humanizador (reação/lerp de mira/pausas/desistência) → atuação; `Personality` em JSON; testes puros de decisão/steering
-- **T-008b** 〔M〕 (acima) Perfis de bot + boss = **presets de Personality** · depende: T-020
+- **T-008b** 〔M〕 ✅ (acima, PROMPT-0030) Perfis de bot + boss = **presets de Personality** · depende: T-020
 
 **F2 — Objetivo & leitura (SPEC-0006)**
 - **T-021** 〔M〕 Bandeira "rei do mapa": 2× XP/s, glow global, toggle por room (default ON), derruba na morte, retorna ao centro se abandonada

@@ -131,6 +131,11 @@ export function upgradeCardsForLevel(level: number): UpgradeCard[] {
   return [UPGRADE_CARD_POOL[base], UPGRADE_CARD_POOL[(base + 2) % n], UPGRADE_CARD_POOL[(base + 4) % n]];
 }
 
+// Boss de bot (T-008b, SPEC-0004 addendum): nasce alto e com build concentrada — o
+// servidor decide de verdade (autoridade), o bot só pede `boss: true` no join.
+export const BOSS_LEVEL_MIN = 6;
+export const BOSS_LEVEL_MAX = 8;
+
 /** XP necessário para sair de `level` e chegar ao próximo — curva de pacing (T-003). */
 export function xpToNext(level: number): number {
   return Math.round(XP_BASE * Math.pow(level, XP_EXP));

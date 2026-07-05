@@ -10,7 +10,7 @@
 ```bash
 npm run test                               # vitest @aop/shared
 cd packages/server && npx vitest run       # vitest @aop/server (combate/mobilidade, T-008/T-012)
-cd packages/bots && npx vitest run         # vitest @aop/bots (decisão/steering puros, T-020)
+cd packages/bots && npx vitest run         # vitest @aop/bots (decisão/steering/cards puros, T-020/T-008b)
 cd packages/server && npx tsc --noEmit
 cd packages/client && npx tsc --noEmit
 cd packages/bots && npx tsc --noEmit
@@ -25,7 +25,7 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 |---|---|---|
 | `npm run test` (shared) — **13 testes** | Curva XP, `pickWeighted`, cards de level-up (determinismo/soma/auto-pick, T-016), `combinedSkillMods` (T-017) | Combate, reroll, rede |
 | `npx vitest run` (server) — **19 testes** | Cadeia tiro→dano→morte→kill, safe zone, **invulnerabilidade de nascimento (SPEC-0005: escudo bloqueia dano + cai ao atirar)**, mobilidade (T-012), **guardas de balance da SPEC-0004** (TTK 5 tiros / full-força 3 tiros), ATTR_DEFS/tetos, cadência/alcance no ProjectileSystem, reroll soma preservada, multishot/pierce/fôlego/kill_rush (T-017) | Protocolo de rede real dos cards; XP passivo e morte-zera-nível (rodam no Room, não nos systems) |
-| `npx vitest run` (bots) — **11 testes** | **Decisão (utility AI, T-020):** engajar/fugir/coletar/perambular escolhidos corretamente, inimigo em zona safe não é alvo, inércia evita oscilação. **Steering contextual:** segue o vetor desejado, desvia de perigo na direção do alvo, não empurra sem alvo e com perigo total, strafe orbital (`lateralBias`) muda de lado com o sinal | Percepção/memória/humanizador (estado vivo, cobertos pelo smoke headless) |
+| `npx vitest run` (bots) — **17 testes** | **Decisão (utility AI, T-020):** engajar/fugir/coletar/perambular escolhidos corretamente, inimigo em zona safe não é alvo, inércia evita oscilação. **Steering contextual:** segue o vetor desejado, desvia de perigo na direção do alvo, não empurra sem alvo e com perigo total, strafe orbital (`lateralBias`) muda de lado com o sinal. **Política de cards por perfil (T-008b):** cada perfil escolhe seu card preferido quando presente, determinístico, cai no 1º da oferta sem preferido (marco de skill) | Percepção/memória/humanizador (estado vivo, cobertos pelo smoke headless); boss (server-side, coberto só pelo smoke) |
 | `tsc --noEmit` | Compilação server/client/bots | Comportamento runtime |
 | Bots headless | Movimento, colisão, coleta, sync, métricas JSONL, tiro/kill/respawn, **fluxo real oferta→escolha→aplicação de card** (bots escolhem via `choose_upgrade`, T-016) | Reroll |
 
@@ -59,6 +59,7 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 | Skills de projétil (T-017) | Testes server (multishot/pierce/fôlego/kill_rush) | Nível 4: card ★; tiro duplo visível; box em zona de guerra dá skill (evento `box_skill` no F3) |
 | Juice de poder (T-018) | — | Aro âmbar no nível 4+, pulsante no 8+; números de dano flutuantes; streak no HUD com 2+ kills |
 | **Arquitetura de IA em camadas (T-020)** | Testes puros de decisão/steering (11) | `BOT_VERBOSE=1 npm run bots -- 4 20`: engajar/fugir/coletar/level_up/speed_up aparecem no log; `"preso — escapando lateralmente"` raro (steering evita a maior parte da borda/prop) |
+| **Perfis nomeados + boss (T-008b)** | Testes puros de `pickCard` (6) | `npm run bots -- 4 20` sem `BOT_SKILL`/com perfis sorteados no log (`— perfil agressivo/cauteloso/cacador/equilibrado`); `BOT_BOSS=1 npm run bots -- 1 10` mostra `[BOSS]` no log do servidor e o bot nasce nível 6–8 (F3 ou log `level_up! nível N` imediato) |
 
 ---
 
@@ -68,7 +69,7 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 
 - [ ] `npm run test` (shared) — 13/13
 - [ ] `npx vitest run` (server) — 17/17
-- [ ] `npx vitest run` (bots) — 11/11 (T-020)
+- [ ] `npx vitest run` (bots) — 17/17 (T-020/T-008b)
 - [ ] Typecheck limpo (3 packages)
 - [ ] `npm run bots -- 3 30` — sem crash
 - [ ] Guarda de `.js` órfão (ver Gates automáticos) — sem saída

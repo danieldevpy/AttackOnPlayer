@@ -9,7 +9,7 @@ const { Client } = await import("colyseus.js");
 const { ROOM_NAME, SERVER_PORT, buildMap, isWall, zoneAt, LAUNCHERS } = await import("@aop/shared");
 type GameMap = import("@aop/shared").GameMap;
 
-import { skillFor, PERSONALITY_BY_SKILL } from "./ai/personality";
+import { profileFor, pickCard, BOSS_PROFILE, isBossIndex } from "./ai/personality";
 import { buildPerception } from "./ai/perception";
 import { initMemory, applyStickiness, shouldGiveUp, updateTarget } from "./ai/memory";
 import { decide } from "./ai/decision";
@@ -81,20 +81,22 @@ function orbitSignFor(id: string): 1 | -1 {
 
 async function runBot(i: number) {
   const name = `bot-${i}`;
-  const skillName = skillFor(i);
-  const personality = PERSONALITY_BY_SKILL[skillName];
+  const isBoss = isBossIndex(i);
+  const profile = isBoss ? BOSS_PROFILE : profileFor(i);
+  const personality = profile.personality;
   const client = new Client(URL);
-  const room = await client.joinOrCreate(ROOM_NAME, { name, bot: true });
+  const room = await client.joinOrCreate(ROOM_NAME, { name, bot: true, boss: isBoss });
   room.onMessage("debug_event", () => {});
-  // T-016: level-up virou oferta de cards. Bot responde com o card equilibrado (auto-pick
-  // explícito) — a política de escolha por perfil (bruto/tanque/caçador) chega na T-008b.
+  // T-008b: cada perfil tem uma política de card determinística (bruto/tanque/caçador
+  // concentram sempre o mesmo par de atributos; equilibrado auto-pica como sempre) —
+  // observável no F3 pelas skills/atributos que o bot acumula ao longo da sessão.
   room.onMessage("upgrade_applied", () => {});
   room.onMessage("upgrade_offer", (offer: any) => {
     const cards: any[] = offer?.cards ?? [];
-    const pick = cards.find((c: any) => c.id === "equilibrado") ?? cards[0];
-    if (pick) setTimeout(() => room.send("choose_upgrade", pick.id), 150 + Math.random() * 250);
+    const pickId = pickCard(profile.cardPolicy, cards);
+    if (pickId) setTimeout(() => room.send("choose_upgrade", pickId), 150 + Math.random() * 250);
   });
-  console.log(`[${name}] entrou na sala ${room.roomId} — skill ${skillName}`);
+  console.log(`[${name}] entrou na sala ${room.roomId} — perfil ${profile.name}${isBoss ? " [BOSS]" : ""}`);
 
   let map: GameMap | undefined;
   let path: Array<{ x: number; z: number }> | null = null;
