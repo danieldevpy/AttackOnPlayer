@@ -13,5 +13,13 @@ export {
   queryMetrics,
   Timer,
   type QueryMetrics,
-  type IndexMetrics,
 } from "./metrics/metrics.js";
+export {
+  extractSymbols,
+  indexCode,
+  type CodeSymbol,
+  type SymbolKind,
+  type IndexCodeMetrics,
+  type IndexCodeResult,
+} from "./index/code.js";
+export { findSymbol, searchCode, type SearchOptions } from "./query/search.js";

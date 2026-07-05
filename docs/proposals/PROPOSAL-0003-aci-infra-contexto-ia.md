@@ -122,6 +122,8 @@ Cada resposta respeita um **orçamento de tokens** configurável (progressive di
 
 Isto **estende** a ADR-004 (fica coerente): continua sendo processo leve in-repo, agora com uma camada de *automação da busca* que a ADR-004 não tinha. Proponho registrar como **ADR-017** na aprovação.
 
+> **Nota de execução (F1):** na implementação, o índice de código usou o **TypeScript Compiler API** (`typescript`, já devDependency do pacote, usada pelo próprio `tsc`) em vez de tree-sitter. Mesmo resultado — parse estrutural exato de símbolos `.ts`/`.tsx` — sem acrescentar dependência nativa/WASM nova, o que é mais coerente ainda com a leveza que a própria F0 já escolheu (`JsonStore` em vez de `better-sqlite3`). Nenhum contrato muda: as tools MCP da tabela abaixo continuam as mesmas; só a técnica interna de extração é outra. Reavaliar tree-sitter só se um dia for preciso indexar linguagens além de TS/TSX.
+
 ---
 
 ## 5. Estimativa de ganho
@@ -144,7 +146,7 @@ Cada fase é entregável sozinha, testada, e **não bloqueia o desenvolvimento d
 | Fase | Entrega | Depende de | Testável por |
 |---|---|---|---|
 | **F0 — Scaffold** | `packages/aci` no workspace, `aci.config.json`, CLI vazia, README, SQLite store, esqueleto de métricas. Zero import do jogo. | — | `npm run aci -- doctor` verde |
-| **F1 — Índice de código** | tree-sitter parseia os 4 pacotes; `aci_find_symbol` + `aci search`; cache incremental por hash | F0 | achar `EffectKind`, `ArenaRoom`, `LauncherDef` com linha+assinatura |
+| **F1 — Índice de código** ✅ | TypeScript Compiler API parseia os 4 pacotes (nota de execução acima); `findSymbol`/`searchCode` + CLI `index`/`search`; cache incremental por hash | F0 | achar `EffectKind`, `ArenaRoom`, `LauncherDef` com linha+assinatura |
 | **F2 — Índice de docs/corpus** | markdown/front-matter: specs, ADRs, prompts, roadmap, backlog, AGENTS, instrucoes; busca por doc/spec/ADR/conceito | F0 | achar "ADR sobre facing", "spec de skills" |
 | **F3 — Grafo de relações + resumos** | arestas doc↔código↔spec↔ADR; `aci_related_docs`; resumo automático de cada spec/doc/pacote | F1, F2 | "quem governa `ProjectileSystem`?" → ADR-011, SPEC-0004 |
 | **F4 — Contexto por feature (a joia)** | `aci_context_for_feature` com orçamento de tokens + progressive disclosure | F1–F3 | "T-020 IA dos bots" retorna só arquivos+trechos+ADR+deps |
