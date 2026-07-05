@@ -24,11 +24,11 @@ Feedback deve ser proporcional à **agência**: o jogo comemora as *decisões* d
 | `blood_hit` ✔ | respingo de sangue estilizado ao tomar dano (fase F1: partículas vermelhas simples) | pedido CD 2026-07-05 — entregue T-022/PROMPT-0034 |
 | `level_up_auto` ✔ | evolução automática: anel leve + som futuro | pedido CD 2026-07-05 — entregue T-022/PROMPT-0034 |
 | `upgrade_chosen_aura` ✔ | escolha manual (card/skill/reroll): aura chamativa no boneco | pedido CD 2026-07-05 — entregue T-022/PROMPT-0034 |
-| `toast_text` | **sistema de mensagens de texto**: toasts curtos com efeito personalizado (fade/slide), fila não invasiva (canto, nunca no centro), substitui os textos crus do HUD (streak, card, farm_event) | pedido CD 2026-07-05 — fica pra T-023 |
+| `toast_text` ✔ | **sistema de mensagens de texto**: toasts curtos com efeito personalizado (fade/slide), fila não invasiva (canto, nunca no centro), substitui os textos crus do HUD (streak, card, farm_event) | pedido CD 2026-07-05 — entregue T-023/PROMPT-0035 |
 
 ## Restrições permanentes
 
 - Todo efeito nasce no **registry nomeado** (`packages/client/src/vfx.ts`, `VFX_DEFS` — T-022) — proibido efeito ad-hoc no main.ts.
 - Deriva de eventos que o servidor já emite; se precisar de evento novo, justificar.
 - Orçamento global de partículas vale sempre ("leve sempre", constituição §5) — pool único fixo (`MAX_PARTICLES`), não 1 mesh por efeito.
-- `toast_text` entra como parte do T-023 (HUD) — os demais já entregues no T-022 (PROMPT-0034); novos itens que o CD adicionar aqui continuam puxáveis por qualquer leva futura.
+- Todos os itens desta leva inicial (T-022/PROMPT-0034 + T-023/PROMPT-0035) estão entregues; novos itens que o CD adicionar aqui continuam puxáveis por qualquer leva futura.

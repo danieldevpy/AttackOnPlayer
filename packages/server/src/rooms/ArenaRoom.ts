@@ -58,6 +58,7 @@ import {
   mapCenter,
   FLAG_XP_MULT,
   FLAG_PICKUP_DIST,
+  REVEAL_ON_HIT_MS,
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
 
@@ -251,6 +252,10 @@ export class ArenaRoom extends Room<ArenaState> {
       }
       const victim = this.state.players.get(hit.targetId);
       const killer = this.state.players.get(hit.killerId);
+      // T-023 (reveal-on-hit): dano de verdade (não bloqueado) revela os dois lados por um
+      // tempo, renovado a cada novo hit — "inimigo é só skin até trocar dano com ele".
+      if (victim) victim.revealedUntil = now + REVEAL_ON_HIT_MS;
+      if (killer) killer.revealedUntil = now + REVEAL_ON_HIT_MS;
       this.emitDebug("hit", {
         victimId: hit.targetId,
         shooterId: hit.killerId,

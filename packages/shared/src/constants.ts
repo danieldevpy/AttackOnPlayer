@@ -164,6 +164,10 @@ export function lossFraction(level: number): number {
 // cai no instante em que ele dispara — não dá para "camperar" atirando invulnerável.
 export const SPAWN_PROTECTION_MS = 3000;
 
+// T-023 (SPEC-0006): reveal-on-hit autoritativo — inimigo é só skin até trocar dano com ele
+// (vítima OU atirador); então nameplate+HP aparecem por este tempo, renovado a cada novo hit.
+export const REVEAL_ON_HIT_MS = 4000;
+
 // Faixas de poder (T-018, SPEC-0004): só FEEDBACK visual/leitura tática — nunca lógica de jogo.
 // nível 1–3: nada · 4–7: aro fraco · 8+: aro forte pulsante. Alimenta o "famar aura" do M2.
 export const POWER_BAND_MID = 4;

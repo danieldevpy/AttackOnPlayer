@@ -1,11 +1,14 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
 import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT, SPEED_BOOST_MS, XP_BOOST_MS, KILL_RUSH_MS } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateBuffCooldownRing } from "./visuals";
-import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent } from "./hud";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateBuffCooldownRing, updateNameplate } from "./visuals";
+import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
 import { createVfxSystem } from "./vfx";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
+
+// T-023 (SPEC-0006): build prod não tem overlay de debug (F3/roster/feeds) — só dev.
+const IS_DEV = import.meta.env.DEV;
 
 const hud = document.getElementById("hud")!;
 const debugOverlay = document.getElementById("debug-overlay")!;
@@ -13,6 +16,11 @@ const debugEventsContainer = document.getElementById("debug-events")!;
 const debugStateEl = document.getElementById("debug-state")!;
 const debugCloseBtn = document.getElementById("debug-close")!;
 let debugOpen = false;
+
+if (!IS_DEV) {
+  debugOverlay.remove();
+  document.querySelector(".debug-f3-hint")?.remove();
+}
 
 debugCloseBtn.addEventListener("click", () => {
   debugOpen = false;
@@ -200,7 +208,7 @@ async function connect() {
     mySessionId = room.sessionId;
     room.onMessage("pong", (t: number) => (ping = Math.round(performance.now() - t)));
     room.onMessage("announce", (msg: { kind: string }) => {
-      if (msg.kind === "farm_event") announceUntil = performance.now() + 6000;
+      if (msg.kind === "farm_event") pushToast("🔥 farm_event na zona de guerra!"); // T-023: toast, não mais texto cru
     });
     room.onMessage("debug_event", (ev: any) => {
       pushDebugEvent(ev);
@@ -367,7 +375,6 @@ function updateDebugState() {
 // Todo perfil produz a MESMA intenção {move, aim, fire}; o servidor não muda (já aceita
 // aimX/aimZ opcional desde SPEC-0003). Mira/rotação é atributo do PERFIL, não uma regra
 // global — perfil novo é só uma classe nova em input/, zero mudança de rede.
-let announceUntil = 0;
 const crosshairEl = document.getElementById("crosshair")!;
 const profileButtons = document.querySelectorAll<HTMLButtonElement>("#profile-selector button");
 
@@ -399,6 +406,7 @@ profileButtons.forEach((btn) => {
 // atributo de perfil de controle.
 addEventListener("keydown", (e) => {
   if (e.key === "F3") {
+    if (!IS_DEV) return; // T-023: overlay de debug não existe em build prod
     e.preventDefault();
     debugOpen = !debugOpen;
     debugOverlay.classList.toggle("active", debugOpen);
@@ -473,6 +481,12 @@ function syncWorld() {
     wasShielded.set(id, shielded);
     const carryingFlag = st.flagEnabled && st.flag?.carrierId === id;
     updateFlagGlow(vis, carryingFlag, t); // T-021: glow do portador
+
+    // T-023: reveal-on-hit — inimigo é só skin até trocar dano (revealedUntil autoritativo).
+    if (id !== mySessionId) {
+      const revealed = (p.revealedUntil ?? 0) > Date.now();
+      updateNameplate(vis, revealed, p.name, p.hp, p.maxHp);
+    }
 
     // T-022: anel de buff esvaziando — 1 por vez (o mais recente aplicado).
     const buff = buffApplied.get(id);
@@ -609,7 +623,6 @@ initHud({
   getRoom: () => room,
   getSessionId: () => mySessionId,
   getPing: () => ping,
-  getAnnounceUntil: () => announceUntil,
   getProfileId: () => profileManager.id,
 });
 

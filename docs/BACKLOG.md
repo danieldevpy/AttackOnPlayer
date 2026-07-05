@@ -112,7 +112,7 @@
 **F2 — Objetivo & leitura (SPEC-0006)**
 - **T-021** 〔M〕 ✅ (PROMPT-0031) Bandeira "rei do mapa": 2× XP/s, glow global, toggle por room (default ON), derruba na morte, retorna ao centro se abandonada
 - **T-022** 〔M〕 ✅ (PROMPT-0034) VFX nomeados: registry de partículas data-driven derivado de eventos existentes. **Regra de intensidade** (automático = leve; escolha manual = "aura" chamativa) + fila inicial do backlog vivo `docs/mechanics/vfx-juice-backlog.md` (speed_up_trail, buff_cooldown_ring, blood_hit, level_up_auto, upgrade_chosen_aura) — backlog é contínuo, CD alimenta quando quiser
-- **T-023** 〔G〕 HUD dev/prod + reveal-on-hit autoritativo (inimigo = só skin até trocar dano; ~4s renováveis) + **toasts** (`toast_text`: mensagens com efeito personalizado, fila no canto, não invasivas) · depende: T-022
+- **T-023** 〔G〕 ✅ (PROMPT-0035) HUD dev/prod (`import.meta.env.DEV`: dev sempre mostra tudo; prod compacto, atributos só segurando [Tab], sem roster/F3) + reveal-on-hit autoritativo (`Player.revealedUntil`, ~4s renováveis, nameplate+HP só aparecem depois de trocar dano) + **toasts** (`toast_text`: mensagens com efeito personalizado, fila no canto, não invasivas) · depende: T-022
 
 **F3 — Conteúdo (SPEC-0007)**
 - **T-024** 〔G〕 **Registry de objetos** (`ObjectDef` no shared — código agora, sistema/Django depois) + formato de mapa v1 (instâncias `{objectId, x, z, ...}`, zonas, spawns, bandeira) + loader por `mapId` com validação/flood-fill

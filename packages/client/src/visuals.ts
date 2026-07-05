@@ -176,6 +176,60 @@ export function updateBuffCooldownRing(group: THREE.Group, active: { kind: strin
   ring.scale.setScalar(0.55 + active.frac * 0.55); // esvazia = encolhe até quase sumir no fim
 }
 
+/**
+ * T-023 (SPEC-0006): reveal-on-hit — "inimigo é só skin (cor+forma por token) até trocar
+ * dano com ele". `revealed` já vem pronto do servidor (`p.revealedUntil > Date.now()`,
+ * autoritativo); este helper só desenha/esconde. Canvas só é redesenhado quando o texto
+ * muda (não todo frame) — nameplate por jogador revelado é barato mesmo com vários ao mesmo tempo.
+ */
+interface NameplateState {
+  sprite: THREE.Sprite;
+  lastLabel: string;
+}
+export function updateNameplate(group: THREE.Group, revealed: boolean, name: string, hp: number, maxHp: number) {
+  let np = group.userData.nameplate as NameplateState | undefined;
+  if (!revealed) {
+    if (np) np.sprite.visible = false;
+    return;
+  }
+  if (!np) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 160;
+    canvas.height = 48;
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false })
+    );
+    sprite.scale.set(1.5, 0.45, 1);
+    sprite.position.y = 1.75;
+    group.add(sprite);
+    np = { sprite, lastLabel: "" };
+    group.userData.nameplate = np;
+  }
+  np.sprite.visible = true;
+  const hpClamped = Math.max(0, Math.ceil(hp));
+  const label = `${name}|${hpClamped}/${maxHp}`;
+  if (label === np.lastLabel) return;
+  np.lastLabel = label;
+  const tex = np.sprite.material.map as THREE.CanvasTexture;
+  const canvas = tex.image as HTMLCanvasElement;
+  const g = canvas.getContext("2d")!;
+  g.clearRect(0, 0, canvas.width, canvas.height);
+  g.font = "bold 16px monospace";
+  g.textAlign = "center";
+  g.fillStyle = "#fff";
+  g.strokeStyle = "#000";
+  g.lineWidth = 3;
+  g.strokeText(name, 80, 16);
+  g.fillText(name, 80, 16);
+  // barra de HP: fundo escuro + preenchimento colorido pela fração de vida
+  const frac = maxHp > 0 ? hpClamped / maxHp : 0;
+  g.fillStyle = "#000a";
+  g.fillRect(10, 28, 140, 10);
+  g.fillStyle = frac > 0.5 ? "#66bb6a" : frac > 0.25 ? "#ffca28" : "#ef5350";
+  g.fillRect(10, 28, 140 * frac, 10);
+  tex.needsUpdate = true;
+}
+
 export function createCollectibleVisual(kind: string): THREE.Mesh {
   switch (kind) {
     case "speed_up":
