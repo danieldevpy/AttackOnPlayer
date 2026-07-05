@@ -44,7 +44,7 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 | Tiro / dano | — | **2 abas** no browser |
 | Morte / respawn / **nível zera** (SPEC-0005) | — | **2 abas** + F3 (`death`, `respawn` com `levelAfter:1`, `hit`, `shield_block`) |
 | **Invuln de nascimento (3s, SPEC-0005)** | Teste server (`shield_block` + cai ao atirar) | F3 mostra `escudo` contando; bolha azul no player; tiro no recém-nascido não tira HP; atirar remove o escudo |
-| Facing **pelo movimento** (SPEC-0005) | — | Andar com WASD: player e tiro apontam na direção do movimento; **mouse não muda o facing**; F3 mostra `facing` seguindo o movimento |
+| Facing por **perfil de controle** (ADR-015/T-019, revisa SPEC-0005) | Lógica do perfil `mouse` verificada isolada (crosshair segue cursor, `aimX` troca de sinal com o lado da tela) | Perfil mouse: mover o mouse gira o facing/tiro para o crosshair em qualquer ângulo, mesmo parado; soltar o mouse da janela mantém o último facing; F3 mostra `facing` seguindo a mira |
 | Gatilho (espaço/clique) | Bots (T-013, mira contínua + gatilho) | F3 mostra `gatilho` ativo; espaço e clique geram projétil idêntico |
 | Ganchos de mobilidade (T-012) | Teste unitário (`projectiles.test.ts`) | `dev_launcher` + `DEBUG=1` no F3 (velocidade cai e volta sozinha) |
 | Bot: ritmo de ataque por skill | `npm run bots` — contar tiros por skill | — |

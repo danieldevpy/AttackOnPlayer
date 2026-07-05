@@ -4,45 +4,41 @@
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
 **Atualizado em:** 2026-07-05
-**Branch:** `evolução` — SPECs 0003/0004/0005 implementadas; **V1 aprovada e documentada, pronta para executar**.
-**Marco:** V1 (lançamento público) — PROPOSAL-0002 ✅ aprovada com ajustes; SPEC-0006..0009 criadas.
+**Branch:** `evolução` (== `main`, merge fast-forward feito nesta sessão) — **execução agêntica sequencial da V1 em andamento**.
+**Marco:** V1 (lançamento público) — PROPOSAL-0002 aprovada; T-019 concluída; seguindo em ordem pelo BACKLOG sem intervenção do CD a cada task.
 
 ---
 
 ## Onde paramos
 
-**PROPOSAL-0002 aprovada pelo CD com 3 ajustes (§9), tudo incorporado e a documentação executável está completa:**
+**Herdado desta sessão, já fechado:**
+- Gates automáticos rodados na íntegra (shared 13/13, server 19/19, tsc ×3, guarda `.js` órfão, smoke de bots) — todos verdes.
+- Merge fast-forward `evolução` → `main` (24 commits, sem conflitos). `main` e `evolução` estão no mesmo commit agora.
 
-- **A1 — Controles por perfil (ADR-015):** o jogo é estilo Valorant 3D leve/simplista; "CS 2D" = liberdade de movimento + tiro com lógica realista. Perfis `mouse` (crosshair 360° + strafe), `keyboard` (rotação por teclas) e `touch` (twin-stick) — todos produzem `{move, aim, fire}`; rotação é atributo do perfil; servidor não muda. Fim do vaivém de ADRs sobre mira.
-- **A2 — Bot é arquitetura de IA (novo doc `docs/ai/bot-architecture.md`):** Percepção → Memória → Decisão (Utility AI) → Context Steering (borda/strafe) → Humanizador → Atuação; `Personality` = JSON; perfis/boss/Guardian = presets. T-020 implementa o doc.
-- **A3 — Mapas & objetos:** registry `ObjectDef` (código agora, sistema/Django depois); mapa = instâncias de objetos por id; CLI ganha `save-current` (salva o mapa da partida atual para reajustar depois). IA cura mapas em sessão com o CD — nunca geração automática.
-- **A4 — Juice contínuo (adição final):** backlog vivo `docs/mechanics/vfx-juice-backlog.md` — o CD adiciona efeitos quando sentir necessidade, qualquer leva puxa via registry da T-022. Regra de intensidade: automático = leve; escolha manual = "aura" chamativa. Toasts (`toast_text`) entram no T-023. **Plano da V1 FINALIZADO.**
+**T-019 concluída (PROMPT-0027):** camada de perfis de controle (ADR-015) + perfil `mouse` — `packages/client/src/input/{types,mouseProfile}.ts`, `main.ts` delegando input ao perfil ativo, crosshair 360° no `index.html`, câmera com leve offset de mira. Servidor inalterado (já aceitava `aimX/aimZ`). Ver detalhes/verificação em `docs/prompts/PROMPT-0027.md`.
 
-**Documentos criados/atualizados nesta sessão:** PROPOSAL-0002 (§9 ajustes, status aprovada) · `docs/ai/bot-architecture.md` · ADR-015 e ADR-016 no DECISION_LOG · `specs/SPEC-0006-sensacao-e-leitura.md` (F1+F2) · `SPEC-0007-mapas-e-objetos.md` (F3) · `SPEC-0008-plataforma-django-auth.md` (F4) · `SPEC-0009-empacotamento-e-lancamento.md` (F5+F6) · BACKLOG (T-019/T-019b/T-020/T-024/T-025 revisadas, seção V1 aprovada) · ROADMAP.
+**Execução autônoma em curso:** esta sessão está seguindo a ordem sugerida da SPEC-0006 sem pausar para aprovação a cada task (só pergunta se houver bloqueio genuíno). Próxima: **T-019b**.
 
-## Próximo passo sugerido
+## Próximo passo
 
-**Começar o desenvolvimento da V1, em ordem:**
-
-1. `Executar T-019 do docs/BACKLOG.md` — camada de perfis de controle + perfil `mouse` (SPEC-0006, ADR-015).
-2. Sequência da F1: T-019 → T-020 (IA de bot) → T-019b → depois F2 (T-021 bandeira → T-022 VFX → T-023 HUD) → T-008b.
-3. **Herdado:** veredito no browser das SPECs 3/4/5 + merge `evolução` → `main` — idealmente antes da T-019 (a T-019 mexe exatamente no input que a SPEC-0005 acabou de mudar; melhor congelar o estado atual em `main` primeiro).
-
-Questões que o CD ainda pode ajustar em teste (defaults valem): bônus de atributo da bandeira (default: só 2×XP), duração do reveal (4s), formas do skin placeholder, canal de divulgação (T-032).
+1. `Executar T-019b` — perfis `keyboard` (rotação por teclas) e `touch` v1 (twin-stick) + auto-detecção e seletor manual. Depende de T-019 (pronta).
+2. Sequência da F1: T-019b → T-020 (arquitetura de IA dos bots) → T-008b (perfis/boss de bot) → depois F2 (T-021 bandeira → T-022 VFX → T-023 HUD/toasts) → F3..F6 (ver seção V1 do `BACKLOG.md`).
+3. **Pendência real (só o CD resolve):** veredito humano num browser com GPU do perfil mouse — critério "circular um alvo mantendo o crosshair nele" (o preview headless desta sessão não tem GPU; a lógica foi validada isolando a classe via `preview_eval`, não por screenshot).
 
 ## Veredito do Creative Director
 
 | Item | Status | Notas |
 |---|---|---|
 | PROPOSAL-0002 + ajustes §9 | ✅ aprovada (2026-07-05) | specs SPEC-0006..0009 derivadas |
-| SPEC-0005 (gameplay) / SPEC-0004 / SPEC-0003 | ⬜ pendente teste no browser | herdadas; checklists no QA.md |
-| Merge `evolução` → `main` | ⬜ pendente | recomendado antes da T-019 |
+| Merge `evolução` → `main` | ✅ feito nesta sessão | fast-forward, 24 commits |
+| T-019 (perfil mouse) | ⬜ pendente teste manual no browser (GPU) | lógica verificada automaticamente; ver PROMPT-0027 |
+| SPEC-0005 / SPEC-0004 / SPEC-0003 (herdadas) | ⬜ pendente teste no browser | checklists no QA.md — não bloqueou o merge (gates automáticos cobrem regressão) |
 
 ## Comandos úteis agora
 
 ```bash
 npm run test && (cd packages/server && npx vitest run)   # 13/13 + 19/19
-npm run dev:server && npm run dev:client                  # estado atual (facing por movimento)
+npm run dev:server && npm run dev:client                  # perfil mouse: WASD + mira/crosshair pelo cursor
 npm run bots -- 4 30
 ```
 
@@ -50,6 +46,7 @@ npm run bots -- 4 30
 
 - Plano-mãe → `docs/proposals/PROPOSAL-0002-v1-lancamento.md` (§9 = ajustes finais do CD)
 - Specs executáveis → `specs/SPEC-0006..0009`
-- Teoria dos bots → `docs/ai/bot-architecture.md`
+- Teoria dos bots (T-020 vai implementar) → `docs/ai/bot-architecture.md`
 - Decisões novas → DECISION_LOG ADR-015 (controles) e ADR-016 (fronteira Django)
-- Tasks → seção V1 do `docs/BACKLOG.md` (T-019..T-032)
+- Tasks → seção V1 do `docs/BACKLOG.md` (T-019 ✅, T-019b..T-032 pendentes)
+- Última leva → `docs/prompts/PROMPT-0027.md`

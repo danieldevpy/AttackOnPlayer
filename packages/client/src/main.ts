@@ -3,6 +3,8 @@ import { Client, Room } from "colyseus.js";
 import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual } from "./visuals";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex, onCombatEvent } from "./hud";
+import { MouseControlProfile } from "./input/mouseProfile";
+import type { ControlProfile, Intent } from "./input/types";
 
 const hud = document.getElementById("hud")!;
 const debugOverlay = document.getElementById("debug-overlay")!;
@@ -292,7 +294,7 @@ function updateDebugState() {
     rows.push(`<tr><td>sessão</td><td>${mySessionId}</td></tr>`);
     rows.push(`<tr><td>pos</td><td>x:${me.x?.toFixed(2)} z:${me.z?.toFixed(2)}</td></tr>`);
     rows.push(`<tr><td>facing</td><td>${((me.dir ?? 0) * 180 / Math.PI).toFixed(0)}°</td></tr>`);
-    rows.push(`<tr><td>gatilho</td><td>${fireSources.size > 0 ? `ativo (${Array.from(fireSources).join(", ")})` : "inativo"}</td></tr>`);
+    rows.push(`<tr><td>gatilho</td><td>${lastIntent.fire ? `ativo (${activeProfile.id})` : "inativo"}</td></tr>`);
     rows.push(`<tr><td>hp</td><td>${Math.ceil(me.hp)}/${me.maxHp} (vit:${me.vitality?.toFixed(2)})</td></tr>`);
     const shieldMs = Math.max(0, (me.spawnProtectedUntil ?? 0) - Date.now());
     rows.push(`<tr><td>escudo</td><td>${shieldMs > 0 ? `${(shieldMs / 1000).toFixed(1)}s` : "—"}</td></tr>`);
@@ -320,22 +322,26 @@ function updateDebugState() {
   debugStateEl.innerHTML = rows.join("");
 }
 
-// ---------- Input (teclado; touch no M1) ----------
+// ---------- Input por perfil de controle (ADR-015 / T-019) ----------
+// Todo perfil produz a MESMA intenção {move, aim, fire}; o servidor não muda (já aceita
+// aimX/aimZ opcional desde SPEC-0003). Mira/rotação é atributo do PERFIL, não uma regra
+// global — perfil novo (T-019b: keyboard/touch) é só uma classe nova, zero mudança de rede.
 let announceUntil = 0;
-const keys = new Set<string>();
-// SPEC-0005 (correção): o facing NÃO é mais controlado pelo mouse. A direção/visão do player
-// deriva só do movimento (WASD) — o servidor calcula `dir` a partir de inputX/inputZ. Sem
-// mira do mouse, sem raycast por tick, sem `aim` na rede: mais simples e mais eficiente.
-// O mouse continua servindo só de gatilho (mousedown/up abaixo), não de direção.
+const crosshairEl = document.getElementById("crosshair")!;
 
-// T-010: gatilhos desacoplados da mira — cada fonte só liga/desliga um nome neste
-// set; "estou atirando" = algum gatilho ativo. Novo gatilho (gamepad/touch) = uma
-// entrada aqui, sem mudar o protocolo (`fire` continua sendo só um booleano).
-const fireSources = new Set<string>();
+const activeProfile: ControlProfile = new MouseControlProfile({
+  camera,
+  crosshairEl,
+  getPlayerPos: () => {
+    const st: any = room?.state;
+    const me = st?.players?.get?.(mySessionId);
+    return me ? { x: me.x, z: me.z } : null;
+  },
+});
+activeProfile.attach();
 
-addEventListener("mousedown", () => fireSources.add("mouse"));
-addEventListener("mouseup", () => fireSources.delete("mouse"));
-
+// Ações fora da intenção de jogo (debug, cards, reroll) continuam globais — não são
+// atributo de perfil de controle.
 addEventListener("keydown", (e) => {
   if (e.key === "F3") {
     e.preventDefault();
@@ -348,38 +354,29 @@ addEventListener("keydown", (e) => {
     }
     return;
   }
-  if (e.key === " ") {
-    e.preventDefault(); // espaço não deve rolar a página
-    fireSources.add("space");
-  }
   // T-016: 1/2/3 escolhem o card da oferta aberta (consome a tecla só se houver oferta)
   if (e.key === "1" || e.key === "2" || e.key === "3") {
     if (chooseUpgradeByIndex(Number(e.key) - 1)) return;
   }
-  keys.add(e.key.toLowerCase());
   if (e.key.toLowerCase() === "r") room?.send("reroll"); // T-004: coins compram reroll de atributo
 });
-addEventListener("keyup", (e) => {
-  keys.delete(e.key.toLowerCase());
-  if (e.key === " ") fireSources.delete("space");
-});
 
-let lastMoveFire = { x: 0, z: 0, fire: false };
+// Última intenção enviada; a câmera (followCamera) reusa o vetor de mira para o leve
+// offset (ADR-015) sem precisar chamar poll() de novo fora do tick de rede.
+let lastIntent: Intent = { moveX: 0, moveZ: 0, fire: false };
+
 function sendInput() {
-  const x = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
-  const z = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-  const fire = fireSources.size > 0;
-
-  // SPEC-0005 (correção): sem `aim` — o facing (Player.dir) é derivado pelo servidor a partir
-  // do movimento (inputX/inputZ). Parado, o servidor mantém o último dir (nunca zera). O tiro
-  // sai sempre na direção que o player está andando/olhando.
-  const moveFireChanged = x !== lastMoveFire.x || z !== lastMoveFire.z || fire !== lastMoveFire.fire;
-  const shouldSend = moveFireChanged || x !== 0 || z !== 0 || fire;
-  if (!shouldSend) return;
-
-  lastMoveFire = { x, z, fire };
-  const payload: { x: number; z: number; fire?: boolean } = { x, z };
-  if (fire) payload.fire = true;
+  const intent = activeProfile.poll();
+  lastIntent = intent;
+  const payload: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean } = {
+    x: intent.moveX,
+    z: intent.moveZ,
+  };
+  if (typeof intent.aimX === "number" && typeof intent.aimZ === "number") {
+    payload.aimX = intent.aimX;
+    payload.aimZ = intent.aimZ;
+  }
+  if (intent.fire) payload.fire = true;
   room?.send("input", payload);
 }
 
@@ -466,11 +463,22 @@ function syncWorld() {
 }
 
 // câmera segue o jogador suavemente
+const CAMERA_AIM_OFFSET = 2.5; // ADR-015: leve deslocamento do alvo na direção da mira, sem girar a câmera
 function followCamera() {
   const me = playerVisuals.get(mySessionId);
   if (!me) return;
-  const tx = me.position.x;
-  const tz = me.position.z;
+  let offsetX = 0;
+  let offsetZ = 0;
+  const { aimX, aimZ } = lastIntent;
+  if (typeof aimX === "number" && typeof aimZ === "number") {
+    const len = Math.hypot(aimX, aimZ);
+    if (len > 1e-3) {
+      offsetX = (aimX / len) * CAMERA_AIM_OFFSET;
+      offsetZ = (aimZ / len) * CAMERA_AIM_OFFSET;
+    }
+  }
+  const tx = me.position.x + offsetX;
+  const tz = me.position.z + offsetZ;
   camera.position.x += (tx - camera.position.x) * 0.06;
   camera.position.z += (tz + 8 - camera.position.z) * 0.06;
   camera.position.y += (15 - camera.position.y) * 0.06;

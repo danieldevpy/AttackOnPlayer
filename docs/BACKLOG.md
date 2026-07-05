@@ -104,7 +104,7 @@
 > Executar em ordem de fase; prompt típico: `Executar T-019 do docs/BACKLOG.md`.
 
 **F1 — Sensação (SPEC-0006)**
-- **T-019** 〔M〕 Camada de **perfis de controle** (ADR-015: todo perfil → `{move, aim, fire}`) + perfil `mouse` (WASD strafe, crosshair 360°, câmera com offset de mira)
+- **T-019** 〔M〕 ✅ (PROMPT-0027) Camada de **perfis de controle** (ADR-015: todo perfil → `{move, aim, fire}`) + perfil `mouse` (WASD strafe, crosshair 360°, câmera com offset de mira)
 - **T-019b** 〔M〕 Perfis `keyboard` (rotação de mira por teclas, notebook sem mouse) e `touch` v1 (twin-stick virtual) + auto-detecção e seletor · depende: T-019
 - **T-020** 〔G〕 **Arquitetura de IA dos bots** (`docs/ai/bot-architecture.md`): percepção filtrada → memória → decisão utility → context steering (fim do esbarrão na borda; strafe orbital) → humanizador (reação/lerp de mira/pausas/desistência) → atuação; `Personality` em JSON; testes puros de decisão/steering
 - **T-008b** 〔M〕 (acima) Perfis de bot + boss = **presets de Personality** · depende: T-020

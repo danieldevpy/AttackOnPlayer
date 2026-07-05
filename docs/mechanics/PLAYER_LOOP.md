@@ -84,8 +84,8 @@ Ao morrer, `resetAttrToLevel` volta ao preset equilibrado do **novo** nível —
 
 ## Combate
 
-- **Facing pelo movimento** (SPEC-0005): a direção/visão do player (`Player.dir`) é derivada do **movimento** (WASD) pelo servidor — **o mouse não controla a mira**. Parado, mantém o último `dir` (nunca zera). O mouse é só um gatilho.
-- **Gatilho ≠ direção** (T-010): espaço e clique são o mesmo gatilho — os dois disparam **na direção do facing atual**, não numa direção mandada pelo input.
+- **Facing por perfil de controle** (ADR-015/T-019, revisa a SPEC-0005): a direção/visão do player (`Player.dir`) é resolvida no servidor a partir de `aimX/aimZ` quando o perfil ativo os envia (perfil `mouse`: mira 360° pelo crosshair no chão), e cai para o **movimento** (WASD) quando não há mira (perfis futuros sem mouse, ou parado sem mover). Parado e sem mira, mantém o último `dir` (nunca zera). O contrato de rede (`{x,z,aimX?,aimZ?,fire?}`) não muda — mira é atributo do perfil no cliente, não uma regra do servidor.
+- **Gatilho ≠ direção** (T-010): espaço e clique são o mesmo gatilho — os dois disparam **na direção do facing atual** (que já reflete a mira, se o perfil enviou uma).
 - Servidor aplica cooldown (~600 ms no `basic_shot`); projétil nasce na borda do player (offset de raio) na posição autoritativa do tick — sem atraso ao atirar em movimento.
 - Projétil: alcance ~8u; some em prop ou ao acertar.
 - **Ganchos de mobilidade por lançador** (T-012, opcional em `LauncherDef.movement`): lentidão do atirador ao disparar e/ou herança de velocidade pelo projétil. `basic_shot` não usa nenhum; existe um lançador de teste (`heavy_shot_dev`) só em dev (`DEBUG=1` + mensagem `dev_launcher`).

@@ -1,5 +1,11 @@
 # Devlog
 
+## 2026-07-05 — Sessão 10: gates + merge evolução→main, T-019 (perfis de controle + mouse)
+- Início da execução agêntica sequencial da V1 (PROPOSAL-0002), sem intervenção do CD a cada task. Antes de tocar código: rodados todos os gates herdados (shared 13/13, server 19/19, tsc ×3, guarda `.js` órfão, smoke de bots) — verdes — e feito o **merge fast-forward `evolução` → `main`** recomendado pela sessão anterior.
+- **T-019 (SPEC-0006/ADR-015):** criada a camada de perfis de controle no cliente (`packages/client/src/input/types.ts` — contrato `Intent`/`ControlProfile`) e o perfil `mouse` (`mouseProfile.ts`): WASD strafe + mira por raycast do cursor no chão (vetor `aim` enviado como `aimX/aimZ`, campo que o servidor já aceitava desde SPEC-0003/bots — zero mudança de servidor) + gatilho por clique/espaço. `main.ts` passou a delegar input ao perfil ativo; crosshair 360° (`#crosshair`) substitui o cursor do SO; câmera ganha leve offset na direção da mira sem girar.
+- **Verificação:** gates automáticos verdes; preview headless sem GPU não permitiu screenshot, então a lógica do perfil foi validada isolando a classe real via import dinâmico no browser (`preview_eval`) — confirmado que o crosshair segue o mouse e o vetor de mira aponta corretamente para os dois lados da tela. Detalhes em `docs/prompts/PROMPT-0027.md`.
+- Pendente: veredito humano do CD num browser com GPU (critério "circular um alvo mantendo o crosshair nele"); T-019b (keyboard/touch) é a próxima task.
+
 ## 2026-07-05 — Sessão 9 (final): ajuste A4 — juice contínuo com regra de intensidade
 - CD jogou mais e pediu (sem reestruturar o plano): mais efeitos visuais (trail de velocidade, anel de cooldown de buff, sangue no hit), distinção **automático = leve vs escolha manual = "aura" chamativa**, toasts de texto personalizados e não invasivos, e um mecanismo para adicionar juice "quando sentir a necessidade momentânea".
 - Solução sem tocar nas fases: **backlog vivo** `docs/mechanics/vfx-juice-backlog.md` (fila que o CD alimenta a qualquer momento; qualquer leva puxa itens via registry da T-022) + regra de intensidade registrada na PROPOSAL-0002 §9-A4 e na SPEC-0006; `toast_text` incorporado ao T-023. Plano da V1 **finalizado**.
