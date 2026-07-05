@@ -42,9 +42,15 @@ export function mapSizeFor(expectedPlayers: number): { w: number; h: number } {
 
 const PROP_TYPES: PropType[] = ["pedra", "arvore", "caixa", "muro"];
 
-/** Uma zona de guerra central; mapas que cresceram além do mínimo (ADR-007) ganham uma segunda. */
-function buildZones(w: number, h: number, spawns: Array<{ x: number; z: number }>): Zone[] {
-  const zones: Zone[] = spawns.map((s) => ({ kind: "safe", cx: s.x, cz: s.z, radius: SAFE_ZONE_RADIUS }));
+/**
+ * Uma zona de guerra central; mapas que cresceram além do mínimo (ADR-007) ganham uma segunda.
+ * SPEC-0005: as zonas SAFE em torno de cada spawn foram REMOVIDAS — não existe mais canto
+ * intocável. A proteção ao nascer virou invulnerabilidade temporal (SPAWN_PROTECTION_MS),
+ * aplicada por player, não por região. O primitivo `kind: "safe"` continua existindo em
+ * `zoneAt`/tipos (testes de combate ainda o exercem), só não é mais gerado no mapa.
+ */
+function buildZones(w: number, h: number, _spawns: Array<{ x: number; z: number }>): Zone[] {
+  const zones: Zone[] = [];
   zones.push({ kind: "war", cx: w / 2, cz: h / 2, radius: WAR_ZONE_RADIUS });
   if (w > BASE_MAP_W * MAP_MIN_SCALE) {
     zones.push({ kind: "war", cx: w * 0.22, cz: h * 0.78, radius: WAR_ZONE_RADIUS * 0.8 });

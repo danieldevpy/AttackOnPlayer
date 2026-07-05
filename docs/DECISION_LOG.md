@@ -2,6 +2,11 @@
 
 Formato: contexto → decisão → consequência. Decisões são reversíveis via novo ADR.
 
+## ADR-014 — Presença viva, morte dura, invuln temporal, facing por movimento (SPEC-0005)
+**Data:** 2026-07-04 · **Status:** Aprovado (CD) — pós-teste com bots, spec SPEC-0005
+Seis ajustes de ritmo/controle pedidos pelo CD após jogar com bots: (1) **XP passivo** — todo player vivo ganha +1 XP/s (`XP_PER_SECOND`), o mapa nunca "esfria"; (2) **morte zera o nível** (volta a 1) — aposenta a perda parcial `lossFraction` do loop, risco real máximo; (3) **reroll (R) também dá XP** (+20, `REROLL_XP_REWARD`) — a tecla vira progressão ativa; (4) **zonas safe removidas** do mapa (cantos intocáveis travavam o combate) — o primitivo `zone.kind === "safe"` fica só nos testes; (5) **invulnerabilidade de nascimento** de 3s por player (`SPAWN_PROTECTION_MS`) substitui a safe zone, e **cai ao atirar** (anti "torre invulnerável"); (6) **facing pelo movimento** — a direção/visão do player deriva do movimento (WASD), calculada no servidor a partir de `inputX/inputZ`; o mouse **não** controla o facing (correção 2026-07-05: a primeira versão pôs sob o mouse; o CD pediu o oposto — mais eficiente, sem raycast por tick nem `aim` na rede; `aimX/aimZ` fica só para os bots).
+**Consequência:** balance de pacing vira hipótese a re-medir com bots (XP passivo + morte-zera se equilibram); nenhum sistema de arquitetura novo — tudo entra em `grantXp`/`ProjectileSystem`/`buildZones`/input do cliente já existentes; `lossFraction` permanece exportada (testes/curva de balance, reintrodução por room possível).
+
 ## ADR-001 — Stack: Three.js + Node/Colyseus + TypeScript (monorepo)
 **Data:** 2026-07-04 · **Status:** Aprovado (CD)
 Navegador garante multiplataforma sem instalação e permite teste agêntico headless. Colyseus dá salas/sync/matchmaking prontos. Monorepo npm workspaces: `shared`, `server`, `client`, `bots`.

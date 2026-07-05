@@ -1,5 +1,22 @@
 # Devlog
 
+## 2026-07-05 — Sessão 8 (cont.): correções da SPEC-0005 (PROMPT-0026)
+- CD apontou 2 erros da leva anterior:
+  1. **Facing não é do mouse.** A direção/visão do player deve vir do **movimento** (WASD), como antes, só que mais eficiente. Removido do cliente todo o caminho de mira por mouse (raycast `cursorGroundOffset`, `mousemove`, envio de `aim`); o servidor já deriva `dir` de `inputX/inputZ`. Cliente do player não manda mais `aim` — o campo do protocolo fica só para os bots (que miram no alvo). Menos trabalho por tick, menos rede.
+  2. **XP fracionado no HUD** (`1.478.../88`). Causa: o XP passivo somava fração por tick direto em `p.xp`. Corrigido com **acumulador de tempo no servidor** (`xpAccum`): o XP entra em `p.xp` só em unidades inteiras (1/s), então o estado nunca é fracionado. HUD também floora por defesa.
+- **Verificado:** shared 13/13, server 19/19, `tsc --noEmit` limpo ×3. Docs atualizadas (SPEC-0005 item 6 + nota de correção, ADR-014, PLAYER_LOOP/combat, QA, ROADMAP, SESSAO_ATUAL).
+
+## 2026-07-04 — Sessão 8: SPEC-0005 — ajustes de gameplay pós-teste com bots
+- CD testou com bots e pediu 6 alterações (PROMPT-0025), implementadas e verificadas:
+  1. **XP passivo:** todo player vivo ganha +1 XP/s (`XP_PER_SECOND`) em `grantXp` por tick — o mapa não "esfria" e quem foi zerado sobe só jogando. Confirmado no smoke: bot sem tiros nem engajamento chegou ao nível 2.
+  2. **Morte zera o nível:** `p.level = 1` no respawn (aposenta `lossFraction` do loop — função fica exportada p/ testes/curva de balance). Risco real máximo.
+  3. **Reroll dá XP:** handler `reroll` chama `grantXp(+20, REROLL_XP_REWARD)` além de redistribuir — a tecla R vira progressão ativa (pode abrir card na hora).
+  4. **Zonas safe removidas:** `buildZones` não gera mais safe (verificado: 0 tiles safe num 115×105, só war/field). O primitivo `zone.kind === "safe"` fica só nos testes de combate. Sem safe, o fire-block por zona nunca dispara.
+  5. **Invulnerabilidade de nascimento:** novo campo `Player.spawnProtectedUntil`; 3s (`SPAWN_PROTECTION_MS`) ao nascer/renascer; `ProjectileSystem` bloqueia dano (evento `shield_block`, novo `blockedByShield`) e a proteção **cai quando o player atira**. Bolha translúcida no cliente + contador no F3. Verificado por script: alvo protegido = 0 dano / 5 blocks; disparar zera a própria proteção; sem proteção o alvo morre normal.
+  6. **Mira contínua:** cliente recalcula `aim` (player→cursor) todo tick com cursor presente, não só no `mousemove` — fim do snap para as 8 direções do movimento (causa-raiz do "tiro em ângulos fixos").
+- **Verificado:** shared 13/13, server 17/17, `tsc --noEmit` limpo ×3, guarda `.js` órfão limpa, smoke com 3 bots (level-up por presença sem kill; combate ok). Docs atualizadas: SPEC-0005, ADR-014, PLAYER_LOOP/progression/world/combat, ROADMAP, QA, SESSAO_ATUAL.
+- Pendente: veredito do CD no browser (checklist novo no QA.md), re-medir pacing (XP passivo × morte-zera) com bots, T-008b (perfis/boss), merge para `main`.
+
 ## 2026-07-04 — Sessão 7: SPEC-0004 implementada (T-014..T-018)
 - Execução completa da spec em 5 levas commitadas separadamente (PROMPT-0020..0024): rebalance TTK (dano 20 + guarda em teste), `ATTR_DEFS` data-driven (5 atributos, cadência/alcance no `ProjectileSystem`, reroll 5-vias com fix de arredondamento), cards de level-up (fila server-authoritative, `choose_upgrade` validado, timeout auto-pick, `hud.ts` extraído, bots respondem), skills de projétil (multishot/pierce/fôlego/impulso como modificadores por player — desvio registrado da spec: skill é do jogador, não do `LauncherDef`; marcos 4/8/12 com card ★; box sorteia skill), juice de poder (aro por faixa, números de dano com escala, streak).
 - **Verificado:** shared 13/13, server 17/17 (inclui guardas de balance: 5 tiros equilibrado, 3 tiros full-força, pierce exato, cooldown 750ms do perfurante), `tsc --noEmit` limpo ×3, guarda `.js` órfão limpa, smoke com bots real (level-up via card confirmado por `hp 104` no nível 2; kill+respawn ok). **TTK medido:** kills/sessão-bot 0.18 → 0.50, bots terminando com hp 20/40 — relatório em `docs/ai/balance-T014-ttk.md`.

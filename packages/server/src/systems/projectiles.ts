@@ -11,6 +11,7 @@ export interface ProjectileHitEvent {
   damage: number;
   killed: boolean;
   blockedBySafeZone: boolean;
+  blockedByShield: boolean; // SPEC-0005: alvo com invulnerabilidade de nascimento ativa
 }
 
 export class ProjectileSystem {
@@ -33,6 +34,9 @@ export class ProjectileSystem {
       if (now - p.lastFireAt < launcher.fire.cooldownMs * p.attackSpeed * mods.cooldownMult) return;
 
       p.lastFireAt = now;
+      // SPEC-0005: disparar encerra a invulnerabilidade de nascimento — imunidade é só para
+      // se reposicionar após (re)nascer, nunca para atirar protegido.
+      if (p.spawnProtectedUntil > now) p.spawnProtectedUntil = 0;
 
       let dirX = Math.cos(p.dir);
       let dirZ = Math.sin(p.dir);
@@ -151,6 +155,22 @@ export class ProjectileSystem {
               damage: 0,
               killed: false,
               blockedBySafeZone: true,
+              blockedByShield: false,
+            });
+            return;
+          }
+
+          // SPEC-0005: invulnerabilidade de nascimento — consome o projétil (não some no ar,
+          // o feedback é o mesmo de safe) mas não aplica dano enquanto o escudo estiver ativo.
+          if (now < target.spawnProtectedUntil) {
+            consumed = true;
+            hits.push({
+              targetId,
+              killerId: proj.ownerId,
+              damage: 0,
+              killed: false,
+              blockedBySafeZone: false,
+              blockedByShield: true,
             });
             return;
           }
@@ -168,6 +188,7 @@ export class ProjectileSystem {
             damage,
             killed: target.hp <= 0,
             blockedBySafeZone: false,
+            blockedByShield: false,
           });
 
           if (proj.pierceLeft > 0) proj.pierceLeft -= 1; // atravessa e segue voando

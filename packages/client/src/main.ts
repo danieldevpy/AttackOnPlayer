@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
 import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual } from "./visuals";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual } from "./visuals";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex, onCombatEvent } from "./hud";
 
 const hud = document.getElementById("hud")!;
@@ -294,6 +294,8 @@ function updateDebugState() {
     rows.push(`<tr><td>facing</td><td>${((me.dir ?? 0) * 180 / Math.PI).toFixed(0)}°</td></tr>`);
     rows.push(`<tr><td>gatilho</td><td>${fireSources.size > 0 ? `ativo (${Array.from(fireSources).join(", ")})` : "inativo"}</td></tr>`);
     rows.push(`<tr><td>hp</td><td>${Math.ceil(me.hp)}/${me.maxHp} (vit:${me.vitality?.toFixed(2)})</td></tr>`);
+    const shieldMs = Math.max(0, (me.spawnProtectedUntil ?? 0) - Date.now());
+    rows.push(`<tr><td>escudo</td><td>${shieldMs > 0 ? `${(shieldMs / 1000).toFixed(1)}s` : "—"}</td></tr>`);
     rows.push(`<tr><td>nível / xp</td><td>${me.level} / ${me.xp?.toFixed(0)}</td></tr>`);
     rows.push(`<tr><td>força</td><td>${me.strength?.toFixed(3)}</td></tr>`);
     rows.push(`<tr><td>velocidade</td><td>${me.speed?.toFixed(3)}</td></tr>`);
@@ -321,8 +323,10 @@ function updateDebugState() {
 // ---------- Input (teclado; touch no M1) ----------
 let announceUntil = 0;
 const keys = new Set<string>();
-const mouse = new THREE.Vector2();
-let mouseMoved = false; // T-009: facing só segue o mouse quando ele se move na tela
+// SPEC-0005 (correção): o facing NÃO é mais controlado pelo mouse. A direção/visão do player
+// deriva só do movimento (WASD) — o servidor calcula `dir` a partir de inputX/inputZ. Sem
+// mira do mouse, sem raycast por tick, sem `aim` na rede: mais simples e mais eficiente.
+// O mouse continua servindo só de gatilho (mousedown/up abaixo), não de direção.
 
 // T-010: gatilhos desacoplados da mira — cada fonte só liga/desliga um nome neste
 // set; "estou atirando" = algum gatilho ativo. Novo gatilho (gamepad/touch) = uma
@@ -331,11 +335,6 @@ const fireSources = new Set<string>();
 
 addEventListener("mousedown", () => fireSources.add("mouse"));
 addEventListener("mouseup", () => fireSources.delete("mouse"));
-addEventListener("mousemove", (e) => {
-  mouse.x = (e.clientX / innerWidth) * 2 - 1;
-  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
-  mouseMoved = true;
-});
 
 addEventListener("keydown", (e) => {
   if (e.key === "F3") {
@@ -365,41 +364,22 @@ addEventListener("keyup", (e) => {
   if (e.key === " ") fireSources.delete("space");
 });
 
-// vetor do player até o cursor, projetado no chão (usado pela mira)
-function cursorGroundOffset(): { x: number; z: number } | null {
-  const me = playerVisuals.get(mySessionId);
-  if (!me) return null;
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(mouse, camera);
-  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const target = new THREE.Vector3();
-  raycaster.ray.intersectPlane(plane, target);
-  return { x: target.x - me.position.x, z: target.z - me.position.z };
-}
-
 let lastMoveFire = { x: 0, z: 0, fire: false };
 function sendInput() {
   const x = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
   const z = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
   const fire = fireSources.size > 0;
 
-  // T-009: mira (facing) é independente do gatilho — só sai no payload quando o mouse
-  // se moveu neste tick, e nunca fica "presa" a um vetor antigo em ticks seguintes.
-  let aim: { aimX: number; aimZ: number } | null = null;
-  if (mouseMoved) {
-    const off = cursorGroundOffset();
-    if (off) aim = { aimX: off.x, aimZ: off.z };
-    mouseMoved = false;
-  }
-
+  // SPEC-0005 (correção): sem `aim` — o facing (Player.dir) é derivado pelo servidor a partir
+  // do movimento (inputX/inputZ). Parado, o servidor mantém o último dir (nunca zera). O tiro
+  // sai sempre na direção que o player está andando/olhando.
   const moveFireChanged = x !== lastMoveFire.x || z !== lastMoveFire.z || fire !== lastMoveFire.fire;
-  const shouldSend = moveFireChanged || aim !== null || x !== 0 || z !== 0 || fire;
+  const shouldSend = moveFireChanged || x !== 0 || z !== 0 || fire;
   if (!shouldSend) return;
 
   lastMoveFire = { x, z, fire };
-  const payload: { x: number; z: number; fire?: boolean; aimX?: number; aimZ?: number } = { x, z };
+  const payload: { x: number; z: number; fire?: boolean } = { x, z };
   if (fire) payload.fire = true;
-  if (aim) { payload.aimX = aim.aimX; payload.aimZ = aim.aimZ; }
   room?.send("input", payload);
 }
 
@@ -435,6 +415,7 @@ function syncWorld() {
     // "nariz" (local +X) com essa direção no mundo (ver visuals.ts).
     vis.rotation.y += shortestAngleDiff(vis.rotation.y, -(p.dir ?? 0)) * 0.25;
     updatePowerVisual(vis, p.level ?? 1, t); // T-018: aro de poder por faixa de nível
+    updateShieldVisual(vis, (p.spawnProtectedUntil ?? 0) > Date.now(), t); // SPEC-0005: bolha de invuln
   });
   playerVisuals.forEach((vis, id) => {
     if (!seenP.has(id)) {

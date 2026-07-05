@@ -23,7 +23,7 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 | Gate | Cobre | Não cobre |
 |---|---|---|
 | `npm run test` (shared) — **13 testes** | Curva XP, `pickWeighted`, cards de level-up (determinismo/soma/auto-pick, T-016), `combinedSkillMods` (T-017) | Combate, reroll, rede |
-| `npx vitest run` (server) — **17 testes** | Cadeia tiro→dano→morte→kill, safe zone, mobilidade (T-012), **guardas de balance da SPEC-0004** (TTK 5 tiros / full-força 3 tiros), ATTR_DEFS/tetos, cadência/alcance no ProjectileSystem, reroll soma preservada, multishot/pierce/fôlego/kill_rush (T-017) | Protocolo de rede real dos cards (roda direto nos systems, sem Colyseus) |
+| `npx vitest run` (server) — **19 testes** | Cadeia tiro→dano→morte→kill, safe zone, **invulnerabilidade de nascimento (SPEC-0005: escudo bloqueia dano + cai ao atirar)**, mobilidade (T-012), **guardas de balance da SPEC-0004** (TTK 5 tiros / full-força 3 tiros), ATTR_DEFS/tetos, cadência/alcance no ProjectileSystem, reroll soma preservada, multishot/pierce/fôlego/kill_rush (T-017) | Protocolo de rede real dos cards; XP passivo e morte-zera-nível (rodam no Room, não nos systems) |
 | `tsc --noEmit` | Compilação server/client/bots | Comportamento runtime |
 | Bots headless | Movimento, colisão, coleta, sync, métricas JSONL, tiro/kill/respawn, **fluxo real oferta→escolha→aplicação de card** (bots escolhem via `choose_upgrade`, T-016) | Reroll |
 
@@ -35,14 +35,16 @@ find packages/*/src -name "*.ts" ! -name "*.d.ts" | sed 's/\.ts$/.js/' | xargs -
 
 | Feature | Automático | Manual recomendado |
 |---|---|---|
-| Mapa / zonas / props | Bots coletam | Olhar chão colorido no client |
+| Mapa / zonas / props | Bots coletam | Olhar chão colorido no client (só guerra/campo — **sem safe**, SPEC-0005) |
 | XP / level-up | Teste curva XP | HUD mostra nível subindo |
+| **XP passivo (+1/s, SPEC-0005)** | Bots sobem de nível sem kill (smoke) | Ficar parado e ver o nível subir sozinho; **HUD mostra XP inteiro** (`xp N/M`, sem casas decimais) |
 | Atributos | — | F3 ou state sync |
 | Coletáveis por zona | Bots + métricas por kind | farm_event no HUD |
-| Reroll (R) | — | Acumular 15+ coins, pressionar R, ver stats mudarem |
+| Reroll (R) | — | Acumular 15+ coins, pressionar R, ver stats mudarem **e o XP/nível subir (+20 XP, SPEC-0005)** |
 | Tiro / dano | — | **2 abas** no browser |
-| Morte / respawn / perda nível | — | **2 abas** + F3 (`death`, `respawn`, `hit`, `safe_block`) |
-| Facing (mira/teclado/parado) | — | F3 mostra `facing` mudando nos 3 casos |
+| Morte / respawn / **nível zera** (SPEC-0005) | — | **2 abas** + F3 (`death`, `respawn` com `levelAfter:1`, `hit`, `shield_block`) |
+| **Invuln de nascimento (3s, SPEC-0005)** | Teste server (`shield_block` + cai ao atirar) | F3 mostra `escudo` contando; bolha azul no player; tiro no recém-nascido não tira HP; atirar remove o escudo |
+| Facing **pelo movimento** (SPEC-0005) | — | Andar com WASD: player e tiro apontam na direção do movimento; **mouse não muda o facing**; F3 mostra `facing` seguindo o movimento |
 | Gatilho (espaço/clique) | Bots (T-013, mira contínua + gatilho) | F3 mostra `gatilho` ativo; espaço e clique geram projétil idêntico |
 | Ganchos de mobilidade (T-012) | Teste unitário (`projectiles.test.ts`) | `dev_launcher` + `DEBUG=1` no F3 (velocidade cai e volta sozinha) |
 | Bot: ritmo de ataque por skill | `npm run bots` — contar tiros por skill | — |

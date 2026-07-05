@@ -4,30 +4,32 @@
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
 **Atualizado em:** 2026-07-04
-**Branch:** `evolução` — contém a SPEC-0003 (herdada, ainda sem merge) **e a SPEC-0004 implementada** (commits por task: docs → T-014 → T-015 → T-016 → T-017 → T-018 → fechamento).
-**Marco:** M1.5 (escala de poder & builds) — **código completo e testado**, aguardando veredito do CD.
+**Branch:** `evolução` — contém SPEC-0003 (herdada), **SPEC-0004** (T-014..T-018) **e agora SPEC-0005** (ajustes pós-teste do CD).
+**Marco:** M1.5 (escala de poder & builds) + ajustes de ritmo — **código completo e testado**, aguardando veredito do CD.
 
 ---
 
 ## Onde paramos
 
-**SPEC-0004 executada por inteiro** (T-014..T-018, PROMPT-0020..0024). O jogo agora tem:
+**SPEC-0005 executada** (6 ajustes pedidos pelo CD após jogar com bots — ADR-014, PROMPT-0025):
 
-- **TTK alvo:** dano base 20 (5 tiros entre iguais; especialista em Força mata em 3). Medido com bots: kills/sessão ~2.8× o histórico (`docs/ai/balance-T014-ttk.md`).
-- **5 atributos data-driven** (`ATTR_DEFS`): Força/Vitalidade/Agilidade + **Cadência** (cooldown) e **Alcance** (range), cada um com valor/pt e teto próprios. Reroll (R) redistribui entre os 5.
-- **Cards de level-up:** 3 opções por nível (teclas 1/2/3), determinísticas, timeout 5s → auto-pick equilibrado; fila para múltiplos level-ups; servidor valida tudo.
-- **Skills de projétil** nos marcos 4/8/12 (card ★, 1 de 2): Tiro Duplo, Leque, Perfurante, Fôlego, Impulso. Box também sorteia skill. Morte apaga build + skills.
-- **Juice:** aro de poder por faixa de nível (4+/8+ pulsante), números de dano flutuantes (escalam com o dano), kill streak no HUD.
-- Bots participam de tudo (auto-pick equilibrado; skill via card ★/box) — política por perfil fica na T-008b.
+1. **XP passivo:** todo player vivo ganha **+1 XP/s** (`XP_PER_SECOND`) — o mapa não "esfria".
+2. **Morte zera o nível:** morrer volta ao **nível 1** (aposenta `lossFraction` do loop).
+3. **Reroll (R) dá XP:** +20 XP (`REROLL_XP_REWARD`) além de redistribuir atributos.
+4. **Zonas safe removidas** do mapa (só guerra/campo agora).
+5. **Invulnerabilidade de nascimento:** 3s imune ao nascer/renascer (`SPAWN_PROTECTION_MS`); **cai ao atirar**. Bolha azul no cliente + contador `escudo` no F3. Novo evento debug `shield_block`.
+6. **Facing pelo movimento:** a direção/visão do player vem do **movimento** (WASD), calculada no servidor — o **mouse não controla o facing** (correção de 2026-07-05; a 1ª versão pôs sob o mouse). Cliente do player não envia mais `aim`; o campo fica só para os bots.
 
-**Gates rodados nesta sessão:** shared 13/13 · server 17/17 · `tsc --noEmit` limpo (server/client/bots) · guarda `.js` órfão limpa · smoke headless com kills, level-up via card (hp 104 = card aplicado) e respawn.
+**Correção 2026-07-05 (PROMPT-0026):** além do item 6 acima, o **XP passivo agora entra inteiro** (acumulador de tempo no servidor, `xpAccum`) — o HUD não mostra mais XP fracionado tipo `1.478/88`.
+
+**Gates rodados nesta sessão:** shared 13/13 · server **19/19** (2 testes novos de invuln de nascimento) · `tsc --noEmit` limpo (server/client/bots) · guarda `.js` órfão limpa · smoke com 3 bots (level-up por presença sem kill; combate ok) · scripts de verificação (escudo bloqueia dano / cai ao atirar; 0 tiles safe gerados).
 
 ## Próximo passo sugerido
 
-1. **Veredito do CD no browser** — checklist novo na matriz do `QA.md`: cards no level-up (1/2/3 + timeout), F3 mostrando cadência/alcance, card ★ no nível 4, aro de poder, números de dano, streak, box dando skill. Duas abas para PvP.
-2. **`Executar T-008b do docs/BACKLOG.md`** — perfis de build de bot (bruto/tanque/caçador) + boss (a espinha já está pronta: bots já recebem e escolhem cards).
-3. **Merge `evolução` → `main`** — checklist do `QA.md` (gates automáticos já limpos; falta o manual do CD).
-4. Depois: T-OPTIONAL 1 completo (re-medir TTK com builds variadas) e M2 (Aura).
+1. **Veredito do CD no browser** — checklist novo na matriz do `QA.md` (linhas SPEC-0005: XP passivo, nível zera na morte, escudo de 3s + bolha, facing por movimento, reroll dando XP). Duas abas para PvP.
+2. **Re-medir pacing** — XP passivo × morte-zera-nível pode acelerar/achatar demais a curva; rodar bots e olhar `docs/ai/balance-T014-ttk.md`.
+3. **`Executar T-008b do docs/BACKLOG.md`** — perfis de build de bot (bruto/tanque/caçador) + boss.
+4. **Merge `evolução` → `main`** — checklist do `QA.md` (gates automáticos limpos; falta o manual do CD).
 
 Prompt típico: `Testar tudo no browser e dar veredito` ou `Executar T-008b do docs/BACKLOG.md`
 
@@ -35,28 +37,28 @@ Prompt típico: `Testar tudo no browser e dar veredito` ou `Executar T-008b do d
 
 | Fluxo | Status | Notas |
 |---|---|---|
-| SPEC-0004 design (PROPOSAL-0001) | ✅ aprovado (2026-07-04) | |
-| Cards de level-up (1/2/3, timeout, fila) | ⬜ pendente teste do CD | verificado por IA: testes + bots headless |
-| Cadência/Alcance no F3 e no jogo | ⬜ pendente teste do CD | verificado por IA: testes unitários |
-| Card ★ de skill no marco (nível 4) | ⬜ pendente teste do CD | verificado por IA: testes + estática |
-| Multishot/pierce em combate real | ⬜ pendente teste do CD | verificado por IA: testes unitários |
-| Aro de poder / números de dano / streak | ⬜ pendente teste do CD | precisa de screenshot (faixas 1/5/9) |
+| SPEC-0005 (6 ajustes de gameplay) | ⬜ pendente teste do CD | verificado por IA: testes + scripts + smoke |
+| XP passivo / reroll dá XP | ⬜ pendente teste do CD | bot sobe de nível sem kill (smoke) |
+| Morte zera o nível | ⬜ pendente teste do CD | `respawn` com `levelAfter:1` |
+| Invuln de nascimento (3s, bolha, cai ao atirar) | ⬜ pendente teste do CD | verificado por IA: 2 testes server + script |
+| Facing pelo movimento (mouse não mira) | ⬜ pendente teste do CD | só verificável no browser |
+| SPEC-0004 (cards/skills/juice/TTK) | ⬜ pendente teste do CD | verificado por IA na sessão 7 |
 | SPEC-0003 (facing/mira/gatilhos, herdada) | ⬜ pendente teste do CD | desde a sessão 5 |
 | Merge para `main` | ⬜ pendente | gates automáticos limpos nesta sessão |
 
 ## Comandos úteis agora
 
 ```bash
-npm run test                        # shared 13/13
-cd packages/server && npx vitest run  # 17/17 (guardas de balance da SPEC-0004)
-npm run dev:server && npm run dev:client  # testar cards/skills/juice no browser
-npm run bots -- 4 30                # bots escolhem cards e disputam com o TTK novo
+npm run test                          # shared 13/13
+cd packages/server && npx vitest run  # 19/19 (inclui invuln de nascimento, SPEC-0005)
+npm run dev:server && npm run dev:client  # testar no browser (facing por movimento, escudo, XP passivo)
+npm run bots -- 4 30                  # bots: presença sobe nível; morte zera; sem safe
 ```
 
 ## Leituras se a sessão nova for só conversa
 
-- Spec implementada → `specs/SPEC-0004-skills-atributos-escala.md` (status/desvios registrados)
-- Números jogáveis → `docs/mechanics/PLAYER_LOOP.md` (atualizado: 5 atributos, cards, skills)
-- Balance medido → `docs/ai/balance-T014-ttk.md`
-- Detalhe por task → `docs/prompts/PROMPT-0020.md` a `PROMPT-0024.md`
+- Ajustes implementados → `specs/SPEC-0005-presenca-viva-morte-dura-mira-continua.md`
+- Decisão → `docs/DECISION_LOG.md` ADR-014
+- Números jogáveis → `docs/mechanics/PLAYER_LOOP.md` (XP passivo, reroll+XP, morte zera, escudo, facing por movimento)
+- Detalhe do pedido → `docs/prompts/PROMPT-0025.md`
 - Próxima task → T-008b no `docs/BACKLOG.md`

@@ -71,6 +71,12 @@ export const XP_EXP = 1.35; // as 2 constantes controlam todo o pacing (balance 
 export const XP_PICKUP_AMOUNT = 8; // XP de um coletável comum (xp_orb)
 export const ATTR_POINTS_PER_LEVEL_EACH = 1; // preset equilibrado: 1 pt em cada atributo-base por nível
 export const COIN_REROLL_COST = 15; // T-004: coins compram reroll do preset de atributo do último nível
+// SPEC-0005: presença viva. Todo player conectado ganha XP por segundo só por estar na sala —
+// o mapa nunca "esfria" e quem foi zerado na morte volta a subir sem depender de drop.
+export const XP_PER_SECOND = 1;
+// SPEC-0005: reroll (R) além de redistribuir atributos também injeta XP — a tecla vira uma
+// alavanca de progressão ativa, não só de reorganização de build.
+export const REROLL_XP_REWARD = 20;
 
 // Atributos data-driven (SPEC-0004/ADR-013, T-015) — valor por ponto e teto PRÓPRIOS
 // por atributo (substitui o ATTR_POINT_VALUE único de 4%). Escala assimétrica: dano
@@ -135,12 +141,21 @@ export const XP_PER_KILL_PER_LEVEL = 15;
 export const MAX_LEVEL_LOSS_FRACTION = 0.6; // teto de perda (60% do nível em níveis altos)
 export const MIN_LOSS_FRACTION = 0.1; // piso (10% do nível)
 
-/** Fração do nível atual que o jogador perde ao morrer. (T-006) */
+/**
+ * Fração do nível atual que o jogador perde ao morrer. (T-006)
+ * SPEC-0005: NÃO é mais usada no loop — a morte agora zera o nível (volta ao 1). Mantida
+ * exportada porque os testes/curva de balance ainda a referenciam e por possível reintrodução.
+ */
 export function lossFraction(level: number): number {
   if (level <= 3) return MIN_LOSS_FRACTION;
   // escala linear a partir do nível 4 até o teto
   return Math.min(MAX_LEVEL_LOSS_FRACTION, MIN_LOSS_FRACTION + (level - 3) * 0.05);
 }
+
+// SPEC-0005: invulnerabilidade de nascimento/renascimento. Substitui a antiga zona safe
+// (removida do mapa): ao nascer/renascer o player fica imune por este tempo. A imunidade
+// cai no instante em que ele dispara — não dá para "camperar" atirando invulnerável.
+export const SPAWN_PROTECTION_MS = 3000;
 
 // Faixas de poder (T-018, SPEC-0004): só FEEDBACK visual/leitura tática — nunca lógica de jogo.
 // nível 1–3: nada · 4–7: aro fraco · 8+: aro forte pulsante. Alimenta o "famar aura" do M2.

@@ -30,16 +30,16 @@ interface LauncherDef {
 - Servidor simula tudo: spawn do projétil, integração por tick, colisão com props (some) e jogadores (dano).
 - Colisão com jogadores usa o segmento percorrido pelo projétil no tick, não só a posição final, para evitar tiro "atravessar" em baixa taxa de simulação.
 - Dano efetivo = `damage × força do atirador`; vida = `vitalidade` (ver growth.md).
-- Sem dano em zona safe (ver world.md). Se o tiro encostar num player protegido pela safe zone, o projétil é consumido e emite evento `safe_block` no debug para ficar claro que foi proteção, não falha de hitbox.
+- **Invulnerabilidade de nascimento (SPEC-0005):** se o tiro encostar num player com escudo ativo (3s ao nascer/renascer, `SPAWN_PROTECTION_MS`), o projétil é consumido e emite evento `shield_block` no debug — proteção, não falha de hitbox. O escudo cai no instante em que o próprio player dispara. (Substitui a antiga zona safe, removida do mapa — o código do `safe_block` permanece só para os testes.)
 - Escalabilidade: padrão de disparo novo = implementar 1 função `pattern` nova; arma nova = 1 entrada de dados. NUNCA lógica de arma no Room.
 
 ## Mira ≠ gatilho (T-010)
 - Input passa a ser `{x, z, aimX?, aimZ?, fire?}` — não existe mais `fx/fz` acoplando mira e disparo.
 - `fire` é só um booleano ("estou atirando?"); a **direção do tiro sempre sai do `Player.dir`** (facing, ver movement.md), nunca do input diretamente. Isso garante que espaço e clique produzam projéteis idênticos.
-- `ProjectileSystem` só olha `p.firing` + cooldown do lançador; se `zoneAt(p) === "safe"`, não dispara.
+- `ProjectileSystem` só olha `p.firing` + cooldown do lançador (a antiga trava `zoneAt === "safe"` nunca dispara agora — sem safe zones). Disparar zera `spawnProtectedUntil` (encerra a invulnerabilidade de nascimento — SPEC-0005).
 - Spawn do projétil = posição autoritativa do player no tick + offset de raio (`PLAYER_RADIUS`) na direção do facing — sem tiro "atrasado" atirando em movimento.
 - Cliente mapeia gatilhos num `Set` (`fireSources`): mousedown adiciona `"mouse"`, espaço adiciona `"space"`; `fire = fireSources.size > 0`. Gatilho novo (gamepad/touch) = uma entrada nesse set, sem mudar o protocolo.
-- Mira (`aimX/aimZ`) continua sendo enviada sempre que o mouse se move na tela, independente de estar atirando — alimenta o facing híbrido (T-009), não o disparo.
+- **Facing pelo movimento (SPEC-0005):** o **cliente do player não envia `aim`** — o facing (`Player.dir`) é derivado pelo servidor do movimento (`inputX/inputZ`); parado, mantém o último `dir`. O campo `aimX/aimZ` do protocolo **continua existindo e é usado pelos bots** (que miram no alvo em combate), nunca pelo player humano.
 
 ## Ganchos de mobilidade por lançador (T-012)
 - `LauncherDef.movement` é opcional e data-driven — aplicado pelo servidor via `EffectSystem` no momento do disparo (`ProjectileSystem`, não lógica solta no Room). Ausente/neutro = `basic_shot` não muda em nada.

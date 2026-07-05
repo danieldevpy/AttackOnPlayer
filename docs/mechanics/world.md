@@ -3,8 +3,8 @@
 ## Geração (substitui o labirinto — T-001)
 Do mesmo seed sincronizado derivam:
 1. **Props colidíveis** esparsos (~4% dos tiles): pedra (1×1), árvore (1×1), caixa (1×1), muro (2×1). Ocupam tiles no grid de colisão existente.
-2. **Zonas** (círculos/retângulos em coordenadas de tile):
-   - **Safe** (uma por spawn): sem dano, spawn de coletável comum raro, cor de chão levemente azulada.
+2. **Zonas** (círculos em coordenadas de tile):
+   - ~~**Safe**~~ **REMOVIDA (SPEC-0005):** não existem mais zonas safe — criavam cantos intocáveis que travavam o combate. A proteção ao nascer virou invulnerabilidade **temporal** por player (3s, `SPAWN_PROTECTION_MS`), não uma região. O primitivo `kind: "safe"` segue em `zoneAt`/tipos (testes de combate ainda o exercem), só não é mais gerado por `buildZones`.
    - **Guerra** (1–2 por mapa, no centro/pontos quentes): loot raro (box, farm event), spawn acelerado, chão avermelhado. Risco ↔ recompensa.
    - **Campo** (resto): neutro.
 3. Corredores de respiro: nenhuma região fechada (props nunca formam paredes contínuas > N tiles).

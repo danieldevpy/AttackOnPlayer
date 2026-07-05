@@ -82,6 +82,56 @@ describe("ProjectileSystem (T-008)", () => {
   });
 });
 
+describe("ProjectileSystem — invulnerabilidade de nascimento (SPEC-0005)", () => {
+  it("alvo protegido não toma dano (projétil consumido, evento blockedByShield)", () => {
+    const map = fieldMap();
+    const state = new ArenaState();
+
+    const shooter = new Player();
+    shooter.x = 6; shooter.z = 10; shooter.launcher = "basic_shot";
+    const target = new Player();
+    target.x = 13; target.z = 10; target.hp = 100; target.maxHp = 100;
+    state.players.set("A", shooter);
+    state.players.set("B", target);
+
+    const sys = new ProjectileSystem();
+    const effects = new EffectSystem();
+    const now = 100000;
+    target.spawnProtectedUntil = now + 3000; // escudo ativo
+
+    let shielded = 0;
+    let anyDamage = false;
+    for (let i = 0; i < 200; i++) {
+      shooter.dir = 0; shooter.firing = true;
+      const hits = sys.tick(state, map, 0.05, now, effects);
+      for (const h of hits) {
+        if (h.targetId !== "B") continue;
+        if (h.blockedByShield) shielded++;
+        if (h.damage > 0) anyDamage = true;
+      }
+    }
+    expect(shielded).toBeGreaterThan(0);
+    expect(anyDamage).toBe(false);
+    expect(target.hp).toBe(100);
+  });
+
+  it("atirar encerra a própria invulnerabilidade do atirador", () => {
+    const map = fieldMap();
+    const state = new ArenaState();
+    const shooter = new Player();
+    shooter.x = 10; shooter.z = 10; shooter.launcher = "basic_shot"; shooter.dir = 0; shooter.firing = true;
+    state.players.set("A", shooter);
+
+    const sys = new ProjectileSystem();
+    const effects = new EffectSystem();
+    const now = 100000;
+    shooter.spawnProtectedUntil = now + 3000;
+
+    sys.tick(state, map, 0.05, now, effects); // dispara (fora de cooldown: lastFireAt=0)
+    expect(shooter.spawnProtectedUntil).toBe(0);
+  });
+});
+
 describe("ProjectileSystem — ganchos de mobilidade por lançador (T-012)", () => {
   it("heavy_shot_dev reduz a velocidade do atirador ao disparar e expira sozinho", () => {
     const map = fieldMap();

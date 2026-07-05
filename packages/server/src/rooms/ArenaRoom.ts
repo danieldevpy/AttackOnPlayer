@@ -38,8 +38,10 @@ import {
   COIN_BUFF_AMOUNT,
   BOX_ATTR_BONUS_EACH,
   COIN_REROLL_COST,
-  lossFraction,
   XP_PER_KILL_PER_LEVEL,
+  XP_PER_SECOND,
+  REROLL_XP_REWARD,
+  SPAWN_PROTECTION_MS,
   LAUNCHERS,
   UpgradeCard,
   UPGRADE_CHOICE_TIMEOUT_MS,
@@ -68,6 +70,9 @@ export class ArenaRoom extends Room<ArenaState> {
   // T-017: `cards` guarda a oferta REAL enviada (marcos incluem skills e dependem do estado
   // do player no momento do envio) — resolução valida contra isto, nunca recomputa.
   private pendingUpgrade = new Map<string, { levels: number[]; cards: UpgradeCard[]; expiresAt: number }>();
+  // SPEC-0005 (correção): acumulador fracionário do XP passivo por player. O XP só entra em
+  // `p.xp` em unidades INTEIRAS (1 por segundo), então o HUD nunca mostra "1.478/88".
+  private xpAccum = new Map<string, number>();
 
   onCreate(options?: { expectedPlayers?: number }) {
     this.setState(new ArenaState());
@@ -113,11 +118,14 @@ export class ArenaRoom extends Room<ArenaState> {
     this.onMessage("ping", (client, t: number) => client.send("pong", t));
 
     // T-004: coins compram reroll da distribuição de atributos (não gasta se não puder pagar)
+    // SPEC-0005: além de redistribuir atributos, o reroll também concede XP — a tecla R vira
+    // progressão ativa (pode subir de nível e abrir card na hora via grantXp).
     this.onMessage("reroll", (client) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || p.coins < COIN_REROLL_COST) return;
       p.coins -= COIN_REROLL_COST;
       this.effects.rerollAttrPoints(client.sessionId, p);
+      this.grantXp(client.sessionId, p, REROLL_XP_REWARD);
     });
 
     // T-016: escolha de card de level-up — servidor valida tudo (oferta aberta + card
@@ -152,6 +160,7 @@ export class ArenaRoom extends Room<ArenaState> {
     const spawn = spawns[this.state.players.size % spawns.length];
     p.x = spawn.x;
     p.z = spawn.z;
+    p.spawnProtectedUntil = Date.now() + SPAWN_PROTECTION_MS; // SPEC-0005: imune ao nascer
     this.state.players.set(client.sessionId, p);
     this.metrics.start(client.sessionId, p.name, p.isBot, this.roomId, p.level);
     console.log(`[arena] + ${p.name} (${client.sessionId})${p.isBot ? " [bot]" : ""}`);
@@ -166,6 +175,7 @@ export class ArenaRoom extends Room<ArenaState> {
     }
     this.effects.clear(client.sessionId);
     this.pendingUpgrade.delete(client.sessionId); // T-016
+    this.xpAccum.delete(client.sessionId); // SPEC-0005
     this.state.players.delete(client.sessionId);
   }
 
@@ -201,6 +211,11 @@ export class ArenaRoom extends Room<ArenaState> {
         this.emitDebug("safe_block", { victimId: hit.targetId, shooterId: hit.killerId });
         return;
       }
+      if (hit.blockedByShield) {
+        // SPEC-0005: dano absorvido pela invulnerabilidade de nascimento do alvo.
+        this.emitDebug("shield_block", { victimId: hit.targetId, shooterId: hit.killerId });
+        return;
+      }
       const victim = this.state.players.get(hit.targetId);
       const killer = this.state.players.get(hit.killerId);
       this.emitDebug("hit", {
@@ -228,15 +243,9 @@ export class ArenaRoom extends Room<ArenaState> {
         this.emitDebug("death", { playerId: id, levelBefore: p.level });
         this.metrics.addDeath(id);
         
-        // Perda de nível
-        const fullResetOnDeath = false; // flag por room (default global)
-        if (fullResetOnDeath) {
-          p.level = 1;
-        } else {
-          const loss = Math.floor(p.level * lossFraction(p.level));
-          p.level = Math.max(1, p.level - loss);
-        }
-        
+        // SPEC-0005: a morte ZERA o nível (volta ao 1) — antes perdia só uma fração
+        // (lossFraction). Risco real ao máximo: morrer apaga toda a progressão do round.
+        p.level = 1;
         p.xp = 0;
         this.effects.resetAttrToLevel(id, p, p.level);
         // T-016/T-017: morte apaga a build — ofertas pendentes e skills morrem junto
@@ -253,7 +262,8 @@ export class ArenaRoom extends Room<ArenaState> {
         p.inputX = 0;
         p.inputZ = 0;
         p.firing = false;
-        
+        p.spawnProtectedUntil = now + SPAWN_PROTECTION_MS; // SPEC-0005: imune ao renascer
+
         this.emitDebug("respawn", {
           playerId: id,
           killerId: killerByVictim.get(id) ?? null,
@@ -263,6 +273,18 @@ export class ArenaRoom extends Room<ArenaState> {
         });
         console.log(`[arena] ${p.name} morreu. Respawn no nível ${p.level} em (${spawn.x}, ${spawn.z}).`);
       }
+    });
+
+    // SPEC-0005: presença viva — todo player conectado (bots inclusos) ganha XP por segundo
+    // só por estar na sala. O tempo acumula por tick, mas o XP entra em unidades INTEIRAS
+    // (mantém `p.xp` sem casas decimais no HUD). grantXp cuida do(s) level-up(s) e do card.
+    // Roda depois da morte/respawn deste tick, então quem acabou de renascer já conta como vivo.
+    this.state.players.forEach((p, id) => {
+      if (p.hp <= 0) return;
+      const acc = (this.xpAccum.get(id) ?? 0) + XP_PER_SECOND * dt;
+      const whole = Math.floor(acc);
+      this.xpAccum.set(id, acc - whole);
+      if (whole > 0) this.grantXp(id, p, whole);
     });
 
     // movimento autoritativo (velocidade = base × multiplicador do EffectSystem)

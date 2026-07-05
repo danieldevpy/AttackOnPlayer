@@ -100,6 +100,28 @@ export function updatePowerVisual(group: THREE.Group, level: number, t: number) 
   }
 }
 
+/**
+ * SPEC-0005: bolha de invulnerabilidade de nascimento/renascimento. Translúcida e pulsante
+ * enquanto o escudo está ativo (3s ou até o player atirar); some quando cai. Placeholder F1.
+ */
+const shieldGeo = new THREE.SphereGeometry(0.7, 16, 12);
+export function updateShieldVisual(group: THREE.Group, protectedNow: boolean, t: number) {
+  let bubble = group.userData.shield as THREE.Mesh | undefined;
+  if (!bubble) {
+    if (!protectedNow) return; // não cria nada até precisar
+    bubble = new THREE.Mesh(
+      shieldGeo,
+      new THREE.MeshBasicMaterial({ color: 0x82b1ff, transparent: true, opacity: 0, side: THREE.DoubleSide })
+    );
+    bubble.position.y = 0.6;
+    group.add(bubble);
+    group.userData.shield = bubble;
+  }
+  const mat = bubble.material as THREE.MeshBasicMaterial;
+  bubble.visible = protectedNow;
+  if (protectedNow) mat.opacity = 0.22 + Math.sin(t * 6) * 0.08;
+}
+
 export function createCollectibleVisual(kind: string): THREE.Mesh {
   switch (kind) {
     case "speed_up":

@@ -122,7 +122,7 @@ export function updateHud(now: number) {
   const ping = ctx.getPing();
   hudEl.textContent =
     `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
-    `nível: ${me?.level ?? "-"} (xp ${me?.xp ?? 0}/${xpNeed})  HP: ${Math.ceil(me?.hp ?? 0)}/${me?.maxHp ?? 100}` +
+    `nível: ${me?.level ?? "-"} (xp ${Math.floor(me?.xp ?? 0)}/${xpNeed})  HP: ${Math.ceil(me?.hp ?? 0)}/${me?.maxHp ?? 100}` +
     (fx.includes("speed_up") ? `  ⚡x${me.speed?.toFixed(1)}` : "") +
     (fx.includes("xp_boost") ? `  2xXP` : "") +
     `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}  cad ${me?.attackSpeed?.toFixed(2) ?? "-"}  alc ${me?.reach?.toFixed(2) ?? "-"}` +

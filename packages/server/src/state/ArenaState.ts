@@ -21,6 +21,7 @@ export class Player extends Schema {
   @type("number") dir = 0; // T-009: facing (rad), híbrido mira/movimento — nunca zera
   @type("number") pendingUpgrades = 0; // T-016: ofertas de card na fila (HUD mostra badge)
   @type(["string"]) skills = new ArraySchema<string>(); // T-017: skills de projétil do round (morte apaga)
+  @type("number") spawnProtectedUntil = 0; // SPEC-0005: timestamp (ms) até quando é imune ao nascer/renascer
 
   // não sincronizado (uso interno do servidor)
   inputX = 0;
