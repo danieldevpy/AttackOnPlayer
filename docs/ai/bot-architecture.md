@@ -44,9 +44,17 @@ com curvas de resposta (linear/quadrática/logística):
 ```
 score(engajar) = W_agressao × conf(minha_vida) × conf(dist_alvo) × conf(vantagem_build) × conf(nivel_alvo)
 score(fugir)   = W_cautela  × (1 − conf(minha_vida)) × conf(ameaça_próxima)
-score(disputar_bandeira) = W_objetivo × conf(dist_bandeira) × conf(risco_zona)
+score(disputar_bandeira) = W_objetivo × conf(dist_bandeira) × conf(risco_zona)   [bandeira NO CHÃO]
 ...
 ```
+
+**Refinamentos pós-teste manual do CD (PROMPT-0032):** bandeira *carregada por inimigo* não é
+mais uma perseguição à parte — o portador vira candidato de `engajar` com bônus
+`× (1 + W_objetivo)` e alcance estendido (disputar É atirar em quem carrega). `engajar` avalia
+os N inimigos mais próximos (não só o primeiro) com um **viés determinístico por (bot, alvo)**
+injetado pela atuação — bots diferentes elegem alvos diferentes e os combates se distribuem.
+**Encurralado** (colado na borda com ameaça no raio), a fuga é substituída por engajar — briga
+de desespero, como um player faria.
 
 Escolhe-se a maior COM inércia (troca só se a nova superar a atual por margem `ε` — evita
 oscilação). **Personalidade = {W_agressao, W_cautela, W_objetivo, W_ganancia, ...}** + knobs

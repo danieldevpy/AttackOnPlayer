@@ -4,6 +4,8 @@
 - Headless, conectam via colyseus.js como jogadores reais (mesmo protocolo, zero código especial no servidor).
 - Comportamento: caça o coletável mais próximo; sem alvo, vagueia evitando paredes.
 - Uso: `npm run bots -- <qtd> <segundos>`. Servem para testar sync, colisão, spawner e métricas.
+- Todos os bots da sessão entram na **mesma sala** (o primeiro fixa via `joinOrCreate`, os
+  demais `joinById`; sala lotada = erro explícito no log, nunca sala fantasma — PROMPT-0032).
 
 ## Bots de combate (M1 — T-008, mínimo do aceite; substituído pela arquitetura em camadas na T-020)
 Mesma base headless; ganham camada de combate sobre a caça a coletáveis:
@@ -31,14 +33,29 @@ coleta distante (`bfsPath`, inalterado); o anti-stuck (bugfix pós-teste manual,
 de esbarrão em borda/prop antes de precisar dele.
 
 **Ações candidatas:** `engage | flee | collect | wander | flag`. A ação `flag` (T-021,
-`disputar_bandeira` do doc teórico) usa perseguição direta — como `engage`/`flee` — porque o
-alvo se move (segue o portador); `manter_posição` continua fora, ainda sem dado que a
-justifique (Gameplay First).
+`disputar_bandeira` do doc teórico) vale só para bandeira **no chão** (corrida de pickup,
+perseguição direta); bandeira **carregada por inimigo** vira bônus de `engage` no portador
+(PROMPT-0032) — disputar é atirar em quem carrega, com alcance de caça estendido.
+`manter_posição` continua fora, ainda sem dado que a justifique (Gameplay First).
+
+**Refinamentos pós-teste manual do CD (PROMPT-0032):**
+- **Alvos "compartilhados":** `decide()` avalia os N inimigos mais próximos com um viés
+  determinístico por (bot, inimigo) (`targetBias`, hash estável) — bots diferentes elegem
+  alvos diferentes em vez de todos travarem no mesmo mais próximo/portador.
+- **Encurralado → vira e luta:** fugindo colado na borda com ameaça no raio, a decisão troca
+  a fuga por `engage` (briga de desespero, sem pesar `hpFrac` de propósito).
+- **Kite:** fugindo com o perseguidor no alcance do launcher, o bot atira de volta enquanto
+  corre (atuação, não decisão).
+- **Separação:** dentro de ~1.8u de outro player, cada vizinho empurra o vetor de movimento
+  para fora — vários bots caçando o mesmo portador não viram um bolo empilhado.
 
 ## Perfis nomeados, política de cards e boss (T-008b, SPEC-0004 addendum)
 `packages/bots/src/ai/personality.ts` define `BOT_PROFILES` — cada perfil combina um vetor
 `Personality` (como o bot **luta**) com uma `CardPolicy` (como o bot **constrói**), sorteado
-por sessão (`BOT_PROFILE` env fixa um; ausente = sorteio):
+por sessão (`BOT_PROFILE` env fixa um; ausente = sorteio). Sobre o preset sorteado aplica-se
+a **dosagem individual** (`withIndividualDosage`, PROMPT-0032): cada bot nasce com variação
+própria (±25% nos pesos, ±20–30% nos knobs) — dois "cautelosos" na mesma sessão não jogam
+idêntico; o log de entrada mostra a dosagem (`agr/caut/obj/fuga<%hp`):
 
 | Perfil | Comportamento | Build (cards preferidos) |
 |---|---|---|

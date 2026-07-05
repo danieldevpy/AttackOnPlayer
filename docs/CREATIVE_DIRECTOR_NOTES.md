@@ -26,3 +26,15 @@ Voz do Daniel. A IA registra aqui, mas o conteúdo é decisão dele.
 **Perda de nível na morte:** nível baixo perde pouco atributo ao morrer; nível muito avançado tem perda muito maior (escala com o nível, não é fixo). Quer também o conceito de "crítico" e camadas de defesa — vida/atributo primeiro (simples), depois armadura, depois aura determinando chance de sobreviver — mantendo o jogo dinâmico. Reset total deve existir, mas como **opção ativável** (por room e/ou modo global), não comportamento único.
 
 **Registrado por:** IA, ver interpretação técnica e limites de escopo em `docs/LEAD_DESIGNER_NOTES.md` (mesma data) e ADR-012.
+
+## 2026-07-05 — Primeiro teste manual da V1 (perfis de controle + bots + bandeira)
+
+**Perfil keyboard:** movimentação absoluta (WASD estilo strafe) com setas girando ficou complicada — quer **tank controls**: W/S andam/recuam baseado na rotação do jogador.
+
+**Bots devem simular players:** *"ataca, vai pra cima, às vezes corre, às vezes volta a atacar; quando se sentir encurralado, para de correr e volta a atacar"*. Rejeitado: fuga infinita com vida baixa, esfregar na borda do mapa sem atirar, todos com o mesmo comportamento. Quer **comportamentos específicos por bot** + uma **dosagem** dessas características para cada bot iniciado.
+
+**Bandeira:** não quer todos os bots focando o portador — quer **conflitos entre si**, com o portador como um alvo possível; os bots devem "**compartilhar**" os alvos para dividir bem a jogatina. Disputar tem que incluir atirar (perseguição sem tiro rejeitada). Regra de retorno: caída e não disputada em **5 segundos**, volta ao centro.
+
+**Sessões de teste:** precisa conseguir iniciar ~10 bots juntos na mesma partida (`npm run bots`), cada um com perfil sorteado diferente.
+
+**Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0032.md`; veredito final: aprovado ("está melhor agora").
