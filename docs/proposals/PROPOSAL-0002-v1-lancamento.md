@@ -1,6 +1,6 @@
 # PROPOSAL-0002 — Plano da V1: do protótipo jogável ao lançamento na VPS
 
-> **Status:** proposta — aguardando análise do CD antes de virar specs/tasks executáveis.
+> **Status:** ✅ aprovada pelo CD (2026-07-05) **com 3 ajustes** (ver §9) — virou SPEC-0006..0009 + ADR-015/016.
 > **Origem:** 9 percepções do CD jogando a build atual (2026-07-05) + pedido de plano completo por etapas até o lançamento.
 > **Referências:** GAME_CONSTITUTION.md · ROADMAP.md (M0–M5 antigos) · specs/SPEC-0001..0005 · DECISION_LOG (ADR-001..014) · PROPOSAL-0001
 
@@ -177,6 +177,27 @@ Dockerfiles (game-server, client→nginx, backend+gunicorn) + `docker-compose.de
 ### T-OPTIONAL 1 — Passe de balance final (já no BACKLOG) · antes do lançamento
 10 partidas de bots com perfis (T-008b) nos mapas novos; ajustar `docs/ai/balance-T014-ttk.md`.
 
-### T-032 — 🚀 LANÇAMENTO V1 〔G〕 · depende: todas
+### T-032 — 🚀 LANÇAMENTO V1 〔G〕 · depende: todas — ver §8 original; aceites mantidos
+
+---
+
+## 9. Ajustes pós-revisão do CD (2026-07-05) — INCORPORADOS às specs
+
+**A1 — Controles são PERFIS, não um modo único (revisa o T-019 e o "conflito 1" do §1).**
+O jogo é *estilo Valorant, porém 3D leve e simplista, com habilidades/atributos gamificados* — a jogabilidade (divertida, pouco frustrante) é o critério nº 1. "CS 2D" era sobre **liberdade de movimento + disparo com lógica "realista" para o estilo**, não sobre um esquema fixo de mouse. Decisão (ADR-015): nasce uma **camada de perfis de controle** no cliente — todo perfil produz a mesma intenção `{move, aim, fire}` (o protocolo atual já é esse); a **rotação do player é resolvida por perfil**:
+
+| Perfil | Movimento | Mira/rotação | Alvo |
+|---|---|---|---|
+| `mouse` | WASD (strafe) | crosshair 360° no cursor | desktop com mouse |
+| `keyboard` | WASD | rotação por teclas (←/→ ou J/L giram a mira; sem mirar, facing segue o movimento) | notebook sem mouse |
+| `touch` | stick virtual esquerdo | stick direito mira e atira (twin-stick) | celular/tablet |
+
+Auto-detecção do dispositivo + seletor manual. Servidor não muda (autoridade e facing híbrido já existem desde a SPEC-0003) — perfis são 100% do lado do input. T-019 dividida: **T-019 (camada de perfis + perfil `mouse`)** e **T-019b (perfis `keyboard` e `touch` v1)**.
+
+**A2 — Bot é uma ARQUITETURA DE IA reutilizável, não um script (revisa o T-020).**
+Pedido: aprofundamento teórico — um algoritmo que sirva a diversas "características". Resposta: **`docs/ai/bot-architecture.md`** (novo, entra junto desta aprovação) define a arquitetura em camadas **Percepção → Memória → Decisão (Utility AI) → Steering contextual → Humanizador → Atuação**, com **Personalidade** como um simples vetor de parâmetros que atravessa todas as camadas. Consequências: o esbarrão na borda (P1) se resolve na camada de steering (repulsão preventiva); "menos robô" se resolve no humanizador (reação, lerp de mira, cadência); perfis/boss (T-008b) e o Guardian (pós-V1) viram **presets de personalidade**, não código novo. T-020 passa a ser "implementar a arquitetura do doc".
+
+**A3 — Mapas: IA ajuda a CURAR, não gera sozinha; objetos são REGISTRADOS (revisa T-024/T-025).**
+O fluxo desejado: (1) **salvar o mapa gerado atual** como arquivo e poder **reajustá-lo depois**; (2) mapas referenciam **objetos por id** — objetos definidos **em código** (como os props de hoje: pedra/árvore/caixa/muro/bandeira, num registry `ObjectDef` no `shared`) e, futuramente, objetos **salvos no sistema** (Django, F4) — mesma interface, duas origens. Personalizável com pouca complexidade inicial: mapa = metadados + lista de instâncias `{objectId, x, z, rot?, scale?}` + zonas + spawns + bandeira. A CLI ganha **`save-current`** (serializa o mapa da sala em execução, ou regenera pelo seed) além de `gen|save|update|list|preview`. "IA cria mapas" = IA (em sessão com o CD) edita o JSON/usa a CLI e vê o preview ASCII — nunca geração automática em produção.
 VPS: deploy do compose prod, domínio + TLS, página inicial mínima (jogar agora + o que é o jogo + privacidade/LGPD), teste de carga com bots (2× o público esperado), checklist go-live (backup, rollback = tag da imagem anterior, monitoração ligada), **divulgação** no canal escolhido pelo CD e coleta de feedback estruturada (telemetria T-026 + formulário curto).
 **Aceite:** desconhecido entra pelo link e joga em <10s; sessão de lançamento monitorada sem crash; primeiro relatório de telemetria pós-lançamento gerado.

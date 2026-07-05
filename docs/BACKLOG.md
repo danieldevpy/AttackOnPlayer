@@ -96,38 +96,40 @@
 
 ---
 
-# V1 — Rumo ao lançamento (PROPOSAL-0002) · ⏳ aguardando aprovação do CD
+# V1 — Rumo ao lançamento (PROPOSAL-0002) · ✅ aprovada pelo CD (2026-07-05, com ajustes §9)
 
-> Plano completo (análise dos 9 pontos do CD, arquitetura, guardrails, aceites detalhados):
-> **`docs/proposals/PROPOSAL-0002-v1-lancamento.md`**. Ao aprovar: F1+F2 → SPEC-0006,
-> F3 → SPEC-0007, F4 → SPEC-0008, F5+F6 → SPEC-0009. Executar em ordem de fase.
+> Plano: **`docs/proposals/PROPOSAL-0002-v1-lancamento.md`** (ajustes A1/A2/A3 no §9).
+> Specs por fase: F1+F2 → `SPEC-0006` · F3 → `SPEC-0007` · F4 → `SPEC-0008` · F5+F6 → `SPEC-0009`.
+> ADRs: **ADR-015** (perfis de controle) · **ADR-016** (fronteira Django). Teoria dos bots: `docs/ai/bot-architecture.md`.
+> Executar em ordem de fase; prompt típico: `Executar T-019 do docs/BACKLOG.md`.
 
-**F1 — Sensação**
-- **T-019** 〔M〕 Mira CS-2D: crosshair 360° + strafe (ADR-015 — reverte ADR-014.6 conscientemente)
-- **T-020** 〔M〕 Bots humanos: steering preventivo de borda + humanização (reação, lerp de mira, strafe, perambulação)
-- **T-008b** 〔M〕 (acima) Perfis de bot + boss · depende: T-020
+**F1 — Sensação (SPEC-0006)**
+- **T-019** 〔M〕 Camada de **perfis de controle** (ADR-015: todo perfil → `{move, aim, fire}`) + perfil `mouse` (WASD strafe, crosshair 360°, câmera com offset de mira)
+- **T-019b** 〔M〕 Perfis `keyboard` (rotação de mira por teclas, notebook sem mouse) e `touch` v1 (twin-stick virtual) + auto-detecção e seletor · depende: T-019
+- **T-020** 〔G〕 **Arquitetura de IA dos bots** (`docs/ai/bot-architecture.md`): percepção filtrada → memória → decisão utility → context steering (fim do esbarrão na borda; strafe orbital) → humanizador (reação/lerp de mira/pausas/desistência) → atuação; `Personality` em JSON; testes puros de decisão/steering
+- **T-008b** 〔M〕 (acima) Perfis de bot + boss = **presets de Personality** · depende: T-020
 
-**F2 — Objetivo & leitura**
-- **T-021** 〔M〕 Bandeira "rei do mapa": 2× XP/s + bônus, glow global, toggle por room (default ON)
+**F2 — Objetivo & leitura (SPEC-0006)**
+- **T-021** 〔M〕 Bandeira "rei do mapa": 2× XP/s, glow global, toggle por room (default ON), derruba na morte, retorna ao centro se abandonada
 - **T-022** 〔M〕 VFX nomeados: registry de partículas data-driven derivado de eventos existentes
-- **T-023** 〔G〕 HUD dev/prod + reveal-on-hit autoritativo (inimigo = só skin até trocar dano) · depende: T-022
+- **T-023** 〔G〕 HUD dev/prod + reveal-on-hit autoritativo (inimigo = só skin até trocar dano; ~4s renováveis) · depende: T-022
 
-**F3 — Conteúdo**
-- **T-024** 〔G〕 Formato de mapa v1 (JSON versionado, props semânticos) + loader por `mapId`
-- **T-025** 〔M〕 CLI de mapas: `npm run map -- gen|save|update|list|preview` (preview ASCII p/ IA) · depende: T-024
+**F3 — Conteúdo (SPEC-0007)**
+- **T-024** 〔G〕 **Registry de objetos** (`ObjectDef` no shared — código agora, sistema/Django depois) + formato de mapa v1 (instâncias `{objectId, x, z, ...}`, zonas, spawns, bandeira) + loader por `mapId` com validação/flood-fill
+- **T-025** 〔M〕 CLI de mapas: `npm run map -- gen|save|save-current|update|list|preview` (**save-current** serializa o mapa da sala em execução; preview ASCII para curadoria IA+CD) · depende: T-024
 
-**F4 — Plataforma**
+**F4 — Plataforma (SPEC-0008)**
 - **T-026** 〔M〕 Telemetria estruturada p/ IA (NDJSON versionado, `npm run analyze`, watchdog de tick)
 - **T-027** 〔G〕 Backend Django: accounts/maps/gameops/telemetry + admin (ADR-016 — fronteira Node×Django)
 - **T-028** 〔G〕 Auth: anônimo default + Google + "registre-se" (JWT no join; guest vincula ao logar) · depende: T-027
 - **T-029** 〔P〕 ADR-012 liga na conta (estatística, nunca poder in-round) · depende: T-028
 
-**F5 — Empacotamento**
+**F5 — Empacotamento (SPEC-0009)**
 - **T-030** 〔G〕 Docker compose dev/prod + `scripts/dev.sh`/`scripts/prod.sh` com verificação de saúde
 - **T-031** 〔M〕 Hardening: healthz, rate-limit, backup Postgres, envs segregadas · depende: T-030
 - **T-OPTIONAL 1** (acima) Passe de balance final com perfis/mapas novos
 
-**F6 — Lançamento**
+**F6 — Lançamento (SPEC-0009)**
 - **T-032** 〔G〕 🚀 V1 na VPS: deploy prod, domínio+TLS, página inicial, teste de carga, go-live e divulgação · depende: todas
 
 ---

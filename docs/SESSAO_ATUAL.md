@@ -4,54 +4,51 @@
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
 **Atualizado em:** 2026-07-05
-**Branch:** `evolução` — SPEC-0003/0004/0005 implementadas e commitadas; **PROPOSAL-0002 (plano da V1) escrita e aguardando aprovação do CD**.
-**Marco:** M1.5 fechado em código · **V1 (lançamento) planejada** em 6 fases.
+**Branch:** `evolução` — SPECs 0003/0004/0005 implementadas; **V1 aprovada e documentada, pronta para executar**.
+**Marco:** V1 (lançamento público) — PROPOSAL-0002 ✅ aprovada com ajustes; SPEC-0006..0009 criadas.
 
 ---
 
 ## Onde paramos
 
-**Sessão de design (sem código de jogo).** O CD jogou a build, trouxe 9 percepções de jogador/analista e pediu o plano completo até a primeira versão pública. Produzido:
+**PROPOSAL-0002 aprovada pelo CD com 3 ajustes (§9), tudo incorporado e a documentação executável está completa:**
 
-- **`docs/proposals/PROPOSAL-0002-v1-lancamento.md`** — o plano: estado atual alinhado com todas as sessões, análise ponto a ponto (com acréscimos da IA), arquitetura alvo (Node/Colyseus = tempo real · Django = plataforma/admin · Postgres · docker compose dev/prod + scripts), guardrails da constituição, 6 fases e 14 tasks novas.
-- **BACKLOG** — seção "V1 — Rumo ao lançamento" (T-019..T-032; T-032 = 🚀 deploy na VPS + divulgação).
-- **ROADMAP** — V1 substitui M4/M5; Aura/Guardian viram pós-V1.
+- **A1 — Controles por perfil (ADR-015):** o jogo é estilo Valorant 3D leve/simplista; "CS 2D" = liberdade de movimento + tiro com lógica realista. Perfis `mouse` (crosshair 360° + strafe), `keyboard` (rotação por teclas) e `touch` (twin-stick) — todos produzem `{move, aim, fire}`; rotação é atributo do perfil; servidor não muda. Fim do vaivém de ADRs sobre mira.
+- **A2 — Bot é arquitetura de IA (novo doc `docs/ai/bot-architecture.md`):** Percepção → Memória → Decisão (Utility AI) → Context Steering (borda/strafe) → Humanizador → Atuação; `Personality` = JSON; perfis/boss/Guardian = presets. T-020 implementa o doc.
+- **A3 — Mapas & objetos:** registry `ObjectDef` (código agora, sistema/Django depois); mapa = instâncias de objetos por id; CLI ganha `save-current` (salva o mapa da partida atual para reajustar depois). IA cura mapas em sessão com o CD — nunca geração automática.
 
-**Destaques do plano que precisam do OK do CD:**
-- **T-019 reverte a ADR-014.6:** mira volta ao mouse, agora estilo **CS-2D** (crosshair 360° + strafe). É a 3ª iteração de mira — todas testadas em jogo, decisão registrada como ADR-015 na aprovação.
-- **Django entra na V1** (contas/admin/gameops) com fronteira dura: nunca decide gameplay em tempo real; conta nunca dá poder in-round.
-- **5 questões abertas** no §7 da proposal (bônus da bandeira, tempo do reveal, skins placeholder, confirmação do Django, canal de divulgação).
+**Documentos criados/atualizados nesta sessão:** PROPOSAL-0002 (§9 ajustes, status aprovada) · `docs/ai/bot-architecture.md` · ADR-015 e ADR-016 no DECISION_LOG · `specs/SPEC-0006-sensacao-e-leitura.md` (F1+F2) · `SPEC-0007-mapas-e-objetos.md` (F3) · `SPEC-0008-plataforma-django-auth.md` (F4) · `SPEC-0009-empacotamento-e-lancamento.md` (F5+F6) · BACKLOG (T-019/T-019b/T-020/T-024/T-025 revisadas, seção V1 aprovada) · ROADMAP.
 
 ## Próximo passo sugerido
 
-1. **CD lê a PROPOSAL-0002** e responde as 5 questões abertas (§7) — aprovar/ajustar.
-2. Na aprovação: IA converte F1+F2 → SPEC-0006, F3 → SPEC-0007, F4 → SPEC-0008, F5+F6 → SPEC-0009 (+ ADR-015/016) e começa `Executar T-019 do docs/BACKLOG.md`.
-3. **Herdado (continua valendo):** veredito no browser das SPECs 3/4/5 (checklists no QA.md) e merge `evolução` → `main` — recomendo fazer antes do código da V1 começar.
+**Começar o desenvolvimento da V1, em ordem:**
 
-Prompt típico: `Aprovo a PROPOSAL-0002 com os ajustes X e Y — gere as specs e execute a F1`
+1. `Executar T-019 do docs/BACKLOG.md` — camada de perfis de controle + perfil `mouse` (SPEC-0006, ADR-015).
+2. Sequência da F1: T-019 → T-020 (IA de bot) → T-019b → depois F2 (T-021 bandeira → T-022 VFX → T-023 HUD) → T-008b.
+3. **Herdado:** veredito no browser das SPECs 3/4/5 + merge `evolução` → `main` — idealmente antes da T-019 (a T-019 mexe exatamente no input que a SPEC-0005 acabou de mudar; melhor congelar o estado atual em `main` primeiro).
+
+Questões que o CD ainda pode ajustar em teste (defaults valem): bônus de atributo da bandeira (default: só 2×XP), duração do reveal (4s), formas do skin placeholder, canal de divulgação (T-032).
 
 ## Veredito do Creative Director
 
 | Item | Status | Notas |
 |---|---|---|
-| PROPOSAL-0002 (plano da V1) | ⬜ aguardando leitura/aprovação | 5 questões abertas no §7 |
-| SPEC-0005 (XP passivo, morte zera, escudo, facing) | ⬜ pendente teste no browser | 19/19 no server |
-| SPEC-0004 (cards/skills/juice/TTK) | ⬜ pendente teste no browser | 30 testes verdes |
-| SPEC-0003 (facing/mira/gatilhos) | ⬜ pendente teste no browser | herdada |
-| Merge `evolução` → `main` | ⬜ pendente | gates automáticos limpos |
+| PROPOSAL-0002 + ajustes §9 | ✅ aprovada (2026-07-05) | specs SPEC-0006..0009 derivadas |
+| SPEC-0005 (gameplay) / SPEC-0004 / SPEC-0003 | ⬜ pendente teste no browser | herdadas; checklists no QA.md |
+| Merge `evolução` → `main` | ⬜ pendente | recomendado antes da T-019 |
 
 ## Comandos úteis agora
 
 ```bash
-npm run test                          # shared 13/13
-cd packages/server && npx vitest run  # 19/19
-npm run dev:server && npm run dev:client  # testar SPECs 3/4/5 no browser
+npm run test && (cd packages/server && npx vitest run)   # 13/13 + 19/19
+npm run dev:server && npm run dev:client                  # estado atual (facing por movimento)
 npm run bots -- 4 30
 ```
 
 ## Leituras se a sessão nova for só conversa
 
-- **O plano da V1** → `docs/proposals/PROPOSAL-0002-v1-lancamento.md`
-- Tasks da V1 → seção "V1" no `docs/BACKLOG.md` (T-019..T-032)
-- Estado jogável atual → `docs/mechanics/PLAYER_LOOP.md`
-- Últimas mudanças de gameplay → `specs/SPEC-0005-*.md` (ADR-014)
+- Plano-mãe → `docs/proposals/PROPOSAL-0002-v1-lancamento.md` (§9 = ajustes finais do CD)
+- Specs executáveis → `specs/SPEC-0006..0009`
+- Teoria dos bots → `docs/ai/bot-architecture.md`
+- Decisões novas → DECISION_LOG ADR-015 (controles) e ADR-016 (fronteira Django)
+- Tasks → seção V1 do `docs/BACKLOG.md` (T-019..T-032)

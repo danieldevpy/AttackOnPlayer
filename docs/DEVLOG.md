@@ -1,5 +1,10 @@
 # Devlog
 
+## 2026-07-05 — Sessão 9 (cont., design): V1 aprovada com ajustes — documentação executável completa
+- CD aprovou a PROPOSAL-0002 com 3 refinamentos (registrados no §9): **A1** controles viram PERFIS (`mouse`/`keyboard`/`touch`, todos → `{move, aim, fire}`; jogo é "Valorant 3D leve"; rotação por perfil — ADR-015 encerra o vaivém das ADRs de mira); **A2** bot vira **arquitetura de IA** com base teórica própria (`docs/ai/bot-architecture.md`: percepção → utility AI → context steering → humanizador; Personality = JSON; perfis/boss/Guardian = presets); **A3** mapas referenciam **objetos registrados** (`ObjectDef` em código agora, sistema depois) e a CLI ganha `save-current` (salvar o mapa gerado atual e reajustar) — IA cura mapas com o CD, nunca gera automático.
+- Criadas as 4 specs executáveis: **SPEC-0006** (F1+F2 sensação & leitura), **SPEC-0007** (F3 mapas & objetos), **SPEC-0008** (F4 telemetria/Django/auth), **SPEC-0009** (F5+F6 docker/hardening/lançamento) + **ADR-015/ADR-016**; BACKLOG revisado (T-019 dividida em T-019/T-019b; T-020 promovida a 〔G〕).
+- Sem código de jogo nesta entrada. Próximo: `Executar T-019` (recomendado: veredito/merge das SPECs 3–5 antes, pois T-019 mexe no input recém-alterado).
+
 ## 2026-07-05 — Sessão 9 (design): PROPOSAL-0002 — plano completo da V1 até o lançamento
 - CD jogou a build e trouxe 9 percepções (bots robóticos na borda, mira "por ângulos" → quer CS-2D, mapas escolhíveis + CLI, bandeira 2×XP/s, backend Django+admin, HUD dev/prod + inimigo revelado só ao trocar dano, VFX nomeados, logs para análise por IA, login anônimo+Google) + pedido de plano por etapas até a V1 na VPS (docker dev/prod + scripts).
 - Alinhamento com o histórico: a mira CS-2D **reverte a ADR-014.6** (facing por movimento) — registrado como revisão consciente (vira ADR-015 na aprovação); Aura (M2) e Guardian (M3) adiados para pós-V1 (a bandeira entrega o "objetivo de mapa" mais barato); M4/M5 absorvidos pelas fases F4/F5/F6; guardrail da constituição mantido (conta = identidade/estatística, nunca poder in-round).
