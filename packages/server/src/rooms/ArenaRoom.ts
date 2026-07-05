@@ -50,7 +50,7 @@ import {
   upgradeCardsForLevel,
   SKILLS,
   SKILL_MILESTONE_LEVELS,
-  SKILL_MILESTONE_CHOICES,
+  SKILL_MILESTONE_SKILL,
   combinedSkillMods,
   UPGRADE_CARD_POOL,
   BOSS_LEVEL_MIN,
@@ -288,8 +288,11 @@ export class ArenaRoom extends Room<ArenaState> {
         p.xp = 0;
         this.effects.resetAttrToLevel(id, p, p.level);
         // T-016/T-017: morte apaga a build — ofertas pendentes e skills morrem junto
-        // (pilar risco real: especializar é apostar)
-        this.pendingUpgrade.delete(id);
+        // (pilar risco real: especializar é apostar). Avisa o cliente pra fechar o menu
+        // de card aberto — sem isso a janela ficava travada na tela após a morte.
+        if (this.pendingUpgrade.delete(id)) {
+          this.clients.find((c) => c.sessionId === id)?.send("upgrade_offer_closed");
+        }
         p.pendingUpgrades = 0;
         p.skills = new ArraySchema<string>();
         
@@ -486,9 +489,10 @@ export class ArenaRoom extends Room<ArenaState> {
   }
 
   /**
-   * T-017: nos marcos (`SKILL_MILESTONE_LEVELS`) a oferta vira [skill A, skill B, atributo]
-   * — escolher 1 de 2 skills ou abrir mão por pontos. Skill já possuída é substituída por
-   * outra que falte; sem skill faltando, a oferta volta a ser só de atributos.
+   * T-017/addendum: nos marcos (`SKILL_MILESTONE_LEVELS`, mais frequentes que o 4/8/12
+   * original) a oferta vira [skill, atributo, atributo] — a skill é uma opção a mais, não
+   * força escolher entre 2 skills. Skill do marco já possuída é substituída pela próxima
+   * que falte; sem skill faltando, a oferta volta a ser só de atributos.
    */
   private buildCards(p: Player, level: number): UpgradeCard[] {
     const attrCards = upgradeCardsForLevel(level);
@@ -498,17 +502,15 @@ export class ArenaRoom extends Room<ArenaState> {
     const missing = Object.keys(SKILLS).filter((s) => !owned.has(s));
     if (missing.length === 0) return attrCards;
 
-    const pair = (SKILL_MILESTONE_CHOICES[level] ?? []).filter((s) => !owned.has(s));
-    while (pair.length < 2 && missing.some((s) => !pair.includes(s))) {
-      pair.push(missing.find((s) => !pair.includes(s))!);
-    }
-    const skillCards: UpgradeCard[] = pair.slice(0, 2).map((s) => ({
-      id: `skill_${s}`,
-      label: `★ ${SKILLS[s].name} — ${SKILLS[s].desc}`,
+    const preferred = SKILL_MILESTONE_SKILL[level];
+    const skillId = preferred && !owned.has(preferred) ? preferred : missing[0];
+    const skillCard: UpgradeCard = {
+      id: `skill_${skillId}`,
+      label: `★ ${SKILLS[skillId].name} — ${SKILLS[skillId].desc}`,
       points: {},
-      skill: s,
-    }));
-    return [...skillCards, attrCards[0]];
+      skill: skillId,
+    };
+    return [skillCard, attrCards[0], attrCards[1]];
   }
 
   /**

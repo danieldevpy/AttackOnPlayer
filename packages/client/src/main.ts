@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
 import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow } from "./visuals";
-import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex, onCombatEvent } from "./hud";
+import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent } from "./hud";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
 
@@ -190,6 +190,7 @@ async function connect() {
     // T-016: cards de level-up — servidor manda a oferta e confirma a escolha
     room.onMessage("upgrade_offer", (offer: any) => showUpgradeOffer(offer));
     room.onMessage("upgrade_applied", (msg: any) => onUpgradeApplied(msg));
+    room.onMessage("upgrade_offer_closed", () => closeUpgradeOffer());
     setInterval(() => room?.send("ping", performance.now()), 2000);
     setInterval(sendInput, 1000 / 20);
   } catch (e) {

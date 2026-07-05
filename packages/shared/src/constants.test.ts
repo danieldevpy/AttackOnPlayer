@@ -49,7 +49,7 @@ describe("upgradeCardsForLevel (cards de level-up, T-016)", () => {
   });
 
   it("auto-pick é o preset equilibrado (timeout nunca pune quem ignora o menu)", () => {
-    expect(UPGRADE_AUTO_PICK.points).toEqual({ forca: 1, vitalidade: 1, agilidade: 1 });
+    expect(UPGRADE_AUTO_PICK.points).toEqual({ forca: 2, vitalidade: 2, agilidade: 2 });
   });
 });
 

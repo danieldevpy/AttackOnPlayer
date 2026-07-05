@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-05 — Sessão 13: feedback de jogo — progressão de skill/atributo + menu de level-up travava na morte
+- **Sem task de backlog associada** — feedback direto do CD jogando com os ajustes da Sessão 12 já em mãos. Dois pontos:
+- **Progressão pouco sentida:** `UPGRADE_CARD_POINTS` dobrou (3→6, `ATTR_POINTS_PER_LEVEL_EACH` 1→2 junto, pela invariante do preset equilibrado) — cards agora dão `+6 Força`/`+6 Vitalidade`/`+6 Agilidade`/`+4+2` em vez da metade. `SKILL_MILESTONE_LEVELS` foi de 3 marcos esparsos (4/8/12 — matematicamente impossível fechar as 5 skills numa run) pra 5 marcos, um por skill (3/6/9/12/15); a composição da oferta nesses marcos **inverteu**: agora é 2 cards de atributo + 1 de skill (`SKILL_MILESTONE_SKILL`, skill fixa por marco), não mais 2 skills à escolha + 1 atributo. Guard-test de balance (`effects.test.ts` — "full-Força mata equilibrado em 3 tiros") recalculado do zero pro novo valor, não só reescalado.
+- **Bug: menu de level-up ficava travado na tela se o jogador morresse com a oferta aberta.** Causa: a morte sempre limpava a oferta pendente no servidor, mas nunca avisava o cliente — só `upgrade_applied` (escolha ou timeout) fechava a UI, e a morte pulava esse caminho. Corrigido com mensagem dedicada `upgrade_offer_closed`, enviada só quando havia mesmo uma oferta pra fechar.
+- **Verificação:** shared 13/13 · server 25/25 · bots 24/24 · tsc ×3 limpo · **2 smokes end-to-end reais** contra servidor de verdade: (1) nível 2 e nível 3 mostrando a composição/valores certos dos cards; (2) dois clientes reais — atacante só disparando quando a oferta da vítima estava aberta, forçando a morte dentro da janela de 5s — confirmou `upgrade_offer_closed` chegando exatamente no momento certo, sem regressão no auto-pick normal. Detalhes em `docs/prompts/PROMPT-0033.md`.
+- Fila da V1 segue parada na T-022 — CD pediu alinhamento do estado atual do projeto antes de retomar.
+
 ## 2026-07-05 — Sessão 12: QA do 1º teste manual do CD (tank controls + bots que simulam players)
 - **Primeiro veredito manual do CD** sobre T-019b/T-020/T-008b/T-021 — 7 anotações resolvidas (PROMPT-0032), aprovadas em jogo real ("está melhor agora").
 - **Keyboard vira tank controls:** W/S avançam/recuam pela rotação do jogador, A/D strafe relativo, setas giram; mira enviada todo tick (senão S viraria o boneco); dica do HUD agora é por perfil ativo.

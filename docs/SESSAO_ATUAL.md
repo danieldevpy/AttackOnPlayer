@@ -5,7 +5,7 @@
 
 **Atualizado em:** 2026-07-05
 **Branch:** `evolução` — working directory original.
-**Marco:** V1 (lançamento público) — PROPOSAL-0002 aprovada; T-019..T-021 concluídas **e aprovadas no 1º teste manual do CD** (Sessão 12/PROMPT-0032); fila segue na T-022.
+**Marco:** V1 (lançamento público) — PROPOSAL-0002 aprovada; T-019..T-021 concluídas e aprovadas no 1º teste manual do CD (Sessão 12/PROMPT-0032); Sessão 13 resolveu 2 pontos de feedback extra (progressão de skill/atributo + bug do menu de level-up). **Pausa pedida pelo CD** para alinhar o estado atual do projeto antes de retomar a fila (T-022 em diante).
 
 ---
 
@@ -15,19 +15,26 @@ Existe (ou existiu) uma sessão paralela na branch `aci` (`.claude/worktrees/aci
 
 ## Onde paramos
 
-**Concluído nesta sessão (QA do 1º teste manual do CD — PROMPT-0032, aprovado):**
-- **Keyboard = tank controls:** W/S pela rotação, A/D strafe relativo, setas giram; mira enviada todo tick; dica do HUD por perfil ativo.
-- **Bots simulam players:** portador da bandeira = alvo de engage (atira!, bônus `1+objective`, alcance estendido); alvos "compartilhados" via `targetBias` por (bot, inimigo); encurralado → vira e luta; kite (atira fugindo); separação anti-empilhamento; **dosagem individual** por bot sobre o preset sorteado.
-- **Infra:** bots todos na mesma sala (`joinById` após o primeiro; sala cheia = erro alto); `MAX_PLAYERS` 8→16; bandeira abandonada volta ao centro em **5s**; warning `announce` silenciado.
-- Docs de IA atualizadas: `docs/ai/bot-architecture.md §3` e `docs/ai/bots.md`.
+**Concluído na Sessão 13 (feedback de jogo do CD, sem task de backlog associada — PROMPT-0033):**
+- **Progressão de skill/atributo:** `UPGRADE_CARD_POINTS` dobrou (3→6, `ATTR_POINTS_PER_LEVEL_EACH` acompanhou 1→2); `SKILL_MILESTONE_LEVELS` foi de 3 marcos esparsos (4/8/12) pra 5 (3/6/9/12/15, um por skill existente — antes era impossível fechar as 5 skills numa run); composição da oferta nos marcos inverteu para **2 atributo + 1 skill** (`SKILL_MILESTONE_SKILL`, skill fixa por marco).
+- **Bugfix:** menu de level-up ficava travado na tela se o jogador morresse com a oferta aberta — servidor agora manda `upgrade_offer_closed` quando a morte cancela uma oferta pendente.
+- Verificado com 2 smokes end-to-end reais contra servidor de verdade (economia de cards em runtime; morte forçada dentro da janela de 5s do menu). Todos os gates verdes.
 
-**Sessões anteriores:** T-021 bandeira (Sessão 11), T-020/T-008b bots (Sessão 10), T-019/T-019b perfis (Sessão 10) — ver `DEVLOG.md`.
+**Sessões anteriores:** QA do 1º teste manual — tank controls + bots que simulam players (Sessão 12/PROMPT-0032), T-021 bandeira (Sessão 11), T-020/T-008b bots (Sessão 10), T-019/T-019b perfis (Sessão 10) — ver `DEVLOG.md`.
 
 ## Próximo passo
 
-1. `Executar T-022` — VFX nomeados: registry de partículas data-driven derivado de eventos existentes (regra de intensidade: automático = leve, escolha manual = "aura" chamativa) + puxar itens do backlog vivo `docs/mechanics/vfx-juice-backlog.md`.
-2. Depois: T-023 (HUD dev/prod + reveal-on-hit + toasts) → F3..F6 (ver seção V1 do `BACKLOG.md`).
-3. **Calibração pendente (não bloqueia):** knobs novos dos bots (`1+objective` do portador, `targetBias` 0.8..1.2, `SEPARATION_DIST` 1.8, `CORNERED_BORDER_DIST` 3) são chute inicial aprovado por sensação — T-026/telemetria confirma com dados. Smoke manual em dispositivo touch real continua pendente.
+1. **Alinhamento pedido pelo CD antes de continuar:** revisar junto com ele o estado atual do projeto (o que está pronto/testado vs. o que só passou em gate automático) e o que falta da parte dele (testes manuais pendentes, vereditos de sensação) antes de abrir novas tasks.
+2. Depois do alinhamento, retomar a fila: `Executar T-022` — VFX nomeados (registry de partículas data-driven + backlog vivo `docs/mechanics/vfx-juice-backlog.md`).
+3. **Calibração pendente (não bloqueia):** ritmo novo dos marcos de skill (3/6/9/12/15) e valor dobrado dos cards são chute inicial validado por sensação nesta sessão — T-026/telemetria confirma com dados quando existir. Os knobs de bot da Sessão 12 (`1+objective`, `targetBias`, `SEPARATION_DIST`, `CORNERED_BORDER_DIST`) têm a mesma ressalva.
+
+## Pendências reais do lado do CD (não bloqueiam a esteira, só ele resolve)
+
+| Item | Status | Notas |
+|---|---|---|
+| Touch em dispositivo real | ⬜ pendente | bots não cobrem; smoke só simula mouse/keyboard/servidor |
+| Sessão mais longa com vários humanos | ⬜ pendente | tudo testado até aqui foi CD sozinho + bots, ou smokes headless via colyseus.js |
+| Veredito dos novos números (skill 3/6/9/12/15, cards ×2) numa sessão de verdade | ⬜ pendente | aprovado por lógica/smoke; falta "sentir" jogando período longo |
 
 ## Veredito do Creative Director
 
@@ -37,6 +44,8 @@ Existe (ou existiu) uma sessão paralela na branch `aci` (`.claude/worktrees/aci
 | T-019 / T-019b (perfis de controle) | ✅ testado manualmente — keyboard refeito como tank controls e aprovado | PROMPT-0027/0028/0032 |
 | T-020 + T-008b (IA/perfis dos bots) | ✅ testado manualmente — aprovado após refinamentos ("simular players") | PROMPT-0029/0030/0032 |
 | T-021 (bandeira "rei do mapa") | ✅ testado manualmente — disputa agora atira no portador; retorno 5s | PROMPT-0031/0032 |
+| Progressão de skill/atributo (addendum SPEC-0004) | ✅ implementado e verificado por smoke real — pendente sensação de sessão longa | PROMPT-0033 |
+| Menu de level-up fechando na morte | ✅ corrigido e verificado por smoke real | PROMPT-0033 |
 | Touch em dispositivo real | ⬜ pendente | bots não cobrem |
 
 ## Comandos úteis agora
@@ -51,7 +60,7 @@ BOT_BOSS=1 BOT_VERBOSE=1 npm run bots -- 4 20 # bot-0 vira boss (nível 6-8)
 ## Leituras se a sessão nova for só conversa
 
 - Plano-mãe → `docs/proposals/PROPOSAL-0002-v1-lancamento.md` (§9 = ajustes finais do CD)
-- Specs executáveis → `specs/SPEC-0006..0009`
-- Teoria + implementação dos bots → `docs/ai/bot-architecture.md` + `docs/ai/bots.md` (refinamentos da Sessão 12 incluídos)
-- Feedback do CD no teste manual → `docs/CREATIVE_DIRECTOR_NOTES.md` (2026-07-05) + `docs/prompts/PROMPT-0032.md`
+- Specs executáveis → `specs/SPEC-0006..0009` (SPEC-0004 tem addendum de 2026-07-05 sobre a progressão)
+- Teoria + implementação dos bots → `docs/ai/bot-architecture.md` + `docs/ai/bots.md`
+- Feedback do CD → `docs/CREATIVE_DIRECTOR_NOTES.md` (2 entradas em 2026-07-05) + `docs/prompts/PROMPT-0032.md` e `PROMPT-0033.md`
 - Tasks → seção V1 do `docs/BACKLOG.md` (T-019..T-021 ✅, T-022..T-032 pendentes)

@@ -64,7 +64,7 @@ Camada de modificadores **por player** sobre o lançador equipado — registro d
 - **Combinação sem explosão:** projéteis por tiro = MAX entre skills; fatores de dano/range/cooldown = PRODUTO; pierce = SOMA.
 - **Congelado no disparo:** dano/range/velocidade do projétil são fixados no spawn (`damageMult`/`maxRange`/`speedMult`) — build nunca muda projétil em voo.
 - **Cooldown efetivo** = `cooldownMs × attackSpeed (cadência) × cooldownMult (skills)`.
-- **Como ganhar:** marcos de nível 4/8/12 (card ★, escolher 1 de 2 — `SKILL_MILESTONE_CHOICES`) ou box (sorteia uma que falte). Morte apaga as skills (pilar risco real).
+- **Como ganhar:** marcos de nível 3/6/9/12/15 (`SKILL_MILESTONE_LEVELS`) — a oferta vira 2 cards de atributo + 1 card ★ de skill (`SKILL_MILESTONE_SKILL`, uma por marco); ou box (sorteia uma que falte). Morte apaga as skills (pilar risco real).
 - Decisão de design: skills são modificadores por player; `LauncherDef` fica reservado a **lançadores novos** (armas trocáveis) — os dois empilham.
 
 ## Evolução planejada

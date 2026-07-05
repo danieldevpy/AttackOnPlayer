@@ -97,6 +97,14 @@ export function onUpgradeApplied(msg: { cardId: string; label: string; level: nu
   flashUntil = performance.now() + 2000;
 }
 
+/** Morte cancela a oferta pendente no servidor (build apaga junto) — fecha o menu sem
+ * flash de card aplicado, já que nenhuma escolha foi feita. */
+export function closeUpgradeOffer() {
+  currentOffer = null;
+  cardsEl.classList.remove("active");
+  cardsEl.innerHTML = "";
+}
+
 export function hasOpenOffer(): boolean {
   return currentOffer !== null;
 }

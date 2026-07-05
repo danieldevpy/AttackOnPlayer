@@ -54,7 +54,7 @@ export const WAR_WEIGHTS: Array<[CollectibleKind, number]> = [
 export const COIN_BUFF_AMOUNT = 10;
 export const XP_BOOST_MULT = 2; // farm_event: XP em dobro
 export const XP_BOOST_MS = 20000;
-export const BOX_ATTR_BONUS_EACH = 3; // box: bônus forte no round (vs. 1 do level-up normal)
+export const BOX_ATTR_BONUS_EACH = 3; // box: bônus forte no round (vs. 2 do level-up normal)
 
 /** Sorteio ponderado — usado para escolher o kind do coletável dentro da zona. */
 export function pickWeighted<T extends string>(rnd: () => number, weights: Array<[T, number]>): T {
@@ -71,7 +71,7 @@ export function pickWeighted<T extends string>(rnd: () => number, weights: Array
 export const XP_BASE = 20;
 export const XP_EXP = 1.35; // as 2 constantes controlam todo o pacing (balance por dados, T-009)
 export const XP_PICKUP_AMOUNT = 8; // XP de um coletável comum (xp_orb)
-export const ATTR_POINTS_PER_LEVEL_EACH = 1; // preset equilibrado: 1 pt em cada atributo-base por nível
+export const ATTR_POINTS_PER_LEVEL_EACH = 2; // preset equilibrado: 2 pts em cada atributo-base por nível (T-016 addendum: progressão mais sentida)
 export const COIN_REROLL_COST = 15; // T-004: coins compram reroll do preset de atributo do último nível
 // SPEC-0005: presença viva. Todo player conectado ganha XP por segundo só por estar na sala —
 // o mapa nunca "esfria" e quem foi zerado na morte volta a subir sem depender de drop.
@@ -114,15 +114,15 @@ export interface UpgradeCard {
   points: Partial<Record<AttrKey, number>>;
   skill?: string; // T-017: card de marco — concede uma skill (SKILLS) em vez de pontos
 }
-export const UPGRADE_CARD_POINTS = 3; // mesma soma do preset antigo (1 pt × 3 atributos-base)
+export const UPGRADE_CARD_POINTS = 6; // dobro do valor original (feedback CD: progressão pouco sentida entre marcos de skill)
 export const UPGRADE_CHOICE_TIMEOUT_MS = 5000; // sem escolha → auto-pick; o jogo NUNCA pausa
 export const UPGRADE_CARD_POOL: UpgradeCard[] = [
-  { id: "forca_bruta", label: "+3 Força", points: { forca: 3 } },
-  { id: "casca_grossa", label: "+3 Vitalidade", points: { vitalidade: 3 } },
-  { id: "pes_ligeiros", label: "+3 Agilidade", points: { agilidade: 3 } },
-  { id: "gatilho_rapido", label: "+2 Cadência  +1 Alcance", points: { cadencia: 2, alcance: 1 } },
-  { id: "olhar_de_aguia", label: "+2 Alcance  +1 Cadência", points: { alcance: 2, cadencia: 1 } },
-  { id: "equilibrado", label: "+1 Força  +1 Vitalidade  +1 Agilidade", points: { forca: 1, vitalidade: 1, agilidade: 1 } },
+  { id: "forca_bruta", label: "+6 Força", points: { forca: 6 } },
+  { id: "casca_grossa", label: "+6 Vitalidade", points: { vitalidade: 6 } },
+  { id: "pes_ligeiros", label: "+6 Agilidade", points: { agilidade: 6 } },
+  { id: "gatilho_rapido", label: "+4 Cadência  +2 Alcance", points: { cadencia: 4, alcance: 2 } },
+  { id: "olhar_de_aguia", label: "+4 Alcance  +2 Cadência", points: { alcance: 4, cadencia: 2 } },
+  { id: "equilibrado", label: "+2 Força  +2 Vitalidade  +2 Agilidade", points: { forca: 2, vitalidade: 2, agilidade: 2 } },
 ];
 /** Timeout/AFK e bots sem política: o preset equilibrado de sempre. */
 export const UPGRADE_AUTO_PICK: UpgradeCard = UPGRADE_CARD_POOL[5];

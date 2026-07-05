@@ -54,13 +54,19 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 };
 
-/** Níveis que trocam 1 card de atributo por escolha de skill (1 de 2) — revisável por dados. */
-export const SKILL_MILESTONE_LEVELS = [4, 8, 12];
-/** Pares determinísticos por marco; skill já possuída é substituída por outra que falte. */
-export const SKILL_MILESTONE_CHOICES: Record<number, [string, string]> = {
-  4: ["tiro_duplo", "folego"],
-  8: ["leque", "perfurante"],
-  12: ["impulso", "perfurante"],
+/**
+ * Níveis que trocam 1 dos 3 cards de atributo por uma skill (oferta vira 2 atributo + 1
+ * skill) — mais frequentes que o marco original (4/8/12): 1 por skill existente, para que
+ * dê pra conseguir as 5 sem depender de sorte de nível alto (feedback CD).
+ */
+export const SKILL_MILESTONE_LEVELS = [3, 6, 9, 12, 15];
+/** Skill concedida em cada marco; se já possuída, `buildCards` substitui pela próxima que falte. */
+export const SKILL_MILESTONE_SKILL: Record<number, string> = {
+  3: "tiro_duplo",
+  6: "folego",
+  9: "leque",
+  12: "perfurante",
+  15: "impulso",
 };
 
 // Impulso (onKill) — constantes do efeito kill_rush

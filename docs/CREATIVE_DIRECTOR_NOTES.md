@@ -38,3 +38,13 @@ Voz do Daniel. A IA registra aqui, mas o conteúdo é decisão dele.
 **Sessões de teste:** precisa conseguir iniciar ~10 bots juntos na mesma partida (`npm run bots`), cada um com perfil sorteado diferente.
 
 **Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0032.md`; veredito final: aprovado ("está melhor agora").
+
+## 2026-07-05 — Feedback de jogo: progressão de skill/atributo + menu travando na morte
+
+**Skill demorando demais:** *"conforme a pessoa vai ganhando nível é muito difícil aparecer uma escolha de skill, às vezes demora até o nível 11"*. Quer que em alguns momentos apareça **2 opções de atributo e 1 opção de skill** (inverso do que existia).
+
+**Atributo fraco por escolha:** quer aumento maior nos cards de atributo — *"em vez de por ex +3 já dá +6"*.
+
+**Bug reportado depois:** o menu de escolha de level-up fica aberto na tela mesmo depois do jogador morrer, mesmo não servindo mais pra nada — quer que feche.
+
+**Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0033.md`.
