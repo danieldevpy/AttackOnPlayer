@@ -1,5 +1,6 @@
-// Bots headless de debug: conectam como jogadores reais, reconstroem o mapa
-// pelo seed (ADR-007) e navegam com BFS até o coletável mais próximo.
+// Bots headless de debug: conectam como jogadores reais, reconstroem o mapa pelo seed
+// (ADR-007) e decidem via a arquitetura de IA em camadas (T-020, docs/ai/bot-architecture.md):
+// Percepção → Memória → Decisão (utility) → Steering contextual → Humanizador → Atuação.
 // Uso: npm run bots -- <qtd> <segundos>   (padrão: 2 bots, 20s; 0 = para sempre)
 import WebSocket from "ws";
 (globalThis as any).WebSocket = WebSocket; // polyfill p/ colyseus.js em Node
@@ -8,37 +9,27 @@ const { Client } = await import("colyseus.js");
 const { ROOM_NAME, SERVER_PORT, buildMap, isWall, zoneAt, LAUNCHERS } = await import("@aop/shared");
 type GameMap = import("@aop/shared").GameMap;
 
+import { skillFor, PERSONALITY_BY_SKILL } from "./ai/personality";
+import { buildPerception } from "./ai/perception";
+import { initMemory, applyStickiness, shouldGiveUp, updateTarget } from "./ai/memory";
+import { decide } from "./ai/decision";
+import { steer } from "./ai/steering";
+import { Humanizer } from "./ai/humanizer";
+import type { ActionKind, Vec2, Zone } from "./ai/types";
+
 const COUNT = Number(process.argv[2] ?? 2);
 const DURATION_S = Number(process.argv[3] ?? 20);
 const URL = process.env.SERVER_URL ?? `ws://localhost:${SERVER_PORT}`;
 const BOT_VERBOSE = process.env.BOT_VERBOSE === "1";
 
-// T-008: perfis de skill de combate. aimError = spread em rad; engageRange = detecção;
-// fleeHp = fração de HP p/ recuar; a força da skill deixa o gancho p/ personalidade/boss (T-008b).
-type SkillName = "fraco" | "medio" | "forte";
-// engageRange = raio de detecção/caça (bot persegue inimigo até aqui, mesmo fora do alcance de tiro).
-// fireIntervalMs = [min,max] do intervalo entre decisões de puxar o gatilho — bugfix pós-teste
-// manual: antes o bot atirava a cada tick assim que no alcance, ficando "impossível de matar"
-// (só o cooldown do lançador, igual pra todo mundo, limitava). Cada skill agora tem seu próprio
-// ritmo de ataque, e o intervalo real sorteia dentro da faixa a cada tiro — não é 100% fixo.
-const SKILLS: Record<SkillName, { aimError: number; engageRange: number; fleeHp: number; fireIntervalMs: [number, number] }> = {
-  fraco: { aimError: 0.4, engageRange: 12, fleeHp: 0.5, fireIntervalMs: [1000, 1900] }, // reativo: só briga quem chega perto
-  medio: { aimError: 0.18, engageRange: 30, fleeHp: 0.35, fireIntervalMs: [550, 1050] }, // caça em raio médio
-  forte: { aimError: 0.06, engageRange: 9999, fleeHp: 0.25, fireIntervalMs: [280, 600] }, // caçador: persegue pelo mapa todo
-};
-const SKILL_NAMES: SkillName[] = ["fraco", "medio", "forte"];
-/** BOT_SKILL fixa a skill de todos; ausente = sorteada por bot (variedade na sessão). */
-function skillFor(i: number): SkillName {
-  const env = process.env.BOT_SKILL as SkillName | undefined;
-  if (env && SKILLS[env]) return env;
-  return SKILL_NAMES[i % SKILL_NAMES.length];
-}
-
-/** Anti-stuck: bot fica "grudado" em obstáculo quando pretende andar mas quase não desloca. */
+/** Anti-stuck: bot fica "grudado" em obstáculo quando pretende andar mas quase não desloca.
+ * Camada 4 (steering) já evita a maior parte dos casos — isto agora é rede de segurança
+ * raramente acionada (bot-architecture.md §4), não o mecanismo primário. */
 const STUCK_DIST_EPS = 0.05; // deslocamento mínimo esperado por tick (100ms) andando livre
 const STUCK_TICKS_THRESHOLD = 5; // ~500ms tentando andar sem sair do lugar
 
-/** BFS 4-direções no grid; retorna centros de tile do caminho (sem o inicial). */
+/** BFS 4-direções no grid; retorna centros de tile do caminho (sem o inicial). BFS continua
+ * só para coleta distante — o steering local cuida do resto (bot-architecture.md §4). */
 function bfsPath(map: GameMap, fx: number, fz: number, tx: number, tz: number) {
   if (fx === tx && fz === tz) return [];
   const { w, h } = map;
@@ -66,10 +57,32 @@ function bfsPath(map: GameMap, fx: number, fz: number, tx: number, tz: number) {
   return path.reverse();
 }
 
+/** Perigo amostrado (borda + props) para uma direção candidata — alimenta o steering
+ * contextual sem o steering.ts precisar conhecer o mapa (mantém a camada pura/testável). */
+function borderPropDanger(map: GameMap, x: number, z: number, dir: Vec2): number {
+  const lookaheads = [0.5, 1.0, 1.6];
+  for (let i = 0; i < lookaheads.length; i++) {
+    const L = lookaheads[i];
+    const px = x + dir.x * L;
+    const pz = z + dir.z * L;
+    if (px < 0.5 || pz < 0.5 || px > map.w - 0.5 || pz > map.h - 0.5 || isWall(map, Math.floor(px), Math.floor(pz))) {
+      return 1 - i * 0.25; // mais perto = mais perigoso
+    }
+  }
+  return 0;
+}
+
+/** Sinal estável por alvo (evita trocar de lado de órbita a cada tick — sem estado extra). */
+function orbitSignFor(id: string): 1 | -1 {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return h % 2 === 0 ? 1 : -1;
+}
+
 async function runBot(i: number) {
   const name = `bot-${i}`;
   const skillName = skillFor(i);
-  const skill = SKILLS[skillName];
+  const personality = PERSONALITY_BY_SKILL[skillName];
   const client = new Client(URL);
   const room = await client.joinOrCreate(ROOM_NAME, { name, bot: true });
   room.onMessage("debug_event", () => {});
@@ -85,22 +98,26 @@ async function runBot(i: number) {
 
   let map: GameMap | undefined;
   let path: Array<{ x: number; z: number }> | null = null;
-  let targetId = "";
+  let collectTargetId = "";
   let pickupsSeen = 0;
   let boostLogged = false;
   let fleeingLogged = false;
+  let unstuckLogged = false;
   let shots = 0; // telemetria: comandos de tiro enviados
-  let engagedTicks = 0; // telemetria: ticks em que houve inimigo em alcance de engajamento
+  let engagedTicks = 0; // telemetria: ticks em que houve inimigo engajado
   let minDist = Infinity; // telemetria: menor distância a um inimigo
-  let nextFireAt = 0; // ritmo de ataque por skill (fireIntervalMs), não o cooldown do lançador
   let lastPos: { x: number; z: number } | null = null; // anti-stuck: posição no tick anterior
   let stuckTicks = 0;
   let unstuckUntil = 0;
-  let unstuckDir = { x: 0, z: 0 };
-  let unstuckLogged = false;
+  let unstuckDir: Vec2 = { x: 0, z: 0 };
+  let prevAction: ActionKind | null = null;
   const track = new Map<string, { x: number; z: number; t: number }>(); // p/ estimar velocidade do alvo (lead)
 
+  const memory = initMemory();
+  const humanizer = new Humanizer(personality);
+
   const think = setInterval(() => {
+    const now = Date.now();
     const state: any = room.state;
     const me = state?.players?.get?.(room.sessionId);
     if (!me) return;
@@ -111,155 +128,146 @@ async function runBot(i: number) {
     if (!map) return;
     const gmap = map; // referência não-nula p/ uso dentro de closures
 
-    // --- Combate (T-008): tem prioridade sobre a coleta ---
     const ldef = LAUNCHERS[me.launcher] ?? LAUNCHERS.basic_shot;
     const fireRange = ldef.projectile.range;
 
-    const myZone = zoneAt(gmap, me.x, me.z);
-
-    // inimigo vivo mais próximo (p/ fuga) e mais próximo "lutável" — fora de safe (p/ engajar).
-    // Ignorar quem está em safe evita ficar preso mirando alguém intocável no próprio spawn.
-    let enemy: any; let enemyId = ""; let ebest = Infinity;
-    let foe: any; let foeId = ""; let fbest = Infinity;
+    // --- Camada 1: Percepção (snapshot filtrado, não o estado inteiro) ---
+    const enemiesRaw: Array<{ id: string; x: number; z: number; hp: number; maxHp: number; level: number }> = [];
     state.players?.forEach?.((pl: any, id: string) => {
       if (id === room.sessionId || pl.hp <= 0) return;
-      const d = Math.hypot(pl.x - me.x, pl.z - me.z);
-      if (d < ebest) { ebest = d; enemy = pl; enemyId = id; }
-      if (zoneAt(gmap, pl.x, pl.z) !== "safe" && d < fbest) { fbest = d; foe = pl; foeId = id; }
+      enemiesRaw.push({ id, x: pl.x, z: pl.z, hp: pl.hp, maxHp: pl.maxHp, level: pl.level });
     });
+    const collectiblesRaw: Array<{ id: string; x: number; z: number }> = [];
+    state.collectibles?.forEach?.((c: any, id: string) => collectiblesRaw.push({ id, x: c.x, z: c.z }));
 
-    const lowHp = me.hp < skill.fleeHp * me.maxHp;
-    let combatDir: { x: number; z: number } | null = null;
-    // T-013: mira (aimX/aimZ) e gatilho (fire) são independentes, como no protocolo
-    // real (T-009/T-010) — o bot mira continuamente no alvo engajado, e só liga o
-    // gatilho quando está de fato no alcance do launcher.
+    const perceptionRadius = personality.engageRange * 1.6;
+    let perception = buildPerception(gmap, me, enemiesRaw, collectiblesRaw, perceptionRadius, (x, z) => zoneAt(gmap, x, z) as Zone);
+
+    // --- Camada 2: Memória (hysteresis de alvo + desistência) ---
+    if (shouldGiveUp(memory, now, personality.giveUpMs)) updateTarget(memory, undefined, now);
+    perception = { ...perception, enemies: applyStickiness(perception.enemies, memory) };
+
+    // --- Camada 3: Decisão (utility AI, função pura — ver decision.test.ts) ---
+    const decision = decide(perception, personality, prevAction);
+    prevAction = decision.action;
+
+    // --- Camada 5 (parte 1): atraso de reação — só troca de ação após reactionMs ---
+    const activeAction = humanizer.reactToAction(decision.action, now);
+
+    let desired: Vec2 = { x: 0, z: 0 };
+    let lateralBias = 0;
     let aim: { aimX: number; aimZ: number } | null = null;
     let fire = false;
+    let inCombat = false;
 
-    if (enemy && lowHp && ebest < skill.engageRange * 1.6) {
-      // fugir: afasta do inimigo (e, de quebra, tende a sair da zona de guerra)
-      combatDir = { x: me.x - enemy.x, z: me.z - enemy.z };
+    if (activeAction === "engage" && decision.targetId) {
+      updateTarget(memory, decision.targetId, now);
+      const target = perception.enemies.find((e) => e.id === decision.targetId);
+      if (target) {
+        inCombat = true;
+        engagedTicks++;
+        if (target.dist < minDist) minDist = target.dist;
+        fleeingLogged = false;
+
+        if (target.dist > fireRange * 0.5) desired = { x: target.x - me.x, z: target.z - me.z };
+        else if (target.dist < 1.5) desired = { x: me.x - target.x, z: me.z - target.z }; // recua se colar
+        else {
+          desired = { x: target.x - me.x, z: target.z - me.z };
+          lateralBias = 0.6 * orbitSignFor(target.id); // strafe orbital — comportamento humano de trocação
+        }
+
+        // chumbo (lead): prevê a posição do alvo pelo tempo de voo do projétil
+        const prevSeen = track.get(target.id);
+        let ex = target.x;
+        let ez = target.z;
+        if (prevSeen && now > prevSeen.t) {
+          const dts = (now - prevSeen.t) / 1000;
+          const vx = (target.x - prevSeen.x) / dts;
+          const vz = (target.z - prevSeen.z) / dts;
+          const tof = target.dist / ldef.projectile.speed;
+          ex = target.x + vx * tof;
+          ez = target.z + vz * tof;
+        }
+        track.set(target.id, { x: target.x, z: target.z, t: now });
+
+        // --- Camada 5 (parte 2): mira com lerp + erro que decai (resolve o "robô") ---
+        const idealAngle = Math.atan2(ez - me.z, ex - me.x);
+        const aimAngle = humanizer.smoothAim(idealAngle, memory.currentTargetId === target.id);
+        aim = { aimX: Math.cos(aimAngle), aimZ: Math.sin(aimAngle) };
+
+        const myZone = zoneAt(gmap, me.x, me.z);
+        if (target.dist <= fireRange && myZone !== "safe" && humanizer.canFire(now)) {
+          fire = true;
+          shots++;
+          humanizer.recordShot(now);
+        }
+        if (BOT_VERBOSE && engagedTicks % 30 === 0) {
+          console.log(`[${name}] engaj dist=${target.dist.toFixed(1)} myzone=${myZone} tgtzone=${target.zone}`);
+        }
+      }
+    } else if (activeAction === "flee" && perception.enemies[0]) {
+      const threat = perception.enemies[0];
+      desired = { x: me.x - threat.x, z: me.z - threat.z };
       if (BOT_VERBOSE && !fleeingLogged) {
         fleeingLogged = true;
         console.log(`[${name}] fugindo — hp ${Math.ceil(me.hp)}/${me.maxHp}`);
       }
-    } else if (foe && fbest <= skill.engageRange) {
-      // engaja o inimigo lutável mais próximo. Como ele está no campo, aproximar-se
-      // naturalmente me tira da minha safe até o alcance de tiro.
+    } else if (activeAction === "collect" && decision.targetId) {
       fleeingLogged = false;
-      engagedTicks++;
-      if (fbest < minDist) minDist = fbest;
-      const tgtZone = zoneAt(map, foe.x, foe.z);
-      if (BOT_VERBOSE && engagedTicks % 30 === 0) console.log(`[${name}] engaj fbest=${fbest.toFixed(1)} myzone=${myZone} tgtzone=${tgtZone}`);
-
-      if (fbest > fireRange * 0.5) combatDir = { x: foe.x - me.x, z: foe.z - me.z }; // fecha a distância
-      else if (fbest < 1.5) combatDir = { x: me.x - foe.x, z: me.z - foe.z }; // recua se colar em cima
-      else combatDir = { x: 0, z: 0 }; // mantém o duelo
-
-      // chumbo (lead): prevê a posição do alvo pelo tempo de voo do projétil
-      const now = Date.now();
-      const prev = track.get(foeId);
-      let ex = foe.x;
-      let ez = foe.z;
-      if (prev && now > prev.t) {
-        const dts = (now - prev.t) / 1000;
-        const vx = (foe.x - prev.x) / dts;
-        const vz = (foe.z - prev.z) / dts;
-        const tof = fbest / ldef.projectile.speed;
-        ex = foe.x + vx * tof;
-        ez = foe.z + vz * tof;
+      const target = perception.collectibles.find((c) => c.id === decision.targetId);
+      if (target) {
+        if (decision.targetId !== collectTargetId) {
+          collectTargetId = decision.targetId;
+          path = bfsPath(gmap, Math.floor(me.x), Math.floor(me.z), Math.floor(target.x), Math.floor(target.z));
+          if (BOT_VERBOSE) {
+            console.log(`[${name}] novo alvo: coletável ${collectTargetId} — caminho: ${path?.length ?? "inalcançável"} passos`);
+          }
+        }
+        let dir: Vec2 = { x: 0, z: 0 };
+        while (path && path.length > 0) {
+          const wp = path[0];
+          const d = Math.hypot(wp.x - me.x, wp.z - me.z);
+          if (d < 0.3) {
+            path.shift();
+            continue;
+          }
+          dir = { x: wp.x - me.x, z: wp.z - me.z };
+          break;
+        }
+        if ((!path || path.length === 0)) dir = { x: target.x - me.x, z: target.z - me.z }; // reta final dentro do tile
+        desired = dir;
       }
-      const ang = Math.atan2(ez - me.z, ex - me.x) + (Math.random() * 2 - 1) * skill.aimError;
-      aim = { aimX: Math.cos(ang), aimZ: Math.sin(ang) };
-
-      // gatilho só liga se no alcance, fora de safe, e o ritmo de ataque da skill permitir
-      // (bugfix: sem isso o bot atirava a cada tick, limitado só pelo cooldown do lançador —
-      // igual pra todo mundo — e virava "impossível de matar" independente da skill).
-      if (fbest <= fireRange && myZone !== "safe" && now >= nextFireAt) {
-        fire = true;
-        shots++;
-        const [lo, hi] = skill.fireIntervalMs;
-        nextFireAt = now + lo + Math.random() * (hi - lo); // "peso" aleatório — nunca 100% fixo
-      }
-      track.set(foeId, { x: foe.x, z: foe.z, t: now });
     } else {
       fleeingLogged = false;
+      collectTargetId = ""; // saiu do modo coleta — recalcula caminho quando voltar
+      // --- Camada 5 (parte 3): perambular com pausas, não vagar geométrico uniforme ---
+      desired = humanizer.wanderVector(now);
     }
 
-    let moveVec = { x: 0, z: 0 };
-    const inCombat = combatDir !== null;
+    // --- Camada 4: Steering contextual (resolve o esbarrão na borda; função pura, ver steering.test.ts) ---
+    const danger = (dir: Vec2) => borderPropDanger(gmap, me.x, me.z, dir);
+    let moveVec = steer({ desired, lateralBias, danger });
 
-    if (combatDir) {
-      const l = Math.hypot(combatDir.x, combatDir.z);
-      moveVec = l > 0.01 ? { x: combatDir.x / l, z: combatDir.z / l } : { x: 0, z: 0 };
-      targetId = ""; // volta a caçar coletável quando o combate acabar
-      path = null;
-    } else {
-      // --- Default: caça o coletável mais próximo (M0) ---
-      let bestId = "";
-      let target: { x: number; z: number } | undefined;
-      let best = Infinity;
-      state.collectibles?.forEach?.((c: any, id: string) => {
-        const d = Math.hypot(c.x - me.x, c.z - me.z);
-        if (d < best) {
-          best = d;
-          bestId = id;
-          target = { x: c.x, z: c.z };
-        }
-      });
-
-      if (target && bestId !== targetId) {
-        targetId = bestId;
-        path = bfsPath(map, Math.floor(me.x), Math.floor(me.z), Math.floor(target.x), Math.floor(target.z));
-        if (BOT_VERBOSE) console.log(`[${name}] novo alvo: coletável ${targetId} em (${target.x.toFixed(1)}, ${target.z.toFixed(1)}) — caminho: ${path?.length ?? 'inalcançável'} passos`);
-      }
-
-      // segue o caminho waypoint a waypoint
-      let dir = { x: 0, z: 0 };
-      while (path && path.length > 0) {
-        const wp = path[0];
-        const d = Math.hypot(wp.x - me.x, wp.z - me.z);
-        if (d < 0.3) {
-          path.shift();
-          continue;
-        }
-        dir = { x: wp.x - me.x, z: wp.z - me.z };
-        break;
-      }
-      if ((!path || path.length === 0) && target) {
-        dir = { x: target.x - me.x, z: target.z - me.z }; // reta final dentro do tile
-      }
-
-      const len = Math.hypot(dir.x, dir.z);
-      moveVec = len > 0.01 ? { x: dir.x / len, z: dir.z / len } : { x: 0, z: 0 };
-    }
-
-    // --- Anti-stuck: detecta quando o movimento pretendido não produz deslocamento real
-    // (bot grudado num prop/parede) e força uma saída lateral temporária. Não depende de
-    // raycasting contra props — só observa a posição autoritativa do servidor tick a tick,
-    // que já reflete a colisão real (moveWithCollision no servidor).
-    const now3 = Date.now();
+    // --- Anti-stuck: rede de segurança (raramente acionada agora que o steering evita borda/prop) ---
     const wantsToMove = Math.hypot(moveVec.x, moveVec.z) > 0.3;
     const distMoved = lastPos ? Math.hypot(me.x - lastPos.x, me.z - lastPos.z) : Infinity;
     lastPos = { x: me.x, z: me.z };
 
-    if (now3 >= unstuckUntil) {
+    if (now >= unstuckUntil) {
       if (wantsToMove && distMoved < STUCK_DIST_EPS) stuckTicks++;
       else stuckTicks = 0;
 
       if (stuckTicks >= STUCK_TICKS_THRESHOLD) {
-        // escapa de lado (perpendicular ao movimento pretendido, lado sorteado) por um tempo curto
         const side = Math.random() < 0.5 ? 1 : -1;
         const perp = { x: -moveVec.z * side, z: moveVec.x * side };
         const pl = Math.hypot(perp.x, perp.z) || 1;
         unstuckDir = { x: perp.x / pl, z: perp.z / pl };
-        unstuckUntil = now3 + 350 + Math.random() * 350;
+        unstuckUntil = now + 350 + Math.random() * 350;
         stuckTicks = 0;
         unstuckLogged = false;
       }
     }
-
-    if (now3 < unstuckUntil) {
+    if (now < unstuckUntil) {
       moveVec = unstuckDir;
       if (BOT_VERBOSE && !unstuckLogged) {
         unstuckLogged = true;
@@ -267,21 +275,25 @@ async function runBot(i: number) {
       }
     }
 
+    // --- Camada 6: Atuação — mesma intenção {move, aim, fire} dos perfis humanos (ADR-015) ---
     const payload: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean } = { x: moveVec.x, z: moveVec.z };
     if (inCombat) {
-      if (aim) { payload.aimX = aim.aimX; payload.aimZ = aim.aimZ; }
+      if (aim) {
+        payload.aimX = aim.aimX;
+        payload.aimZ = aim.aimZ;
+      }
       if (fire) payload.fire = true;
     }
     room.send("input", payload);
 
     if (me.level > 1 + pickupsSeen) {
       pickupsSeen = me.level - 1;
-      targetId = ""; // força re-alvo
+      collectTargetId = ""; // força re-alvo
       console.log(`[${name}] level_up! nível ${me.level}`);
     }
     if (me.speed > 1 && !boostLogged) {
       boostLogged = true;
-      targetId = "";
+      collectTargetId = "";
       console.log(`[${name}] speed_up! velocidade x${me.speed}`);
     } else if (me.speed <= 1) {
       boostLogged = false;
