@@ -66,6 +66,9 @@ export class ArenaState extends Schema {
   @type("number") mapW = 0;
   @type("number") mapH = 0;
   @type("number") mapSeed = 0;
+  // T-024: não-vazio = mapa curado (arquivo); cliente/bots então esperam a mensagem
+  // "map_data" (JSON completo) em vez de reconstruir por buildMap(mapW,mapH,mapSeed).
+  @type("string") mapId = "";
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: Collectible }) collectibles = new MapSchema<Collectible>();
   @type({ map: Projectile }) projectiles = new MapSchema<Projectile>();

@@ -6,8 +6,9 @@ import WebSocket from "ws";
 (globalThis as any).WebSocket = WebSocket; // polyfill p/ colyseus.js em Node
 
 const { Client } = await import("colyseus.js");
-const { ROOM_NAME, SERVER_PORT, buildMap, isWall, zoneAt, LAUNCHERS } = await import("@aop/shared");
+const { ROOM_NAME, SERVER_PORT, buildMap, isWall, zoneAt, LAUNCHERS, mapFileToGameMap } = await import("@aop/shared");
 type GameMap = import("@aop/shared").GameMap;
+type MapFileV1 = import("@aop/shared").MapFileV1;
 
 import { profileFor, pickCard, BOSS_PROFILE, isBossIndex } from "./ai/personality";
 import { buildPerception } from "./ai/perception";
@@ -21,6 +22,9 @@ const COUNT = Number(process.argv[2] ?? 2);
 const DURATION_S = Number(process.argv[3] ?? 20);
 const URL = process.env.SERVER_URL ?? `ws://localhost:${SERVER_PORT}`;
 const BOT_VERBOSE = process.env.BOT_VERBOSE === "1";
+// T-024: `BOT_MAP_ID=arena-teste npm run bots -- ...` sobe a sala com um mapa curado
+// (maps/<id>.map.json) em vez do gerado por seed — só o bot que cria a sala manda o id.
+const BOT_MAP_ID = process.env.BOT_MAP_ID;
 
 /** Anti-stuck: bot fica "grudado" em obstáculo quando pretende andar mas quase não desloca.
  * Camada 4 (steering) já evita a maior parte dos casos — isto agora é rede de segurança
@@ -112,7 +116,7 @@ async function runBot(i: number) {
       return;
     }
   } else {
-    room = await client.joinOrCreate(ROOM_NAME, { name, bot: true, boss: isBoss });
+    room = await client.joinOrCreate(ROOM_NAME, { name, bot: true, boss: isBoss, mapId: BOT_MAP_ID });
     sharedRoomId = room.roomId;
   }
   room.onMessage("debug_event", () => {});
@@ -133,6 +137,13 @@ async function runBot(i: number) {
   );
 
   let map: GameMap | undefined;
+  // T-024: mapa curado (mapId) não dá pra reconstruir por seed — vem pronto via "map_data".
+  room.onMessage("map_data", (file: MapFileV1) => {
+    if (!map) {
+      map = mapFileToGameMap(file);
+      console.log(`[${name}] mapa ${file.w}x${file.h} curado "${file.id}" recebido`);
+    }
+  });
   let path: Array<{ x: number; z: number }> | null = null;
   let collectTargetId = "";
   let pickupsSeen = 0;
@@ -157,7 +168,7 @@ async function runBot(i: number) {
     const state: any = room.state;
     const me = state?.players?.get?.(room.sessionId);
     if (!me) return;
-    if (!map && state.mapW > 0) {
+    if (!map && !state.mapId && state.mapW > 0) {
       map = buildMap(state.mapW, state.mapH, state.mapSeed);
       console.log(`[${name}] mapa ${state.mapW}x${state.mapH} reconstruído (seed ${state.mapSeed})`);
     }

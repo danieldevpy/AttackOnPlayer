@@ -5,7 +5,7 @@
 
 **Atualizado em:** 2026-07-05
 **Branch:** `evolução` — working directory original.
-**Marco:** V1 (lançamento público) — PROPOSAL-0002 aprovada; **fase F2 completa** (T-019..T-023, todas aprovadas no 1º teste manual do CD ou verificadas por smoke real). Fila segue para F3 (T-024).
+**Marco:** V1 (lançamento público) — PROPOSAL-0002 aprovada; **fase F2 completa** (T-019..T-023); **F3 iniciada** com T-024 (registry de objetos + mapa v1) entregue. Fila segue para T-025 (CLI de mapas).
 
 ---
 
@@ -13,21 +13,24 @@
 
 Existe (ou existiu) uma sessão paralela na branch `aci` (`.claude/worktrees/aci`, scaffold de `packages/aci`/PROPOSAL-0003 — módulo isolado, sem relação com a V1). Há também uma pasta `packages/aci/` **não versionada** na working directory original + um `snapshot-test.sh` solto — resíduos de outra esteira; **não mexer neles**. Antes de qualquer limpeza, checar se a sessão `aci` ainda está ativa (`git branch -a`, `git worktree list`).
 
+**Novo nesta sessão:** existem OUTROS projetos totalmente não relacionados rodando processos na mesma máquina — `/home/daniel/Desenvolvimento/particulas`, `/home/daniel/Desenvolvimento/AtakkTeste` e `/home/daniel/Desenvolvimento/AttakOnPlayer-teste` (note o nome quase idêntico ao deste repo!). Ao usar `ps aux`/`kill`, sempre confirmar o `cwd` do processo (`/proc/<pid>/cwd` ou o caminho no próprio comando) antes de matar — nunca assumir pelo nome do processo (`bot.ts`, `tsx`, etc.) sozinho.
+
 ## Onde paramos
 
-**Concluído na Sessão 15 (T-023, PROMPT-0035):**
-- **HUD dev/prod** via `import.meta.env.DEV` (nativo do Vite, sem flag nova): prod é painel compacto sempre visível (ping/nível/xp/HP/tags) + atributos completos só segurando `[Tab]`; roster e overlay de debug (F3) removidos do DOM em prod. Dev mantém tudo visível, como antes.
-- **Reveal-on-hit autoritativo:** `Player.revealedUntil` (Schema, mesmo padrão de `spawnProtectedUntil`) setado em vítima+atirador a cada dano real, renovado a cada hit (`REVEAL_ON_HIT_MS=4000`). Nameplate (nome+HP) só aparece enquanto revelado — "inimigo é só skin até trocar dano com ele".
-- **Toasts (`toast_text`)** — fila no canto inferior direito substitui todo texto cru do HUD (streak, card, farm_event). Fecha o item pendente do backlog vivo de VFX/juice.
-- Verificado nos **dois builds**: dev (sem regressão) e **produção real** (`vite build`+`vite preview`) — primeira task da fila testada contra o bundle de prod de verdade, não só dev server. Screenshots confirmaram os 3 comportamentos funcionando.
+**Concluído na Sessão 16 (T-024, PROMPT-0036):**
+- **Registry de objetos** (`packages/shared/src/objects.ts`, `ObjectDef{id,footprint,collidable}`) para `pedra`/`arvore`/`caixa`/`muro`/`bandeira`.
+- **Formato de mapa v1** (`packages/shared/src/mapFile.ts`, `MapFileV1`) + `validateMapFile` (objectId desconhecido, fora dos limites, flood-fill via novo `floodFillReachable` em `map.ts`) + `mapFileToGameMap` (produz a MESMA `GameMap` do gerador por seed — zero mudança em colisão/zonas/bots/render).
+- **Loader só de servidor** (`packages/server/src/mapLoader.ts`, lê `maps/<id>.map.json`) + `ArenaRoom` aceita `mapId` opcional (`ArenaState.mapId`, vazio = seed como sempre); mapa curado manda o JSON por mensagem `map_data` no join (cliente/bots não leem disco do servidor). `BOT_MAP_ID` (env var) permite QA sem esperar a CLI.
+- Fixture de exemplo `maps/arena-teste.map.json` provou o pipeline ponta a ponta: smoke real com 3 bots + 1 humano na mesma sala curada, combate/pathfinding/zona de guerra funcionando, screenshot confirmando o mapa 15×13 renderizado corretamente.
+- shared 20/20 (7 novos testes) · server 25/25 · bots 24/24 · tsc limpo em todos os pacotes.
 
-**Sessões anteriores:** VFX nomeados (Sessão 14/PROMPT-0034), progressão de skill/atributo + bugfix do menu de level-up (Sessão 13/PROMPT-0033) — ver `DEVLOG.md` para o histórico completo (Sessões 10-14).
+**Sessões anteriores:** HUD dev/prod + reveal-on-hit + toasts (Sessão 15/PROMPT-0035, fecha a F2), VFX nomeados (Sessão 14/PROMPT-0034) — ver `DEVLOG.md` para o histórico completo (Sessões 10-15).
 
 ## Próximo passo
 
-1. **Executar T-024** (início da F3/SPEC-0007) — registry de objetos (`ObjectDef` no shared) + formato de mapa v1 (instâncias `{objectId, x, z, ...}`, zonas, spawns, bandeira) + loader por `mapId` com validação/flood-fill. Contexto: `docs/BACKLOG.md` linha ~118, `specs/SPEC-0007-*.md`.
-2. Depois de T-024, T-025 (CLI de mapas) depende diretamente dela.
-3. **Calibração pendente (não bloqueia):** tempo de reveal-on-hit (4s) e vida do toast (2.6s) são chute inicial — mesma ressalva de VFX (T-022) e progressão (Sessão 13), ajustável por constante única se o CD sentir necessidade jogando.
+1. **Executar T-025** — CLI de mapas: `npm run map -- gen|save|save-current|update|list|preview`. `save-current` serializa o mapa da sala em execução (provavelmente via um endpoint/mensagem de debug que devolve o `GameMap` atual do servidor + zonas/spawns/bandeira, convertido para `MapFileV1`); `preview` é ASCII no terminal para curadoria. Depende de T-024 (pronto): `validateMapFile`/`mapFileToGameMap`/`loadMapFile` já existem para a CLI consumir. Contexto: `specs/SPEC-0007-mapas-e-objetos.md`, `docs/BACKLOG.md` linha ~119.
+2. T-025 fecha os critérios de aceite da SPEC-0007 que dependem de salvar/reajustar um mapa real ("2 mapas curados distintos", fluxo editar-JSON-e-jogar completo).
+3. **Calibração pendente (não bloqueia):** nenhuma nova nesta sessão — T-024 é puramente estrutural (formato de dados), sem números de balance para o CD calibrar.
 
 ## Pendências reais do lado do CD (não bloqueiam a esteira, só ele resolve)
 
@@ -50,22 +53,25 @@ Existe (ou existiu) uma sessão paralela na branch `aci` (`.claude/worktrees/aci
 | Progressão de skill/atributo + bugfix menu (Sessão 13) | ✅ implementado, verificado por smoke real | PROMPT-0033 — pendente sensação de sessão longa |
 | T-022 (VFX nomeados) | ✅ implementado, verificado por smoke real + screenshot | PROMPT-0034 — pendente veredito visual do CD |
 | T-023 (HUD dev/prod + reveal-on-hit + toasts) | ✅ implementado, verificado em build dev+prod real + screenshots | PROMPT-0035 — pendente veredito de timing do CD |
+| T-024 (registry de objetos + mapa v1 + loader) | ✅ implementado, verificado por smoke real (mapa curado) + screenshot | PROMPT-0036 — sem veredito pendente (estrutural, sem balance) |
 | Touch em dispositivo real | ⬜ pendente | bots não cobrem |
 
 ## Comandos úteis agora
 
 ```bash
-npm run test -w @aop/shared && (cd packages/server && npx vitest run) && (cd packages/bots && npx vitest run)  # 13/13 + 25/25 + 24/24
+npm run test -w @aop/shared && (cd packages/server && npx vitest run) && (cd packages/bots && npx vitest run)  # 20/20 + 25/25 + 24/24
 npm run dev:server && npm run dev:client
-npm run bots -- 10 0                          # 10 bots para sempre, MESMA sala, dosagem no log
-BOT_BOSS=1 BOT_VERBOSE=1 npm run bots -- 4 20 # bot-0 vira boss (nível 6-8)
+npm run bots -- 10 0                                  # 10 bots para sempre, MESMA sala, dosagem no log
+BOT_BOSS=1 BOT_VERBOSE=1 npm run bots -- 4 20         # bot-0 vira boss (nível 6-8)
+BOT_MAP_ID=arena-teste BOT_VERBOSE=1 npm run bots -- 3 0  # sala nasce com o mapa curado de exemplo (T-024)
 ```
 
 ## Leituras se a sessão nova for só conversa
 
 - Plano-mãe → `docs/proposals/PROPOSAL-0002-v1-lancamento.md` (§9 = ajustes finais do CD)
-- Specs executáveis → `specs/SPEC-0006-sensacao-e-leitura.md` (F1+F2, agora completa) + `SPEC-0007..0009` (F3 em diante)
+- Specs executáveis → `specs/SPEC-0006-sensacao-e-leitura.md` (F1+F2, completa) + `SPEC-0007-mapas-e-objetos.md` (F3, T-024 entregue/T-025 em aberto) + `SPEC-0008..0009`
+- Mapas: registry `packages/shared/src/objects.ts` + formato `packages/shared/src/mapFile.ts` + loader `packages/server/src/mapLoader.ts` + exemplo `maps/arena-teste.map.json`
 - VFX: registry em `packages/client/src/vfx.ts` + backlog vivo `docs/mechanics/vfx-juice-backlog.md` (todos os itens iniciais ✔ entregues)
 - Teoria + implementação dos bots → `docs/ai/bot-architecture.md` + `docs/ai/bots.md`
-- Feedback do CD → `docs/CREATIVE_DIRECTOR_NOTES.md` + `docs/prompts/PROMPT-0032.md`, `PROMPT-0033.md`, `PROMPT-0034.md`, `PROMPT-0035.md`
-- Tasks → seção V1 do `docs/BACKLOG.md` (T-019..T-023 ✅, T-024..T-032 pendentes)
+- Feedback do CD → `docs/CREATIVE_DIRECTOR_NOTES.md` + `docs/prompts/PROMPT-0032.md` a `PROMPT-0036.md`
+- Tasks → seção V1 do `docs/BACKLOG.md` (T-019..T-024 ✅, T-025..T-032 pendentes)

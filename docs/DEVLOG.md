@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-05 — Sessão 16: T-024 (registry de objetos + formato de mapa v1 + loader)
+- **Registry (`packages/shared/src/objects.ts`):** `ObjectDef {id, footprint, collidable}` para `pedra`/`arvore`/`caixa`/`muro`/`bandeira` — mesma interface que objetos salvos pelo sistema (Django, SPEC-0008) vão usar depois.
+- **Formato de mapa v1 (`packages/shared/src/mapFile.ts`):** `MapFileV1` (instâncias, zonas, spawns, bandeira) + `validateMapFile` (objectId desconhecido, fora dos limites, **flood-fill** via novo `floodFillReachable` em `map.ts`) + `mapFileToGameMap`, que produz a MESMA estrutura `GameMap` do gerador por seed — colisão/zonas/bots/render não mudaram nada.
+- **Loader só de servidor (`packages/server/src/mapLoader.ts`):** lê `maps/<id>.map.json` do disco, valida, lança erro claro se inválido. `ArenaRoom` aceita `mapId` opcional (`ArenaState.mapId`, vazio = seed, como sempre); mapa curado manda o JSON completo por mensagem (`map_data`) no join, já que cliente/bots não leem o disco do servidor. Cliente e bots (`BOT_MAP_ID`, novo env var no mesmo padrão de `BOT_BOSS`) atualizados para os dois caminhos.
+- **Verificação:** shared 20/20 (7 novos) · server 25/25 · bots 24/24 · tsc limpo em todos os pacotes · smoke real com `maps/arena-teste.map.json` (fixture de exemplo): 3 bots + 1 humano na mesma sala curada, pathfinding/combate/zona de guerra funcionando, overlay F3 confirmando `15×13 curado:arena-teste`, screenshot do mapa renderizando. Detalhes em `docs/prompts/PROMPT-0036.md`.
+- Próxima: T-025 (CLI de mapas — `gen/save/save-current/update/list/preview`), que fecha os critérios de aceite que dependem de salvar o mapa de uma sala real.
+
 ## 2026-07-05 — Sessão 15: T-023 (HUD dev/prod + reveal-on-hit + toasts)
 - **HUD dev/prod (`import.meta.env.DEV`, nativo do Vite):** prod vira painel compacto (ping/nível/xp/HP/tags sempre visíveis, atributos completos só segurando `[Tab]`), roster e overlay de debug (F3) somem do DOM inteiramente em prod. Dev mantém tudo sempre visível, como antes.
 - **Reveal-on-hit autoritativo:** novo `Player.revealedUntil` (`ArenaState.ts`, mesmo padrão de `spawnProtectedUntil`) — setado em vítima e atirador a cada dano real (`REVEAL_ON_HIT_MS=4000`, novo em `shared/constants.ts`), renovado a cada novo hit. Nameplate (nome + barra de HP, sprite de canvas) só aparece enquanto o campo estiver no futuro — "inimigo é só skin até trocar dano com ele".

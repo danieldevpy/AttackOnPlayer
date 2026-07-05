@@ -122,6 +122,47 @@ export function buildMap(w: number, h: number, seed: number): GameMap {
   return { w, h, seed, cells, props, zones };
 }
 
+/** T-024: flood-fill de sanidade — confirma que toda célula livre é alcançável a partir de
+ * qualquer outra (nenhuma região fechada). O gerador por seed já garante isso estruturalmente
+ * (`isIsolated`, props nunca se tocam); mapas curados (arquivo) precisam desta checagem
+ * explícita na validação, já que um humano/CLI pode editar o JSON livremente. */
+export function floodFillReachable(map: GameMap): boolean {
+  const total = map.w * map.h;
+  let start = -1;
+  let freeCount = 0;
+  for (let i = 0; i < total; i++) {
+    if (map.cells[i] !== TILE_FREE) continue;
+    freeCount++;
+    if (start === -1) start = i;
+  }
+  if (start === -1) return true; // sem células livres — nada a checar
+
+  const seen = new Uint8Array(total);
+  const stack = [start];
+  seen[start] = 1;
+  let reached = 1;
+  while (stack.length) {
+    const idx = stack.pop()!;
+    const x = idx % map.w;
+    const z = Math.floor(idx / map.w);
+    const neighbors: Array<[number, number]> = [
+      [x + 1, z],
+      [x - 1, z],
+      [x, z + 1],
+      [x, z - 1],
+    ];
+    for (const [nx, nz] of neighbors) {
+      if (nx < 0 || nz < 0 || nx >= map.w || nz >= map.h) continue;
+      const nIdx = nz * map.w + nx;
+      if (seen[nIdx] || map.cells[nIdx] !== TILE_FREE) continue;
+      seen[nIdx] = 1;
+      reached++;
+      stack.push(nIdx);
+    }
+  }
+  return reached === freeCount;
+}
+
 /** Zona no ponto dado (centro de tile ou posição contínua). Safe tem prioridade sobre guerra. */
 export function zoneAt(map: GameMap, x: number, z: number): ZoneKind {
   let inWar = false;

@@ -1,6 +1,18 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
-import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT, SPEED_BOOST_MS, XP_BOOST_MS, KILL_RUSH_MS } from "@aop/shared";
+import {
+  buildMap,
+  isWall,
+  zoneAt,
+  ROOM_NAME,
+  SERVER_PORT,
+  SPEED_BOOST_MS,
+  XP_BOOST_MS,
+  KILL_RUSH_MS,
+  GameMap,
+  MapFileV1,
+  mapFileToGameMap,
+} from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateBuffCooldownRing, updateNameplate } from "./visuals";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
 import { createVfxSystem } from "./vfx";
@@ -53,10 +65,13 @@ scene.add(sun);
 const vfx = createVfxSystem();
 scene.add(vfx.points);
 
-// ---------- Mundo (construído após receber mapW/mapH/mapSeed do servidor) ----------
+// ---------- Mundo (construído após receber mapW/mapH/mapSeed OU "map_data" do servidor) ----------
 let worldBuilt = false;
-function buildWorld(w: number, h: number, seed: number) {
-  const map = buildMap(w, h, seed); // mesmo seed = mesmo mapa do servidor (ADR-007)
+// T-024 (SPEC-0007): mapa curado (mapId) não dá pra reconstruir por seed — o cliente recebe
+// o GameMap já pronto (via `map_data` + `mapFileToGameMap`). Mapa gerado (sem mapId) continua
+// reconstruindo localmente por `buildMap(w,h,seed)`, como sempre (ADR-007, zero tráfego extra).
+function buildWorld(map: GameMap) {
+  const { w, h, seed } = map;
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
@@ -217,6 +232,12 @@ async function connect() {
     room.onMessage("upgrade_offer", (offer: any) => showUpgradeOffer(offer));
     room.onMessage("upgrade_applied", (msg: any) => onUpgradeApplied(msg));
     room.onMessage("upgrade_offer_closed", () => closeUpgradeOffer());
+    // T-024: mapa curado (mapId) manda o JSON completo uma vez no join — reconstrução por
+    // seed não se aplica (mapFileToGameMap produz o mesmo GameMap que o servidor usa).
+    room.onMessage("map_data", (file: MapFileV1) => {
+      if (worldBuilt) return;
+      buildWorld(mapFileToGameMap(file));
+    });
     setInterval(() => room?.send("ping", performance.now()), 2000);
     setInterval(sendInput, 1000 / 20);
   } catch (e) {
@@ -331,7 +352,11 @@ function updateDebugState() {
 
   // Servidor
   rows.push(`<tr><td colspan="2" class="section">── SALA ──</td></tr>`);
-  rows.push(`<tr><td>mapa</td><td>${st?.mapW ?? "?"}×${st?.mapH ?? "?"} seed:${st?.mapSeed ?? "?"}</td></tr>`);
+  rows.push(
+    `<tr><td>mapa</td><td>${st?.mapW ?? "?"}×${st?.mapH ?? "?"} ${
+      st?.mapId ? `curado:${st.mapId}` : `seed:${st?.mapSeed ?? "?"}`
+    }</td></tr>`
+  );
   rows.push(`<tr><td>players</td><td>${st?.players?.size ?? 0}</td></tr>`);
   rows.push(`<tr><td>coletáveis</td><td>${st?.collectibles?.size ?? 0}</td></tr>`);
   rows.push(`<tr><td>projéteis</td><td>${st?.projectiles?.size ?? 0}</td></tr>`);
@@ -455,7 +480,9 @@ function shortestAngleDiff(from: number, to: number): number {
 function syncWorld() {
   const st: any = room?.state;
   if (!st) return;
-  if (!worldBuilt && st.mapW > 0) buildWorld(st.mapW, st.mapH, st.mapSeed);
+  // T-024: mapa curado (st.mapId não-vazio) constrói só ao receber "map_data" (acima) —
+  // reconstruir aqui por seed daria um mapa ERRADO (mapFile não usa buildMap).
+  if (!worldBuilt && !st.mapId && st.mapW > 0) buildWorld(buildMap(st.mapW, st.mapH, st.mapSeed));
   if (!worldBuilt) return;
 
   const seenP = new Set<string>();

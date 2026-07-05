@@ -59,8 +59,10 @@ import {
   FLAG_XP_MULT,
   FLAG_PICKUP_DIST,
   REVEAL_ON_HIT_MS,
+  MapFileV1,
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
+import { loadMap } from "../mapLoader";
 
 export const activeRooms = new Map<string, ArenaRoom>();
 
@@ -73,6 +75,9 @@ export class ArenaRoom extends Room<ArenaState> {
   private projectiles = new ProjectileSystem();
   private flagSystem = new FlagSystem();
   private flagCenter = { x: 0, z: 0 };
+  // T-024: presentes só quando a room nasce com `mapId` (mapa curado por arquivo).
+  private curatedMapFile?: MapFileV1;
+  private curatedSpawns?: Array<{ x: number; z: number }>;
   private collectibleSeq = 0;
   private nextSpawnAt = 0;
   public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
@@ -84,22 +89,39 @@ export class ArenaRoom extends Room<ArenaState> {
   // `p.xp` em unidades INTEIRAS (1 por segundo), então o HUD nunca mostra "1.478/88".
   private xpAccum = new Map<string, number>();
 
-  onCreate(options?: { expectedPlayers?: number; flagEnabled?: boolean }) {
+  onCreate(options?: { expectedPlayers?: number; flagEnabled?: boolean; mapId?: string }) {
     this.setState(new ArenaState());
 
-    // ADR-007: tamanho decidido AQUI e nunca mais (mínimo 5x o base)
-    const size = mapSizeFor(Number(options?.expectedPlayers) || 4);
-    const seed = (Date.now() % 2147483647) | 0;
-    this.map = buildMap(size.w, size.h, seed);
-    this.state.mapW = size.w;
-    this.state.mapH = size.h;
-    this.state.mapSeed = seed;
-    this.budget = collectibleBudget(size.w, size.h);
+    // T-024 (SPEC-0007): mapId presente = mapa curado (arquivo versionado); ausente = o
+    // caminho original por seed (ADR-007), preservado tal e qual para não quebrar nada
+    // que já dependa dele (bots de teste, gates automáticos).
+    if (options?.mapId) {
+      const { file, map } = loadMap(options.mapId);
+      this.map = map;
+      this.curatedMapFile = file;
+      this.curatedSpawns = file.spawns;
+      this.state.mapW = file.w;
+      this.state.mapH = file.h;
+      this.state.mapSeed = file.seed ?? 0;
+      this.state.mapId = file.id;
+      this.budget = collectibleBudget(file.w, file.h);
+      this.flagCenter = file.flag;
+    } else {
+      // ADR-007: tamanho decidido AQUI e nunca mais (mínimo 5x o base)
+      const size = mapSizeFor(Number(options?.expectedPlayers) || 4);
+      const seed = (Date.now() % 2147483647) | 0;
+      this.map = buildMap(size.w, size.h, seed);
+      this.state.mapW = size.w;
+      this.state.mapH = size.h;
+      this.state.mapSeed = seed;
+      this.state.mapId = "";
+      this.budget = collectibleBudget(size.w, size.h);
+      this.flagCenter = mapCenter(size.w, size.h);
+    }
 
-    // T-021: toggle por room (default ON) — nasce no centro do mapa (T-024 vai poder
-    // sobrescrever via formato de mapa versionado; até lá é sempre o centro calculado).
+    // T-021: toggle por room (default ON) — bandeira nasce no centro do mapa (seed) ou
+    // na posição curada pelo arquivo (mapId).
     this.state.flagEnabled = options?.flagEnabled ?? true;
-    this.flagCenter = mapCenter(size.w, size.h);
     this.flagSystem.initAt(this.state.flag, this.flagCenter.x, this.flagCenter.z);
 
     activeRooms.set(this.roomId, this);
@@ -163,7 +185,9 @@ export class ArenaRoom extends Room<ArenaState> {
 
     this.setSimulationInterval((dt) => this.update(dt / 1000), 1000 / TICK_RATE);
     console.log(
-      `[arena] sala ${this.roomId}: mapa ${size.w}x${size.h} seed ${seed}, orçamento ${this.budget} coletáveis`
+      `[arena] sala ${this.roomId}: mapa ${this.state.mapW}x${this.state.mapH}` +
+        (this.state.mapId ? ` (curado: ${this.state.mapId})` : ` seed ${this.state.mapSeed}`) +
+        `, orçamento ${this.budget} coletáveis`
     );
   }
 
@@ -172,7 +196,8 @@ export class ArenaRoom extends Room<ArenaState> {
     p.name = String(options?.name ?? "player").slice(0, 16);
     p.isBot = Boolean(options?.bot);
     p.playerToken = options?.token || `bot_${client.sessionId}`;
-    const spawns = spawnPoints(this.map.w, this.map.h);
+    // T-024: mapa curado traz seus próprios spawns; sem mapId, mantém os 8 cantos/meios-de-borda de sempre.
+    const spawns = this.curatedSpawns ?? spawnPoints(this.map.w, this.map.h);
     const spawn = spawns[this.state.players.size % spawns.length];
     p.x = spawn.x;
     p.z = spawn.z;
@@ -180,6 +205,9 @@ export class ArenaRoom extends Room<ArenaState> {
     if (options?.boss) this.initBoss(client.sessionId, p);
     this.state.players.set(client.sessionId, p);
     this.metrics.start(client.sessionId, p.name, p.isBot, this.roomId, p.level);
+    // T-024: mapa curado não dá pra reconstruir por seed no cliente/bots — o JSON completo
+    // viaja uma vez no join (mapas pequenos, sem custo de tráfego contínuo).
+    if (this.curatedMapFile) client.send("map_data", this.curatedMapFile);
     console.log(`[arena] + ${p.name} (${client.sessionId})${p.isBot ? " [bot]" : ""}${options?.boss ? " [BOSS]" : ""}`);
   }
 
