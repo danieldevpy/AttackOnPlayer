@@ -140,6 +140,42 @@ export function updateFlagGlow(group: THREE.Group, carrying: boolean, t: number)
   if (carrying) glow.intensity = 2.4 + Math.sin(t * 4) * 0.6;
 }
 
+/**
+ * T-022 (SPEC-0006, backlog `buff_cooldown_ring`): anel esvaziando ao redor do boneco
+ * enquanto um buff temporário (velocidade/xp/impulso) está ativo. main.ts sabe o instante
+ * exato de cada aplicação (evento `pickup`/`impulso`) e a duração vem das mesmas constantes
+ * do EffectSystem (@aop/shared) — sem isso o cliente teria que "chutar" o tempo restante.
+ * Só 1 anel por vez (o buff mais recente) — várias faixas simultâneas fica pro backlog.
+ */
+const BUFF_RING_COLOR: Record<string, number> = {
+  speed_up: 0x26c6da,
+  xp_boost: 0xffd54f,
+  kill_rush: 0xff7043,
+};
+const buffRingGeo = new THREE.RingGeometry(0.8, 0.9, 24);
+export function updateBuffCooldownRing(group: THREE.Group, active: { kind: string; frac: number } | null) {
+  let ring = group.userData.buffRing as THREE.Mesh | undefined;
+  if (!ring) {
+    if (!active) return;
+    ring = new THREE.Mesh(
+      buffRingGeo,
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.045;
+    group.add(ring);
+    group.userData.buffRing = ring;
+  }
+  const mat = ring.material as THREE.MeshBasicMaterial;
+  if (!active) {
+    mat.opacity = 0;
+    return;
+  }
+  mat.color.setHex(BUFF_RING_COLOR[active.kind] ?? 0xffffff);
+  mat.opacity = 0.5;
+  ring.scale.setScalar(0.55 + active.frac * 0.55); // esvazia = encolhe até quase sumir no fim
+}
+
 export function createCollectibleVisual(kind: string): THREE.Mesh {
   switch (kind) {
     case "speed_up":

@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
-import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow } from "./visuals";
+import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT, SPEED_BOOST_MS, XP_BOOST_MS, KILL_RUSH_MS } from "@aop/shared";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateBuffCooldownRing } from "./visuals";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent } from "./hud";
+import { createVfxSystem } from "./vfx";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
 
@@ -39,6 +40,10 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 const sun = new THREE.DirectionalLight(0xffffff, 0.8);
 sun.position.set(5, 10, 3);
 scene.add(sun);
+
+// T-022 (SPEC-0006): registry de VFX nomeados — 1 pool de partículas para todo o jogo.
+const vfx = createVfxSystem();
+scene.add(vfx.points);
 
 // ---------- Mundo (construído após receber mapW/mapH/mapSeed do servidor) ----------
 let worldBuilt = false;
@@ -156,6 +161,19 @@ const collectibleMeshes = new Map<string, THREE.Mesh>();
 const projectileMeshes = new Map<string, THREE.Mesh>();
 let flagVisual: THREE.Group | undefined; // T-021: bandeira "rei do mapa" — objeto único, não um MapSchema
 
+// T-022: instante exato de aplicação de cada buff temporário (evento já emitido pelo
+// servidor — pickup/impulso), pareado com a MESMA duração do EffectSystem (@aop/shared),
+// pra desenhar o anel esvaziando sem "chutar" o tempo restante nem duplicar a constante.
+const BUFF_DURATION_MS: Record<string, number> = {
+  speed_up: SPEED_BOOST_MS,
+  xp_boost: XP_BOOST_MS,
+  kill_rush: KILL_RUSH_MS,
+};
+const buffApplied = new Map<string, { kind: string; expiresAt: number }>();
+const wasShielded = new Map<string, boolean>(); // detecta a transição p/ disparar shield_pop
+const lastTrailSpawn = new Map<string, number>();
+let lastFlagAuraAt = 0;
+
 // ---------- Rede ----------
 const url =
   location.hostname === "localhost" || location.hostname.startsWith("192.")
@@ -211,7 +229,28 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
   onCombatEvent(ev, mySessionId);
   if (ev.type === "hit" && ev.payload?.damage > 0) {
     const vis = playerVisuals.get(ev.payload.victimId);
-    if (vis) spawnDamagePopup(vis.position.x, vis.position.z, ev.payload.damage, ev.payload.isKill === true);
+    if (vis) {
+      spawnDamagePopup(vis.position.x, vis.position.z, ev.payload.damage, ev.payload.isKill === true);
+      vfx.spawnAt("hit_spark", vis.position.x, vis.position.z);
+      vfx.spawnAt("blood_hit", vis.position.x, vis.position.z);
+    }
+  }
+  // T-022: registry de VFX — cada efeito nasce de um evento que o servidor já emite.
+  if (ev.type === "death") {
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) vfx.spawnAt("death_burst", vis.position.x, vis.position.z);
+  } else if (ev.type === "pickup") {
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) vfx.spawnAt("pickup_glint", vis.position.x, vis.position.z);
+    // pickup é o instante exato em que speed_up/xp_boost são (re)aplicados no servidor —
+    // reseta o anel de cooldown pra refletir a renovação, não só a 1ª aplicação.
+    const kind = ev.payload.kind === "speed_up" ? "speed_up" : ev.payload.kind === "farm_event" ? "xp_boost" : null;
+    if (kind) buffApplied.set(ev.payload.playerId, { kind, expiresAt: performance.now() + BUFF_DURATION_MS[kind] });
+  } else if (ev.type === "impulso") {
+    buffApplied.set(ev.payload.playerId, { kind: "kill_rush", expiresAt: performance.now() + BUFF_DURATION_MS.kill_rush });
+  } else if (ev.type === "upgrade") {
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) vfx.spawnAt(ev.payload.auto ? "level_up_auto" : "upgrade_chosen_aura", vis.position.x, vis.position.z);
   }
 }
 
@@ -428,13 +467,57 @@ function syncWorld() {
     // "nariz" (local +X) com essa direção no mundo (ver visuals.ts).
     vis.rotation.y += shortestAngleDiff(vis.rotation.y, -(p.dir ?? 0)) * 0.25;
     updatePowerVisual(vis, p.level ?? 1, t); // T-018: aro de poder por faixa de nível
-    updateShieldVisual(vis, (p.spawnProtectedUntil ?? 0) > Date.now(), t); // SPEC-0005: bolha de invuln
-    updateFlagGlow(vis, st.flagEnabled && st.flag?.carrierId === id, t); // T-021: glow do portador
+    const shielded = (p.spawnProtectedUntil ?? 0) > Date.now();
+    updateShieldVisual(vis, shielded, t); // SPEC-0005: bolha de invuln
+    if (wasShielded.get(id) && !shielded) vfx.spawnAt("shield_pop", vis.position.x, vis.position.z); // T-022
+    wasShielded.set(id, shielded);
+    const carryingFlag = st.flagEnabled && st.flag?.carrierId === id;
+    updateFlagGlow(vis, carryingFlag, t); // T-021: glow do portador
+
+    // T-022: anel de buff esvaziando — 1 por vez (o mais recente aplicado).
+    const buff = buffApplied.get(id);
+    if (buff) {
+      const now = performance.now();
+      if (now >= buff.expiresAt) {
+        buffApplied.delete(id);
+        updateBuffCooldownRing(vis, null);
+      } else {
+        const total = BUFF_DURATION_MS[buff.kind] ?? 1;
+        updateBuffCooldownRing(vis, { kind: buff.kind, frac: (buff.expiresAt - now) / total });
+      }
+    } else {
+      updateBuffCooldownRing(vis, null);
+    }
+
+    // T-022 (backlog `speed_up_trail`): rastro periódico enquanto o buff está ativo —
+    // reusa o mesmo pool de partículas, sem mesh dedicado por jogador.
+    const fx: string[] = p.effects ? Array.from(p.effects) : [];
+    if (fx.includes("speed_up")) {
+      const last = lastTrailSpawn.get(id) ?? 0;
+      const now = performance.now();
+      if (now - last > 120) {
+        vfx.spawnAt("speed_up_trail", vis.position.x, vis.position.z, 0.15);
+        lastTrailSpawn.set(id, now);
+      }
+    }
+
+    // T-022 (backlog `flag_aura`): sparkle periódico no portador — glow (T-021) já cobre
+    // a leitura tática de longe, isto é só o "juice" de perto.
+    if (carryingFlag) {
+      const now = performance.now();
+      if (now - lastFlagAuraAt > 350) {
+        vfx.spawnAt("flag_aura", vis.position.x, vis.position.z, 1.4);
+        lastFlagAuraAt = now;
+      }
+    }
   });
   playerVisuals.forEach((vis, id) => {
     if (!seenP.has(id)) {
       scene.remove(vis);
       playerVisuals.delete(id);
+      buffApplied.delete(id);
+      wasShielded.delete(id);
+      lastTrailSpawn.delete(id);
     }
   });
 
@@ -485,6 +568,7 @@ function syncWorld() {
       mesh.position.set(proj.x, 0.5, proj.z);
       scene.add(mesh);
       projectileMeshes.set(id, mesh);
+      vfx.spawnAt("muzzle_flash", proj.x, proj.z); // T-022: projétil nasce no cano — mesma posição inicial
     }
     mesh.position.x += (proj.x - mesh.position.x) * 0.5;
     mesh.position.z += (proj.z - mesh.position.z) * 0.5;
@@ -542,6 +626,7 @@ function animate() {
     mesh.rotation.y += 0.02;
   });
   updateDamagePopups(performance.now()); // T-018
+  vfx.update(performance.now()); // T-022
   updateHud(performance.now());
   // Atualiza painel de debug a ~10fps para não sobrecarregar DOM
   if (debugOpen && ++debugTick % 2 === 0) updateDebugState();

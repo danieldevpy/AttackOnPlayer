@@ -5,47 +5,49 @@
 
 **Atualizado em:** 2026-07-05
 **Branch:** `evolução` — working directory original.
-**Marco:** V1 (lançamento público) — PROPOSAL-0002 aprovada; T-019..T-021 concluídas e aprovadas no 1º teste manual do CD (Sessão 12/PROMPT-0032); Sessão 13 resolveu 2 pontos de feedback extra (progressão de skill/atributo + bug do menu de level-up). **Pausa pedida pelo CD** para alinhar o estado atual do projeto antes de retomar a fila (T-022 em diante).
+**Marco:** V1 (lançamento público) — PROPOSAL-0002 aprovada; T-019..T-021 concluídas e aprovadas no 1º teste manual do CD (Sessão 12/PROMPT-0032); Sessão 13 resolveu 2 pontos de feedback extra; **Sessão 14 entregou T-022 (VFX nomeados)**. Fila segue para T-023.
 
 ---
 
 ## ⚠️ Sessão concorrente conhecida
 
-Existe (ou existiu) uma sessão paralela na branch `aci` (`.claude/worktrees/aci`, scaffold `packages/aci`/PROPOSAL-0003 — módulo isolado, sem relação com a V1). Há também uma pasta `packages/aci/` **não versionada** na working directory original + um `snapshot-test.sh` solto — resíduos de outra esteira; **não mexer neles**. Antes de qualquer limpeza, checar se a sessão `aci` ainda está ativa (`git branch -a`, `git worktree list`).
+Existe (ou existiu) uma sessão paralela na branch `aci` (`.claude/worktrees/aci`, scaffold de `packages/aci`/PROPOSAL-0003 — módulo isolado, sem relação com a V1). Há também uma pasta `packages/aci/` **não versionada** na working directory original + um `snapshot-test.sh` solto — resíduos de outra esteira; **não mexer neles**. Antes de qualquer limpeza, checar se a sessão `aci` ainda está ativa (`git branch -a`, `git worktree list`).
 
 ## Onde paramos
 
-**Concluído na Sessão 13 (feedback de jogo do CD, sem task de backlog associada — PROMPT-0033):**
-- **Progressão de skill/atributo:** `UPGRADE_CARD_POINTS` dobrou (3→6, `ATTR_POINTS_PER_LEVEL_EACH` acompanhou 1→2); `SKILL_MILESTONE_LEVELS` foi de 3 marcos esparsos (4/8/12) pra 5 (3/6/9/12/15, um por skill existente — antes era impossível fechar as 5 skills numa run); composição da oferta nos marcos inverteu para **2 atributo + 1 skill** (`SKILL_MILESTONE_SKILL`, skill fixa por marco).
-- **Bugfix:** menu de level-up ficava travado na tela se o jogador morresse com a oferta aberta — servidor agora manda `upgrade_offer_closed` quando a morte cancela uma oferta pendente.
-- Verificado com 2 smokes end-to-end reais contra servidor de verdade (economia de cards em runtime; morte forçada dentro da janela de 5s do menu). Todos os gates verdes.
+**Concluído na Sessão 14 (T-022, PROMPT-0034):**
+- **Registry de VFX nomeados** (`packages/client/src/vfx.ts`, `VFX_DEFS`) — os 6 efeitos-base da SPEC-0006 (`muzzle_flash`, `hit_spark`, `death_burst`, `shield_pop`, `flag_aura`, `pickup_glint`) + os 5 da fila inicial do backlog vivo (`speed_up_trail`, `buff_cooldown_ring`, `blood_hit`, `level_up_auto`, `upgrade_chosen_aura`, todos marcados ✔ em `docs/mechanics/vfx-juice-backlog.md`). "Efeito novo = 1 entrada de dados" via `VFX_DEFS`, 1 pool único de partículas (`THREE.Points`, orçamento fixo `MAX_PARTICLES=260`) para o jogo inteiro.
+- Todo efeito nasce de evento que o servidor já emite (`hit`/`death`/`pickup`/`upgrade` via `debug_event`, transição de `spawnProtectedUntil`, 1ª aparição de projétil) — **zero mudança de protocolo**. Novo helper `updateBuffCooldownRing` em `visuals.ts`.
+- Verificado com smoke real (servidor+cliente reais, 1 humano + 6 bots, ~2min) sem erros de console + screenshot confirmando partículas renderizando na cena.
+- `toast_text` (fila do backlog) ficou de fora **de propósito** — é parte da T-023.
 
-**Sessões anteriores:** QA do 1º teste manual — tank controls + bots que simulam players (Sessão 12/PROMPT-0032), T-021 bandeira (Sessão 11), T-020/T-008b bots (Sessão 10), T-019/T-019b perfis (Sessão 10) — ver `DEVLOG.md`.
+**Sessões anteriores:** progressão de skill/atributo + bugfix do menu de level-up (Sessão 13/PROMPT-0033) — ver `DEVLOG.md` para o histórico completo (Sessões 10-13).
 
 ## Próximo passo
 
-1. **Alinhamento pedido pelo CD antes de continuar:** revisar junto com ele o estado atual do projeto (o que está pronto/testado vs. o que só passou em gate automático) e o que falta da parte dele (testes manuais pendentes, vereditos de sensação) antes de abrir novas tasks.
-2. Depois do alinhamento, retomar a fila: `Executar T-022` — VFX nomeados (registry de partículas data-driven + backlog vivo `docs/mechanics/vfx-juice-backlog.md`).
-3. **Calibração pendente (não bloqueia):** ritmo novo dos marcos de skill (3/6/9/12/15) e valor dobrado dos cards são chute inicial validado por sensação nesta sessão — T-026/telemetria confirma com dados quando existir. Os knobs de bot da Sessão 12 (`1+objective`, `targetBias`, `SEPARATION_DIST`, `CORNERED_BORDER_DIST`) têm a mesma ressalva.
+1. **Executar T-023** — HUD dev/prod + reveal-on-hit autoritativo (inimigo só mostra skin até trocar dano, nameplate+HP por ~4s renováveis) + **toasts** (`toast_text`: mensagens com efeito, fila no canto do HUD, substitui os textos crus de streak/card/farm_event). Depende de T-022 (pronto). Contexto: `specs/SPEC-0006-sensacao-e-leitura.md` linhas 14-15, `docs/BACKLOG.md`.
+2. Depois de T-023, fase F2 da V1 está completa — próxima é F3 (T-024 registry de objetos + mapa v1, T-025 CLI de mapas).
+3. **Calibração pendente (não bloqueia):** cores/contagens dos `VFX_DEFS` são chute inicial de "leve sempre" — CD ajusta por sensação jogando; ritmo de skill (3/6/9/12/15) e cards ×2 (Sessão 13) seguem com a mesma ressalva.
 
 ## Pendências reais do lado do CD (não bloqueiam a esteira, só ele resolve)
 
 | Item | Status | Notas |
 |---|---|---|
 | Touch em dispositivo real | ⬜ pendente | bots não cobrem; smoke só simula mouse/keyboard/servidor |
-| Sessão mais longa com vários humanos | ⬜ pendente | tudo testado até aqui foi CD sozinho + bots, ou smokes headless via colyseus.js |
-| Veredito dos novos números (skill 3/6/9/12/15, cards ×2) numa sessão de verdade | ⬜ pendente | aprovado por lógica/smoke; falta "sentir" jogando período longo |
+| Sessão mais longa com vários humanos | ⬜ pendente | tudo testado até aqui foi CD sozinho + bots, ou smokes headless/preview solo |
+| Veredito dos novos números de progressão (Sessão 13) numa sessão de verdade | ⬜ pendente | aprovado por lógica/smoke; falta "sentir" jogando período longo |
+| Veredito visual dos VFX (Sessão 14) — cores/intensidade/timing | ⬜ pendente | implementado e visto renderizar em screenshot; falta o CD jogar e dar veredito de "sensação" |
 
 ## Veredito do Creative Director
 
 | Item | Status | Notas |
 |---|---|---|
 | PROPOSAL-0002 + ajustes §9 | ✅ aprovada (2026-07-05) | specs SPEC-0006..0009 derivadas |
-| T-019 / T-019b (perfis de controle) | ✅ testado manualmente — keyboard refeito como tank controls e aprovado | PROMPT-0027/0028/0032 |
-| T-020 + T-008b (IA/perfis dos bots) | ✅ testado manualmente — aprovado após refinamentos ("simular players") | PROMPT-0029/0030/0032 |
-| T-021 (bandeira "rei do mapa") | ✅ testado manualmente — disputa agora atira no portador; retorno 5s | PROMPT-0031/0032 |
-| Progressão de skill/atributo (addendum SPEC-0004) | ✅ implementado e verificado por smoke real — pendente sensação de sessão longa | PROMPT-0033 |
-| Menu de level-up fechando na morte | ✅ corrigido e verificado por smoke real | PROMPT-0033 |
+| T-019 / T-019b (perfis de controle) | ✅ testado manualmente | PROMPT-0027/0028/0032 |
+| T-020 + T-008b (IA/perfis dos bots) | ✅ testado manualmente | PROMPT-0029/0030/0032 |
+| T-021 (bandeira "rei do mapa") | ✅ testado manualmente | PROMPT-0031/0032 |
+| Progressão de skill/atributo + bugfix menu (Sessão 13) | ✅ implementado, verificado por smoke real | PROMPT-0033 — pendente sensação de sessão longa |
+| T-022 (VFX nomeados) | ✅ implementado, verificado por smoke real + screenshot | PROMPT-0034 — pendente veredito visual do CD |
 | Touch em dispositivo real | ⬜ pendente | bots não cobrem |
 
 ## Comandos úteis agora
@@ -60,7 +62,8 @@ BOT_BOSS=1 BOT_VERBOSE=1 npm run bots -- 4 20 # bot-0 vira boss (nível 6-8)
 ## Leituras se a sessão nova for só conversa
 
 - Plano-mãe → `docs/proposals/PROPOSAL-0002-v1-lancamento.md` (§9 = ajustes finais do CD)
-- Specs executáveis → `specs/SPEC-0006..0009` (SPEC-0004 tem addendum de 2026-07-05 sobre a progressão)
+- Specs executáveis → `specs/SPEC-0006-sensacao-e-leitura.md` (F1+F2 — T-022/T-023 aqui) + `SPEC-0007..0009`
+- VFX: registry em `packages/client/src/vfx.ts` + backlog vivo `docs/mechanics/vfx-juice-backlog.md`
 - Teoria + implementação dos bots → `docs/ai/bot-architecture.md` + `docs/ai/bots.md`
-- Feedback do CD → `docs/CREATIVE_DIRECTOR_NOTES.md` (2 entradas em 2026-07-05) + `docs/prompts/PROMPT-0032.md` e `PROMPT-0033.md`
-- Tasks → seção V1 do `docs/BACKLOG.md` (T-019..T-021 ✅, T-022..T-032 pendentes)
+- Feedback do CD → `docs/CREATIVE_DIRECTOR_NOTES.md` + `docs/prompts/PROMPT-0032.md`, `PROMPT-0033.md`, `PROMPT-0034.md`
+- Tasks → seção V1 do `docs/BACKLOG.md` (T-019..T-022 ✅, T-023..T-032 pendentes)
