@@ -1,5 +1,9 @@
 # Devlog
 
+## 2026-07-05 — Sessão 9 (final): ajuste A4 — juice contínuo com regra de intensidade
+- CD jogou mais e pediu (sem reestruturar o plano): mais efeitos visuais (trail de velocidade, anel de cooldown de buff, sangue no hit), distinção **automático = leve vs escolha manual = "aura" chamativa**, toasts de texto personalizados e não invasivos, e um mecanismo para adicionar juice "quando sentir a necessidade momentânea".
+- Solução sem tocar nas fases: **backlog vivo** `docs/mechanics/vfx-juice-backlog.md` (fila que o CD alimenta a qualquer momento; qualquer leva puxa itens via registry da T-022) + regra de intensidade registrada na PROPOSAL-0002 §9-A4 e na SPEC-0006; `toast_text` incorporado ao T-023. Plano da V1 **finalizado**.
+
 ## 2026-07-05 — Sessão 9 (cont., design): V1 aprovada com ajustes — documentação executável completa
 - CD aprovou a PROPOSAL-0002 com 3 refinamentos (registrados no §9): **A1** controles viram PERFIS (`mouse`/`keyboard`/`touch`, todos → `{move, aim, fire}`; jogo é "Valorant 3D leve"; rotação por perfil — ADR-015 encerra o vaivém das ADRs de mira); **A2** bot vira **arquitetura de IA** com base teórica própria (`docs/ai/bot-architecture.md`: percepção → utility AI → context steering → humanizador; Personality = JSON; perfis/boss/Guardian = presets); **A3** mapas referenciam **objetos registrados** (`ObjectDef` em código agora, sistema depois) e a CLI ganha `save-current` (salvar o mapa gerado atual e reajustar) — IA cura mapas com o CD, nunca gera automático.
 - Criadas as 4 specs executáveis: **SPEC-0006** (F1+F2 sensação & leitura), **SPEC-0007** (F3 mapas & objetos), **SPEC-0008** (F4 telemetria/Django/auth), **SPEC-0009** (F5+F6 docker/hardening/lançamento) + **ADR-015/ADR-016**; BACKLOG revisado (T-019 dividida em T-019/T-019b; T-020 promovida a 〔G〕).
