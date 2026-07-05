@@ -100,11 +100,50 @@ export const BOT_PROFILES: Record<ProfileName, BotProfile> = {
   },
 };
 
-/** BOT_PROFILE fixa o perfil de todos; ausente = sorteado por bot (variedade na sessão). */
+function clamp01(x: number): number {
+  return Math.max(0, Math.min(1, x));
+}
+
+/** v ± amt% (uniforme) — dosagem, não personalidade nova. */
+function jitter(v: number, amt: number): number {
+  return v * (1 + (Math.random() * 2 - 1) * amt);
+}
+
+/**
+ * Dosagem individual: cada bot nasce com uma variação própria em torno do preset — dois
+ * "agressivos" na mesma sessão não jogam idêntico (pedido do CD no teste manual da T-021).
+ * O preset continua sendo a identidade (nome/cards); a dosagem só tempera os pesos.
+ */
+export function withIndividualDosage(profile: BotProfile): BotProfile {
+  const p = profile.personality;
+  const w = (v: number) => clamp01(jitter(v, 0.25));
+  const reactF = 1 + (Math.random() * 2 - 1) * 0.2; // mesmo fator nos 2 extremos — nunca inverte o range
+  const fireF = 1 + (Math.random() * 2 - 1) * 0.2;
+  return {
+    ...profile,
+    personality: {
+      aggression: w(p.aggression),
+      caution: w(p.caution),
+      greed: w(p.greed),
+      wander: w(p.wander),
+      objective: w(p.objective),
+      engageRange: p.engageRange >= 9999 ? p.engageRange : Math.max(6, jitter(p.engageRange, 0.2)),
+      fleeHpFrac: clamp01(jitter(p.fleeHpFrac, 0.3)),
+      aimErrorRad: Math.max(0.02, jitter(p.aimErrorRad, 0.3)),
+      aimLerp: clamp01(jitter(p.aimLerp, 0.2)),
+      reactionMsRange: [p.reactionMsRange[0] * reactF, p.reactionMsRange[1] * reactF],
+      fireIntervalMsRange: [p.fireIntervalMsRange[0] * fireF, p.fireIntervalMsRange[1] * fireF],
+      giveUpMs: jitter(p.giveUpMs, 0.25),
+    },
+  };
+}
+
+/** BOT_PROFILE fixa o preset de todos; ausente = sorteado por bot. Em ambos os casos a
+ * dosagem individual é aplicada — variedade dentro da sessão mesmo com preset fixo. */
 export function profileFor(i: number): BotProfile {
   const env = process.env.BOT_PROFILE as ProfileName | undefined;
-  if (env && BOT_PROFILES[env]) return BOT_PROFILES[env];
-  return BOT_PROFILES[PROFILE_NAMES[Math.floor(Math.random() * PROFILE_NAMES.length)]];
+  const base = env && BOT_PROFILES[env] ? BOT_PROFILES[env] : BOT_PROFILES[PROFILE_NAMES[Math.floor(Math.random() * PROFILE_NAMES.length)]];
+  return withIndividualDosage(base);
 }
 
 /** Escolhe 1 card da oferta seguindo a política do perfil — determinística (nunca sorteio),

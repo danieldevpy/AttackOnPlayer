@@ -52,6 +52,8 @@ export interface PerceivedFlag {
   dist: number;
   zone: Zone;
   carriedBySelf: boolean;
+  /** id do portador atual; vazio/ausente = bandeira no chão (disputável por pickup). */
+  carrierId?: string;
 }
 
 /** Snapshot filtrado (camada 1) — nunca o estado inteiro do servidor. */

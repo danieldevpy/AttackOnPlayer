@@ -102,4 +102,53 @@ describe("decide (utility AI, T-020)", () => {
     const result = decide(perception(), BASE_PERSONALITY, null);
     expect(result.scores.flag).toBe(0);
   });
+
+  it("bandeira carregada por inimigo: portador vira alvo de ENGAGE (atira, não só persegue)", () => {
+    const p = perception({
+      enemies: [{ id: "carrier", x: 12, z: 0, hp: 100, maxHp: 100, level: 3, dist: 12, zone: "field" }],
+      flag: { x: 12, z: 0, dist: 12, zone: "field", carriedBySelf: false, carrierId: "carrier" },
+    });
+    const result = decide(p, BASE_PERSONALITY, null);
+    expect(result.action).toBe("engage");
+    expect(result.targetId).toBe("carrier");
+    expect(result.scores.flag).toBe(0); // disputa carregada não é mais a ação `flag`
+  });
+
+  it("portador não monopoliza: outro inimigo bem mais perto ainda vence sem objective alto", () => {
+    const calm: Personality = { ...BASE_PERSONALITY, objective: 0.2 };
+    const p = perception({
+      enemies: [
+        { id: "duel", x: 2, z: 0, hp: 100, maxHp: 100, level: 3, dist: 2, zone: "field" },
+        { id: "carrier", x: 15, z: 0, hp: 100, maxHp: 100, level: 3, dist: 15, zone: "field" },
+      ],
+      flag: { x: 15, z: 0, dist: 15, zone: "field", carriedBySelf: false, carrierId: "carrier" },
+    });
+    const result = decide(p, calm, null);
+    expect(result.action).toBe("engage");
+    expect(result.targetId).toBe("duel");
+  });
+
+  it("targetBias espalha alvos: viés alto num inimigo levemente mais longe o elege", () => {
+    const p = perception({
+      enemies: [
+        { id: "e1", x: 3, z: 0, hp: 100, maxHp: 100, level: 3, dist: 3, zone: "field" },
+        { id: "e2", x: 4, z: 0, hp: 100, maxHp: 100, level: 3, dist: 4, zone: "field" },
+      ],
+    });
+    const result = decide(p, BASE_PERSONALITY, null, { targetBias: (id) => (id === "e2" ? 1.2 : 0.8) });
+    expect(result.action).toBe("engage");
+    expect(result.targetId).toBe("e2");
+  });
+
+  it("encurralado na borda com ameaça no raio: para de fugir e vira pra lutar", () => {
+    const cautious: Personality = { ...BASE_PERSONALITY, caution: 0.9 };
+    const p = perception({
+      self: { x: 0, z: 0, hp: 10, maxHp: 100, level: 3, zone: "field" },
+      nearestBorderDist: 1,
+      enemies: [{ id: "e1", x: 2, z: 0, hp: 100, maxHp: 100, level: 5, dist: 2, zone: "field" }],
+    });
+    const result = decide(p, cautious, null);
+    expect(result.action).toBe("engage");
+    expect(result.targetId).toBe("e1");
+  });
 });

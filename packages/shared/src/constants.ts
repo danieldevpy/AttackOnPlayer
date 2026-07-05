@@ -11,7 +11,9 @@ export const PLAYER_SPEED = 4; // unidades/s (base — ver mechanics/skills.md)
 export const PLAYER_RADIUS = 0.35;
 export const PLAYER_BASE_HP = 100;
 
-export const MAX_PLAYERS = 8;
+// 16 acomoda sessões de teste com ~10 bots + humanos (era 8; bots excedentes caíam
+// silenciosamente em outra sala via joinOrCreate — QA do teste manual da T-021).
+export const MAX_PLAYERS = 16;
 
 // Coletáveis (ADR-006: nascem longe de jogadores)
 export type CollectibleKind = "xp_orb" | "speed_up" | "coin_buff" | "farm_event" | "box";
@@ -178,7 +180,7 @@ export const SPEED_MAX_MULT = 2; // teto anti-snowball
 // fica visível globalmente (glow); morre e derruba no local; sem dono por tempo demais, volta.
 export const FLAG_XP_MULT = 2;
 export const FLAG_PICKUP_DIST = COLLECT_DIST;
-export const FLAG_ABANDON_RETURN_MS = 15000;
+export const FLAG_ABANDON_RETURN_MS = 5000; // caída e não disputada em 5s → volta ao centro (CD, teste manual T-021)
 
 export const ROOM_NAME = "arena";
 export const SERVER_PORT = 2567;

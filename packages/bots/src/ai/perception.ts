@@ -29,6 +29,8 @@ export interface RawFlag {
   x: number;
   z: number;
   carriedBySelf: boolean;
+  /** id do portador; vazio = no chão. */
+  carrierId?: string;
 }
 
 /**
@@ -80,6 +82,7 @@ export function buildPerception(
         dist: Math.hypot(flag.x - self.x, flag.z - self.z),
         zone: zoneOf(flag.x, flag.z),
         carriedBySelf: flag.carriedBySelf,
+        carrierId: flag.carrierId || undefined,
       }
     : undefined;
 

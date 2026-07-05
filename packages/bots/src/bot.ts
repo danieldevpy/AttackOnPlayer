@@ -79,14 +79,44 @@ function orbitSignFor(id: string): 1 | -1 {
   return h % 2 === 0 ? 1 : -1;
 }
 
+/** Hash 0..1 estável por string — base do viés de alvo por (bot, inimigo). */
+function hash01(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 10000) / 10000;
+}
+
+/** Raio de "não empilhar": dentro disto, empurra pra longe do outro player. */
+const SEPARATION_DIST = 1.8;
+
+/** Todos os bots da sessão jogam JUNTOS: o primeiro fixa a sala, os demais entram nela
+ * por id. Antes, joinOrCreate criava outra sala silenciosamente quando a primeira lotava
+ * — "npm run bots 10" parecia perder bots (QA do teste manual da T-021). */
+let sharedRoomId: string | null = null;
+
 async function runBot(i: number) {
   const name = `bot-${i}`;
   const isBoss = isBossIndex(i);
   const profile = isBoss ? BOSS_PROFILE : profileFor(i);
   const personality = profile.personality;
   const client = new Client(URL);
-  const room = await client.joinOrCreate(ROOM_NAME, { name, bot: true, boss: isBoss });
+  let room;
+  if (sharedRoomId) {
+    try {
+      room = await client.joinById(sharedRoomId, { name, bot: true, boss: isBoss });
+    } catch (e: any) {
+      console.error(`[${name}] NÃO entrou na sala ${sharedRoomId} (lotada? MAX_PLAYERS): ${e?.message ?? e}`);
+      return;
+    }
+  } else {
+    room = await client.joinOrCreate(ROOM_NAME, { name, bot: true, boss: isBoss });
+    sharedRoomId = room.roomId;
+  }
   room.onMessage("debug_event", () => {});
+  room.onMessage("announce", () => {}); // farm_event etc. — só o cliente humano exibe; sem handler o colyseus.js loga warning
   // T-008b: cada perfil tem uma política de card determinística (bruto/tanque/caçador
   // concentram sempre o mesmo par de atributos; equilibrado auto-pica como sempre) —
   // observável no F3 pelas skills/atributos que o bot acumula ao longo da sessão.
@@ -96,7 +126,11 @@ async function runBot(i: number) {
     const pickId = pickCard(profile.cardPolicy, cards);
     if (pickId) setTimeout(() => room.send("choose_upgrade", pickId), 150 + Math.random() * 250);
   });
-  console.log(`[${name}] entrou na sala ${room.roomId} — perfil ${profile.name}${isBoss ? " [BOSS]" : ""}`);
+  console.log(
+    `[${name}] entrou na sala ${room.roomId} — perfil ${profile.name}${isBoss ? " [BOSS]" : ""}` +
+      ` (dosagem: agr ${personality.aggression.toFixed(2)} caut ${personality.caution.toFixed(2)}` +
+      ` obj ${personality.objective.toFixed(2)} fuga<${Math.round(personality.fleeHpFrac * 100)}%hp)`
+  );
 
   let map: GameMap | undefined;
   let path: Array<{ x: number; z: number }> | null = null;
@@ -145,7 +179,12 @@ async function runBot(i: number) {
     // T-021: bandeira é objetivo de mapa — visível inteira quando a room liga o toggle.
     const flagRaw =
       state.flagEnabled && state.flag
-        ? { x: state.flag.x, z: state.flag.z, carriedBySelf: state.flag.carrierId === room.sessionId }
+        ? {
+            x: state.flag.x,
+            z: state.flag.z,
+            carriedBySelf: state.flag.carrierId === room.sessionId,
+            carrierId: state.flag.carrierId,
+          }
         : undefined;
 
     const perceptionRadius = personality.engageRange * 1.6;
@@ -165,7 +204,12 @@ async function runBot(i: number) {
     perception = { ...perception, enemies: applyStickiness(perception.enemies, memory) };
 
     // --- Camada 3: Decisão (utility AI, função pura — ver decision.test.ts) ---
-    const decision = decide(perception, personality, prevAction);
+    // targetBias: viés estável por (bot, inimigo) — bots diferentes elegem alvos diferentes
+    // ("compartilham" a jogatina) em vez de todos travarem no mesmo mais próximo.
+    const decision = decide(perception, personality, prevAction, {
+      targetBias: (enemyId) => 0.8 + 0.4 * hash01(`${name}:${enemyId}`),
+      stickyTargetId: memory.currentTargetId,
+    });
     prevAction = decision.action;
 
     // --- Camada 5 (parte 1): atraso de reação — só troca de ação após reactionMs ---
@@ -225,6 +269,20 @@ async function runBot(i: number) {
     } else if (activeAction === "flee" && perception.enemies[0]) {
       const threat = perception.enemies[0];
       desired = { x: me.x - threat.x, z: me.z - threat.z };
+      // Kite: correndo, ainda responde fogo se o perseguidor está no alcance — player
+      // de verdade não foge de costas caladas (pedido do CD no teste manual).
+      const myZone = zoneAt(gmap, me.x, me.z);
+      if (threat.dist <= fireRange && myZone !== "safe") {
+        inCombat = true;
+        const idealAngle = Math.atan2(threat.z - me.z, threat.x - me.x);
+        const aimAngle = humanizer.smoothAim(idealAngle, memory.currentTargetId === threat.id);
+        aim = { aimX: Math.cos(aimAngle), aimZ: Math.sin(aimAngle) };
+        if (humanizer.canFire(now)) {
+          fire = true;
+          shots++;
+          humanizer.recordShot(now);
+        }
+      }
       if (BOT_VERBOSE && !fleeingLogged) {
         fleeingLogged = true;
         console.log(`[${name}] fugindo — hp ${Math.ceil(me.hp)}/${me.maxHp}`);
@@ -255,8 +313,8 @@ async function runBot(i: number) {
         desired = dir;
       }
     } else if (activeAction === "flag" && perception.flag) {
-      // T-021: bandeira SEGUE o portador — perseguição direta (como "engage"/"flee"), não BFS
-      // (BFS é para alvo parado; recalcular caminho a cada tick pra um alvo móvel seria caro).
+      // T-021: só bandeira NO CHÃO chega aqui (carregada por inimigo vira engage no
+      // portador, na decisão) — perseguição direta; o steering desvia de obstáculo.
       fleeingLogged = false;
       const flag = perception.flag;
       desired = { x: flag.x - me.x, z: flag.z - me.z };
@@ -270,6 +328,24 @@ async function runBot(i: number) {
     // --- Camada 4: Steering contextual (resolve o esbarrão na borda; função pura, ver steering.test.ts) ---
     const danger = (dir: Vec2) => borderPropDanger(gmap, me.x, me.z, dir);
     let moveVec = steer({ desired, lateralBias, danger });
+
+    // Separação: vários bots convergindo pro mesmo alvo (ex.: portador da bandeira) não
+    // podem virar um bolo — dentro de SEPARATION_DIST, cada vizinho empurra pra fora.
+    let sepX = 0;
+    let sepZ = 0;
+    for (const e of perception.enemies) {
+      if (e.dist < SEPARATION_DIST && e.dist > 1e-3) {
+        const w = (SEPARATION_DIST - e.dist) / SEPARATION_DIST;
+        sepX += ((me.x - e.x) / e.dist) * w;
+        sepZ += ((me.z - e.z) / e.dist) * w;
+      }
+    }
+    if (sepX !== 0 || sepZ !== 0) {
+      const bx = moveVec.x + sepX * 0.9;
+      const bz = moveVec.z + sepZ * 0.9;
+      const bl = Math.hypot(bx, bz);
+      if (bl > 1e-3) moveVec = { x: bx / bl, z: bz / bl };
+    }
 
     // --- Anti-stuck: rede de segurança (raramente acionada agora que o steering evita borda/prop) ---
     const wantsToMove = Math.hypot(moveVec.x, moveVec.z) > 0.3;
