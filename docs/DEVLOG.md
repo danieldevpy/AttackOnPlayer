@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-05 — Sessão 9 (design): PROPOSAL-0002 — plano completo da V1 até o lançamento
+- CD jogou a build e trouxe 9 percepções (bots robóticos na borda, mira "por ângulos" → quer CS-2D, mapas escolhíveis + CLI, bandeira 2×XP/s, backend Django+admin, HUD dev/prod + inimigo revelado só ao trocar dano, VFX nomeados, logs para análise por IA, login anônimo+Google) + pedido de plano por etapas até a V1 na VPS (docker dev/prod + scripts).
+- Alinhamento com o histórico: a mira CS-2D **reverte a ADR-014.6** (facing por movimento) — registrado como revisão consciente (vira ADR-015 na aprovação); Aura (M2) e Guardian (M3) adiados para pós-V1 (a bandeira entrega o "objetivo de mapa" mais barato); M4/M5 absorvidos pelas fases F4/F5/F6; guardrail da constituição mantido (conta = identidade/estatística, nunca poder in-round).
+- Também commitado o código da SPEC-0005 que estava com working tree sujo da sessão anterior (já testado, 19/19 no server).
+- Produzido: `docs/proposals/PROPOSAL-0002-v1-lancamento.md` (análise ponto a ponto com acréscimos, arquitetura alvo, guardrails, 6 fases, 5 questões abertas) + seção **V1** no BACKLOG (T-019..T-032, T-032 = 🚀 lançamento) + ROADMAP remapeado.
+- Sem mudança de código de jogo nesta entrada. Próximo: aprovação do CD → specs por fase (SPEC-0006..0009) → `Executar T-019`.
+
 ## 2026-07-05 — Sessão 8 (cont.): correções da SPEC-0005 (PROMPT-0026)
 - CD apontou 2 erros da leva anterior:
   1. **Facing não é do mouse.** A direção/visão do player deve vir do **movimento** (WASD), como antes, só que mais eficiente. Removido do cliente todo o caminho de mira por mouse (raycast `cursorGroundOffset`, `mousemove`, envio de `aim`); o servidor já deriva `dir` de `inputX/inputZ`. Cliente do player não manda mais `aim` — o campo do protocolo fica só para os bots (que miram no alvo). Menos trabalho por tick, menos rede.

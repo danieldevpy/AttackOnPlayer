@@ -3,62 +3,55 @@
 > **Substituir este arquivo inteiro** ao fim de cada sessão de trabalho.
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
-**Atualizado em:** 2026-07-04
-**Branch:** `evolução` — contém SPEC-0003 (herdada), **SPEC-0004** (T-014..T-018) **e agora SPEC-0005** (ajustes pós-teste do CD).
-**Marco:** M1.5 (escala de poder & builds) + ajustes de ritmo — **código completo e testado**, aguardando veredito do CD.
+**Atualizado em:** 2026-07-05
+**Branch:** `evolução` — SPEC-0003/0004/0005 implementadas e commitadas; **PROPOSAL-0002 (plano da V1) escrita e aguardando aprovação do CD**.
+**Marco:** M1.5 fechado em código · **V1 (lançamento) planejada** em 6 fases.
 
 ---
 
 ## Onde paramos
 
-**SPEC-0005 executada** (6 ajustes pedidos pelo CD após jogar com bots — ADR-014, PROMPT-0025):
+**Sessão de design (sem código de jogo).** O CD jogou a build, trouxe 9 percepções de jogador/analista e pediu o plano completo até a primeira versão pública. Produzido:
 
-1. **XP passivo:** todo player vivo ganha **+1 XP/s** (`XP_PER_SECOND`) — o mapa não "esfria".
-2. **Morte zera o nível:** morrer volta ao **nível 1** (aposenta `lossFraction` do loop).
-3. **Reroll (R) dá XP:** +20 XP (`REROLL_XP_REWARD`) além de redistribuir atributos.
-4. **Zonas safe removidas** do mapa (só guerra/campo agora).
-5. **Invulnerabilidade de nascimento:** 3s imune ao nascer/renascer (`SPAWN_PROTECTION_MS`); **cai ao atirar**. Bolha azul no cliente + contador `escudo` no F3. Novo evento debug `shield_block`.
-6. **Facing pelo movimento:** a direção/visão do player vem do **movimento** (WASD), calculada no servidor — o **mouse não controla o facing** (correção de 2026-07-05; a 1ª versão pôs sob o mouse). Cliente do player não envia mais `aim`; o campo fica só para os bots.
+- **`docs/proposals/PROPOSAL-0002-v1-lancamento.md`** — o plano: estado atual alinhado com todas as sessões, análise ponto a ponto (com acréscimos da IA), arquitetura alvo (Node/Colyseus = tempo real · Django = plataforma/admin · Postgres · docker compose dev/prod + scripts), guardrails da constituição, 6 fases e 14 tasks novas.
+- **BACKLOG** — seção "V1 — Rumo ao lançamento" (T-019..T-032; T-032 = 🚀 deploy na VPS + divulgação).
+- **ROADMAP** — V1 substitui M4/M5; Aura/Guardian viram pós-V1.
 
-**Correção 2026-07-05 (PROMPT-0026):** além do item 6 acima, o **XP passivo agora entra inteiro** (acumulador de tempo no servidor, `xpAccum`) — o HUD não mostra mais XP fracionado tipo `1.478/88`.
-
-**Gates rodados nesta sessão:** shared 13/13 · server **19/19** (2 testes novos de invuln de nascimento) · `tsc --noEmit` limpo (server/client/bots) · guarda `.js` órfão limpa · smoke com 3 bots (level-up por presença sem kill; combate ok) · scripts de verificação (escudo bloqueia dano / cai ao atirar; 0 tiles safe gerados).
+**Destaques do plano que precisam do OK do CD:**
+- **T-019 reverte a ADR-014.6:** mira volta ao mouse, agora estilo **CS-2D** (crosshair 360° + strafe). É a 3ª iteração de mira — todas testadas em jogo, decisão registrada como ADR-015 na aprovação.
+- **Django entra na V1** (contas/admin/gameops) com fronteira dura: nunca decide gameplay em tempo real; conta nunca dá poder in-round.
+- **5 questões abertas** no §7 da proposal (bônus da bandeira, tempo do reveal, skins placeholder, confirmação do Django, canal de divulgação).
 
 ## Próximo passo sugerido
 
-1. **Veredito do CD no browser** — checklist novo na matriz do `QA.md` (linhas SPEC-0005: XP passivo, nível zera na morte, escudo de 3s + bolha, facing por movimento, reroll dando XP). Duas abas para PvP.
-2. **Re-medir pacing** — XP passivo × morte-zera-nível pode acelerar/achatar demais a curva; rodar bots e olhar `docs/ai/balance-T014-ttk.md`.
-3. **`Executar T-008b do docs/BACKLOG.md`** — perfis de build de bot (bruto/tanque/caçador) + boss.
-4. **Merge `evolução` → `main`** — checklist do `QA.md` (gates automáticos limpos; falta o manual do CD).
+1. **CD lê a PROPOSAL-0002** e responde as 5 questões abertas (§7) — aprovar/ajustar.
+2. Na aprovação: IA converte F1+F2 → SPEC-0006, F3 → SPEC-0007, F4 → SPEC-0008, F5+F6 → SPEC-0009 (+ ADR-015/016) e começa `Executar T-019 do docs/BACKLOG.md`.
+3. **Herdado (continua valendo):** veredito no browser das SPECs 3/4/5 (checklists no QA.md) e merge `evolução` → `main` — recomendo fazer antes do código da V1 começar.
 
-Prompt típico: `Testar tudo no browser e dar veredito` ou `Executar T-008b do docs/BACKLOG.md`
+Prompt típico: `Aprovo a PROPOSAL-0002 com os ajustes X e Y — gere as specs e execute a F1`
 
 ## Veredito do Creative Director
 
-| Fluxo | Status | Notas |
+| Item | Status | Notas |
 |---|---|---|
-| SPEC-0005 (6 ajustes de gameplay) | ⬜ pendente teste do CD | verificado por IA: testes + scripts + smoke |
-| XP passivo / reroll dá XP | ⬜ pendente teste do CD | bot sobe de nível sem kill (smoke) |
-| Morte zera o nível | ⬜ pendente teste do CD | `respawn` com `levelAfter:1` |
-| Invuln de nascimento (3s, bolha, cai ao atirar) | ⬜ pendente teste do CD | verificado por IA: 2 testes server + script |
-| Facing pelo movimento (mouse não mira) | ⬜ pendente teste do CD | só verificável no browser |
-| SPEC-0004 (cards/skills/juice/TTK) | ⬜ pendente teste do CD | verificado por IA na sessão 7 |
-| SPEC-0003 (facing/mira/gatilhos, herdada) | ⬜ pendente teste do CD | desde a sessão 5 |
-| Merge para `main` | ⬜ pendente | gates automáticos limpos nesta sessão |
+| PROPOSAL-0002 (plano da V1) | ⬜ aguardando leitura/aprovação | 5 questões abertas no §7 |
+| SPEC-0005 (XP passivo, morte zera, escudo, facing) | ⬜ pendente teste no browser | 19/19 no server |
+| SPEC-0004 (cards/skills/juice/TTK) | ⬜ pendente teste no browser | 30 testes verdes |
+| SPEC-0003 (facing/mira/gatilhos) | ⬜ pendente teste no browser | herdada |
+| Merge `evolução` → `main` | ⬜ pendente | gates automáticos limpos |
 
 ## Comandos úteis agora
 
 ```bash
 npm run test                          # shared 13/13
-cd packages/server && npx vitest run  # 19/19 (inclui invuln de nascimento, SPEC-0005)
-npm run dev:server && npm run dev:client  # testar no browser (facing por movimento, escudo, XP passivo)
-npm run bots -- 4 30                  # bots: presença sobe nível; morte zera; sem safe
+cd packages/server && npx vitest run  # 19/19
+npm run dev:server && npm run dev:client  # testar SPECs 3/4/5 no browser
+npm run bots -- 4 30
 ```
 
 ## Leituras se a sessão nova for só conversa
 
-- Ajustes implementados → `specs/SPEC-0005-presenca-viva-morte-dura-mira-continua.md`
-- Decisão → `docs/DECISION_LOG.md` ADR-014
-- Números jogáveis → `docs/mechanics/PLAYER_LOOP.md` (XP passivo, reroll+XP, morte zera, escudo, facing por movimento)
-- Detalhe do pedido → `docs/prompts/PROMPT-0025.md`
-- Próxima task → T-008b no `docs/BACKLOG.md`
+- **O plano da V1** → `docs/proposals/PROPOSAL-0002-v1-lancamento.md`
+- Tasks da V1 → seção "V1" no `docs/BACKLOG.md` (T-019..T-032)
+- Estado jogável atual → `docs/mechanics/PLAYER_LOOP.md`
+- Últimas mudanças de gameplay → `specs/SPEC-0005-*.md` (ADR-014)

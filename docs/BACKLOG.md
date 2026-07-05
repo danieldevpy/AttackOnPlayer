@@ -95,4 +95,40 @@
 **Aceite:** glow por faixa visível; screenshot comparando faixas de nível; sem custo de draw calls perceptível.
 
 ---
+
+# V1 — Rumo ao lançamento (PROPOSAL-0002) · ⏳ aguardando aprovação do CD
+
+> Plano completo (análise dos 9 pontos do CD, arquitetura, guardrails, aceites detalhados):
+> **`docs/proposals/PROPOSAL-0002-v1-lancamento.md`**. Ao aprovar: F1+F2 → SPEC-0006,
+> F3 → SPEC-0007, F4 → SPEC-0008, F5+F6 → SPEC-0009. Executar em ordem de fase.
+
+**F1 — Sensação**
+- **T-019** 〔M〕 Mira CS-2D: crosshair 360° + strafe (ADR-015 — reverte ADR-014.6 conscientemente)
+- **T-020** 〔M〕 Bots humanos: steering preventivo de borda + humanização (reação, lerp de mira, strafe, perambulação)
+- **T-008b** 〔M〕 (acima) Perfis de bot + boss · depende: T-020
+
+**F2 — Objetivo & leitura**
+- **T-021** 〔M〕 Bandeira "rei do mapa": 2× XP/s + bônus, glow global, toggle por room (default ON)
+- **T-022** 〔M〕 VFX nomeados: registry de partículas data-driven derivado de eventos existentes
+- **T-023** 〔G〕 HUD dev/prod + reveal-on-hit autoritativo (inimigo = só skin até trocar dano) · depende: T-022
+
+**F3 — Conteúdo**
+- **T-024** 〔G〕 Formato de mapa v1 (JSON versionado, props semânticos) + loader por `mapId`
+- **T-025** 〔M〕 CLI de mapas: `npm run map -- gen|save|update|list|preview` (preview ASCII p/ IA) · depende: T-024
+
+**F4 — Plataforma**
+- **T-026** 〔M〕 Telemetria estruturada p/ IA (NDJSON versionado, `npm run analyze`, watchdog de tick)
+- **T-027** 〔G〕 Backend Django: accounts/maps/gameops/telemetry + admin (ADR-016 — fronteira Node×Django)
+- **T-028** 〔G〕 Auth: anônimo default + Google + "registre-se" (JWT no join; guest vincula ao logar) · depende: T-027
+- **T-029** 〔P〕 ADR-012 liga na conta (estatística, nunca poder in-round) · depende: T-028
+
+**F5 — Empacotamento**
+- **T-030** 〔G〕 Docker compose dev/prod + `scripts/dev.sh`/`scripts/prod.sh` com verificação de saúde
+- **T-031** 〔M〕 Hardening: healthz, rate-limit, backup Postgres, envs segregadas · depende: T-030
+- **T-OPTIONAL 1** (acima) Passe de balance final com perfis/mapas novos
+
+**F6 — Lançamento**
+- **T-032** 〔G〕 🚀 V1 na VPS: deploy prod, domínio+TLS, página inicial, teste de carga, go-live e divulgação · depende: todas
+
+---
 Concluiu tudo? Reler `docs/VISAO-ATUAL.md` e abrir nova sessão de ideias (PROMPT-0004).
