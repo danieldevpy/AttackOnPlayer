@@ -142,8 +142,23 @@ async function runBot(i: number) {
     const collectiblesRaw: Array<{ id: string; x: number; z: number }> = [];
     state.collectibles?.forEach?.((c: any, id: string) => collectiblesRaw.push({ id, x: c.x, z: c.z }));
 
+    // T-021: bandeira é objetivo de mapa — visível inteira quando a room liga o toggle.
+    const flagRaw =
+      state.flagEnabled && state.flag
+        ? { x: state.flag.x, z: state.flag.z, carriedBySelf: state.flag.carrierId === room.sessionId }
+        : undefined;
+
     const perceptionRadius = personality.engageRange * 1.6;
-    let perception = buildPerception(gmap, me, enemiesRaw, collectiblesRaw, perceptionRadius, (x, z) => zoneAt(gmap, x, z) as Zone);
+    let perception = buildPerception(
+      gmap,
+      me,
+      enemiesRaw,
+      collectiblesRaw,
+      perceptionRadius,
+      (x, z) => zoneAt(gmap, x, z) as Zone,
+      Math.random,
+      flagRaw
+    );
 
     // --- Camada 2: Memória (hysteresis de alvo + desistência) ---
     if (shouldGiveUp(memory, now, personality.giveUpMs)) updateTarget(memory, undefined, now);
@@ -239,6 +254,12 @@ async function runBot(i: number) {
         if ((!path || path.length === 0)) dir = { x: target.x - me.x, z: target.z - me.z }; // reta final dentro do tile
         desired = dir;
       }
+    } else if (activeAction === "flag" && perception.flag) {
+      // T-021: bandeira SEGUE o portador — perseguição direta (como "engage"/"flee"), não BFS
+      // (BFS é para alvo parado; recalcular caminho a cada tick pra um alvo móvel seria caro).
+      fleeingLogged = false;
+      const flag = perception.flag;
+      desired = { x: flag.x - me.x, z: flag.z - me.z };
     } else {
       fleeingLogged = false;
       collectTargetId = ""; // saiu do modo coleta — recalcula caminho quando voltar

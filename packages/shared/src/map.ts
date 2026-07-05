@@ -49,6 +49,12 @@ const PROP_TYPES: PropType[] = ["pedra", "arvore", "caixa", "muro"];
  * aplicada por player, não por região. O primitivo `kind: "safe"` continua existindo em
  * `zoneAt`/tipos (testes de combate ainda o exercem), só não é mais gerado no mapa.
  */
+/** Centro do mapa — usado pela zona de guerra principal e pela posição default da
+ * bandeira (T-021; T-024 vai poder sobrescrever via formato de mapa versionado). */
+export function mapCenter(w: number, h: number): { x: number; z: number } {
+  return { x: w / 2, z: h / 2 };
+}
+
 function buildZones(w: number, h: number, _spawns: Array<{ x: number; z: number }>): Zone[] {
   const zones: Zone[] = [];
   zones.push({ kind: "war", cx: w / 2, cz: h / 2, radius: WAR_ZONE_RADIUS });

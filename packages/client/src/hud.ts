@@ -120,6 +120,8 @@ export function updateHud(now: number) {
   const fx: string[] = me?.effects ? Array.from(me.effects) : [];
   const xpNeed = me ? xpToNext(me.level) : 0;
   const ping = ctx.getPing();
+  // T-021: bandeira "rei do mapa" — só existe leitura quando a room liga o toggle.
+  const flagCarrierId: string | undefined = st?.flagEnabled ? st?.flag?.carrierId : undefined;
   hudEl.textContent =
     `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
     `nível: ${me?.level ?? "-"} (xp ${Math.floor(me?.xp ?? 0)}/${xpNeed})  HP: ${Math.ceil(me?.hp ?? 0)}/${me?.maxHp ?? 100}` +
@@ -130,6 +132,7 @@ export function updateHud(now: number) {
     `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • mouse=mira • espaço/click=atirar)` +
     (streak >= 2 ? `\n🔥 streak: ${streak}` : "") +
     (me?.pendingUpgrades > 1 ? `\n📶 +${me.pendingUpgrades - 1} level-up na fila` : "") +
+    (flagCarrierId && flagCarrierId === ctx.getSessionId() ? `\n🚩 você carrega a bandeira (2×XP)!` : "") +
     (now < flashUntil ? `\n${flashLabel}` : "") +
     (now < ctx.getAnnounceUntil() ? `\n🔥 farm_event na zona de guerra!` : "");
 
@@ -145,6 +148,7 @@ export function updateHud(now: number) {
       ${p.isBot ? `<span class="tag">BOT</span>` : ""}
       ${fx2.includes("speed_up") ? `<span class="tag">⚡</span>` : ""}
       ${fx2.includes("xp_boost") ? `<span class="tag">2xXP</span>` : ""}
+      ${flagCarrierId === id ? `<span class="tag">🚩</span>` : ""}
       <span class="lvl">lv${p.level}</span>
       <span class="hp">${Math.ceil(p.hp)}/${p.maxHp}</span>
     </div>`;

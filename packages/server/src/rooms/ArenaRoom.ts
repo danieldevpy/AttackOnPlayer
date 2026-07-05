@@ -3,6 +3,7 @@ import { ArenaState, Player, Collectible } from "../state/ArenaState";
 import { MetricsRecorder } from "../metrics/SessionMetrics";
 import { EffectSystem } from "../systems/effects";
 import { ProjectileSystem } from "../systems/projectiles";
+import { FlagSystem } from "../systems/flag";
 interface PersistentProgress {
   forca: number;
   agilidade: number; // T-015: renomeado de `velocidade` (scaffold ADR-012, dev-only — sem migração de dados: memória volátil)
@@ -54,6 +55,9 @@ import {
   UPGRADE_CARD_POOL,
   BOSS_LEVEL_MIN,
   BOSS_LEVEL_MAX,
+  mapCenter,
+  FLAG_XP_MULT,
+  FLAG_PICKUP_DIST,
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
 
@@ -66,6 +70,8 @@ export class ArenaRoom extends Room<ArenaState> {
   private metrics = new MetricsRecorder();
   private effects = new EffectSystem();
   private projectiles = new ProjectileSystem();
+  private flagSystem = new FlagSystem();
+  private flagCenter = { x: 0, z: 0 };
   private collectibleSeq = 0;
   private nextSpawnAt = 0;
   public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
@@ -77,7 +83,7 @@ export class ArenaRoom extends Room<ArenaState> {
   // `p.xp` em unidades INTEIRAS (1 por segundo), então o HUD nunca mostra "1.478/88".
   private xpAccum = new Map<string, number>();
 
-  onCreate(options?: { expectedPlayers?: number }) {
+  onCreate(options?: { expectedPlayers?: number; flagEnabled?: boolean }) {
     this.setState(new ArenaState());
 
     // ADR-007: tamanho decidido AQUI e nunca mais (mínimo 5x o base)
@@ -88,6 +94,12 @@ export class ArenaRoom extends Room<ArenaState> {
     this.state.mapH = size.h;
     this.state.mapSeed = seed;
     this.budget = collectibleBudget(size.w, size.h);
+
+    // T-021: toggle por room (default ON) — nasce no centro do mapa (T-024 vai poder
+    // sobrescrever via formato de mapa versionado; até lá é sempre o centro calculado).
+    this.state.flagEnabled = options?.flagEnabled ?? true;
+    this.flagCenter = mapCenter(size.w, size.h);
+    this.flagSystem.initAt(this.state.flag, this.flagCenter.x, this.flagCenter.z);
 
     activeRooms.set(this.roomId, this);
 
@@ -263,7 +275,13 @@ export class ArenaRoom extends Room<ArenaState> {
       if (p.hp <= 0) {
         this.emitDebug("death", { playerId: id, levelBefore: p.level });
         this.metrics.addDeath(id);
-        
+
+        // T-021: morte do portador derruba a bandeira no local (antes do respawn mover p.x/p.z).
+        if (this.state.flagEnabled && this.state.flag.carrierId === id) {
+          this.flagSystem.drop(this.state.flag, p.x, p.z, now);
+          this.emitDebug("flag_drop", { playerId: id, reason: "death" });
+        }
+
         // SPEC-0005: a morte ZERA o nível (volta ao 1) — antes perdia só uma fração
         // (lossFraction). Risco real ao máximo: morrer apaga toda a progressão do round.
         p.level = 1;
@@ -305,7 +323,11 @@ export class ArenaRoom extends Room<ArenaState> {
       const acc = (this.xpAccum.get(id) ?? 0) + XP_PER_SECOND * dt;
       const whole = Math.floor(acc);
       this.xpAccum.set(id, acc - whole);
-      if (whole > 0) this.grantXp(id, p, whole);
+      if (whole > 0) {
+        // T-021: portador da bandeira ganha o XP passivo em dobro.
+        const flagMult = this.state.flagEnabled && this.state.flag.carrierId === id ? FLAG_XP_MULT : 1;
+        this.grantXp(id, p, whole * flagMult);
+      }
     });
 
     // movimento autoritativo (velocidade = base × multiplicador do EffectSystem)
@@ -317,6 +339,20 @@ export class ArenaRoom extends Room<ArenaState> {
       p.x = moved.x;
       p.z = moved.z;
     });
+
+    // T-021: bandeira — segue o portador (ou conta o abandono), depois checa pickup por distância.
+    if (this.state.flagEnabled) {
+      this.flagSystem.tick(this.state.flag, this.state.players, this.flagCenter, now);
+      if (!this.state.flag.carrierId) {
+        this.state.players.forEach((p, id) => {
+          if (this.state.flag.carrierId || p.hp <= 0) return;
+          if (Math.hypot(p.x - this.state.flag.x, p.z - this.state.flag.z) < FLAG_PICKUP_DIST) {
+            this.flagSystem.pickup(this.state.flag, id);
+            this.emitDebug("flag_pickup", { playerId: id });
+          }
+        });
+      }
+    }
 
     // coleta
     this.state.collectibles.forEach((c, cid) => {

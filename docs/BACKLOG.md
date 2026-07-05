@@ -110,7 +110,7 @@
 - **T-008b** 〔M〕 ✅ (acima, PROMPT-0030) Perfis de bot + boss = **presets de Personality** · depende: T-020
 
 **F2 — Objetivo & leitura (SPEC-0006)**
-- **T-021** 〔M〕 Bandeira "rei do mapa": 2× XP/s, glow global, toggle por room (default ON), derruba na morte, retorna ao centro se abandonada
+- **T-021** 〔M〕 ✅ (PROMPT-0031) Bandeira "rei do mapa": 2× XP/s, glow global, toggle por room (default ON), derruba na morte, retorna ao centro se abandonada
 - **T-022** 〔M〕 VFX nomeados: registry de partículas data-driven derivado de eventos existentes. **Regra de intensidade** (automático = leve; escolha manual = "aura" chamativa) + fila inicial do backlog vivo `docs/mechanics/vfx-juice-backlog.md` (speed_up_trail, buff_cooldown_ring, blood_hit, level_up_auto, upgrade_chosen_aura) — backlog é contínuo, CD alimenta quando quiser
 - **T-023** 〔G〕 HUD dev/prod + reveal-on-hit autoritativo (inimigo = só skin até trocar dano; ~4s renováveis) + **toasts** (`toast_text`: mensagens com efeito personalizado, fila no canto, não invasivas) · depende: T-022
 

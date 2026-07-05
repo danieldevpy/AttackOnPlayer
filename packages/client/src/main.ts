@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
 import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual } from "./visuals";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow } from "./visuals";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex, onCombatEvent } from "./hud";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
@@ -154,6 +154,7 @@ function buildWorld(w: number, h: number, seed: number) {
 const playerVisuals = new Map<string, THREE.Group>();
 const collectibleMeshes = new Map<string, THREE.Mesh>();
 const projectileMeshes = new Map<string, THREE.Mesh>();
+let flagVisual: THREE.Group | undefined; // T-021: bandeira "rei do mapa" — objeto único, não um MapSchema
 
 // ---------- Rede ----------
 const url =
@@ -427,6 +428,7 @@ function syncWorld() {
     vis.rotation.y += shortestAngleDiff(vis.rotation.y, -(p.dir ?? 0)) * 0.25;
     updatePowerVisual(vis, p.level ?? 1, t); // T-018: aro de poder por faixa de nível
     updateShieldVisual(vis, (p.spawnProtectedUntil ?? 0) > Date.now(), t); // SPEC-0005: bolha de invuln
+    updateFlagGlow(vis, st.flagEnabled && st.flag?.carrierId === id, t); // T-021: glow do portador
   });
   playerVisuals.forEach((vis, id) => {
     if (!seenP.has(id)) {
@@ -434,6 +436,24 @@ function syncWorld() {
       playerVisuals.delete(id);
     }
   });
+
+  // T-021: bandeira — objeto único (não um MapSchema); toggle por room esconde/mostra.
+  if (st.flagEnabled && st.flag) {
+    if (!flagVisual) {
+      flagVisual = new THREE.Group();
+      propParts("bandeira").forEach((part) => {
+        const mesh = new THREE.Mesh(part.geometry, part.material);
+        mesh.position.copy(part.offset);
+        flagVisual!.add(mesh);
+      });
+      scene.add(flagVisual);
+    }
+    flagVisual.position.x += (st.flag.x - flagVisual.position.x) * 0.25;
+    flagVisual.position.z += (st.flag.z - flagVisual.position.z) * 0.25;
+  } else if (flagVisual) {
+    scene.remove(flagVisual);
+    flagVisual = undefined;
+  }
 
   const seenC = new Set<string>();
   st.collectibles?.forEach((c: any, id: string) => {

@@ -31,6 +31,12 @@ export class Player extends Schema {
   lastFireAt = 0; // T-005
 }
 
+export class Flag extends Schema {
+  @type("number") x = 0;
+  @type("number") z = 0;
+  @type("string") carrierId = ""; // "" = ninguém carrega (T-021)
+}
+
 export class Collectible extends Schema {
   @type("number") x = 0;
   @type("number") z = 0;
@@ -62,4 +68,6 @@ export class ArenaState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: Collectible }) collectibles = new MapSchema<Collectible>();
   @type({ map: Projectile }) projectiles = new MapSchema<Projectile>();
+  @type("boolean") flagEnabled = true; // T-021: toggle por room (default ON)
+  @type(Flag) flag = new Flag();
 }

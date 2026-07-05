@@ -8,15 +8,17 @@ function clamp01(x: number): number {
 // por essa margem — evita oscilação de decisão a cada tick.
 const SWITCH_MARGIN = 0.08;
 
+/** T-021: sentinela de targetId da bandeira — não é um id de entidade real (só 1 por room). */
+export const FLAG_TARGET_ID = "flag";
+
 /**
  * Camada 3 — Decisão (Utility AI). Função PURA: snapshot → escolha (testável isolada).
  * Cada ação candidata recebe um escore = produto de considerações normalizadas 0..1.
  * `nivel_alvo`/`vantagem_build` do doc são combinados aqui numa única `advantageConf`
  * (simplificação de V1; calibrar com telemetria real na T-026 antes de separar de novo).
- * `disputar_bandeira`/`manter_posição` ficam de fora até a bandeira existir (T-021).
  */
 export function decide(perception: Perception, personality: Personality, prevAction: ActionKind | null): DecisionResult {
-  const { self, enemies, collectibles } = perception;
+  const { self, enemies, collectibles, flag } = perception;
   const hpFrac = self.maxHp > 0 ? clamp01(self.hp / self.maxHp) : 0;
 
   const nearestFightable = enemies.find((e) => e.zone !== "safe");
@@ -48,11 +50,21 @@ export function decide(perception: Perception, personality: Personality, prevAct
 
   const wanderScore = personality.wander * 0.2; // piso sempre disponível (fallback nunca-vazio)
 
+  // T-021 (bot-architecture.md §3): score(disputar_bandeira) = W_objetivo × conf(dist) × conf(risco_zona).
+  // Carregando a própria bandeira não há o que "disputar" — as outras ações cuidam do resto.
+  let flagScore = 0;
+  if (flag && !flag.carriedBySelf) {
+    const distConf = clamp01(1 - flag.dist / (personality.engageRange * 1.6));
+    const riskConf = flag.zone === "war" ? 0.7 : flag.zone === "safe" ? 1 : 0.85;
+    flagScore = personality.objective * distConf * riskConf;
+  }
+
   const scores: Record<ActionKind, number> = {
     engage: engageScore,
     flee: fleeScore,
     collect: collectScore,
     wander: wanderScore,
+    flag: flagScore,
   };
 
   let bestAction: ActionKind = "wander";
@@ -66,6 +78,13 @@ export function decide(perception: Perception, personality: Personality, prevAct
     }
   }
 
-  const targetId = bestAction === "engage" ? engageTargetId : bestAction === "collect" ? collectTargetId : undefined;
+  const targetId =
+    bestAction === "engage"
+      ? engageTargetId
+      : bestAction === "collect"
+      ? collectTargetId
+      : bestAction === "flag"
+      ? FLAG_TARGET_ID
+      : undefined;
   return { action: bestAction, targetId, scores };
 }

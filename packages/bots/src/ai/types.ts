@@ -11,14 +11,13 @@ export type Zone = "safe" | "war" | "field";
 /**
  * Vetor de personalidade (bot-architecture.md §3): pesos que multiplicam os escores da
  * decisão + knobs do humanizador. Comportamento novo = novos valores, não novo código.
- * `objective` (disputa de bandeira) fica de fora até a T-021 existir no jogo — sem dado,
- * sem consideração (Gameplay First: não se decide sobre algo que ainda não existe).
  */
 export interface Personality {
   aggression: number; // W_agressao
   caution: number; // W_cautela
   greed: number; // W_ganancia (coleta)
   wander: number; // piso de perambulação
+  objective: number; // W_objetivo (T-021: disputa da bandeira)
   engageRange: number; // raio de detecção/caça
   fleeHpFrac: number; // fração de HP abaixo da qual a fuga pesa mais
   aimErrorRad: number; // erro sistemático inicial (decai enquanto rastreia o mesmo alvo)
@@ -46,15 +45,25 @@ export interface PerceivedCollectible {
   dist: number;
 }
 
+/** T-021: bandeira "rei do mapa" — visível o mapa inteiro (não filtrada por raio). */
+export interface PerceivedFlag {
+  x: number;
+  z: number;
+  dist: number;
+  zone: Zone;
+  carriedBySelf: boolean;
+}
+
 /** Snapshot filtrado (camada 1) — nunca o estado inteiro do servidor. */
 export interface Perception {
   self: { x: number; z: number; hp: number; maxHp: number; level: number; zone: Zone };
   enemies: PerceivedEnemy[]; // ordenados por distância (com ruído)
   collectibles: PerceivedCollectible[]; // ordenados por distância
   nearestBorderDist: number;
+  flag?: PerceivedFlag; // ausente quando a room desliga o toggle (T-021)
 }
 
-export type ActionKind = "engage" | "flee" | "collect" | "wander";
+export type ActionKind = "engage" | "flee" | "collect" | "wander" | "flag";
 
 export interface DecisionResult {
   action: ActionKind;

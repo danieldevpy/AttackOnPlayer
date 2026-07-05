@@ -24,10 +24,18 @@ export interface MapBounds {
   h: number;
 }
 
+/** T-021: bandeira crua — posição atual (segue o portador) + se o próprio bot já a carrega. */
+export interface RawFlag {
+  x: number;
+  z: number;
+  carriedBySelf: boolean;
+}
+
 /**
  * Camada 1 (bot-architecture.md): snapshot FILTRADO do que o bot "veria" — inimigos vivos
  * dentro do raio de percepção (com ruído leve de distância), coletáveis e a distância da
  * borda mais próxima. Anti-trapaça de design: nunca recebe o estado inteiro do servidor.
+ * A bandeira (quando a room liga o toggle) é objetivo de mapa — visível inteira, sem raio.
  */
 export function buildPerception(
   map: MapBounds,
@@ -36,7 +44,8 @@ export function buildPerception(
   collectibles: RawEntity[],
   perceptionRadius: number,
   zoneOf: (x: number, z: number) => Zone,
-  rng: () => number = Math.random
+  rng: () => number = Math.random,
+  flag?: RawFlag
 ): Perception {
   const selfZone = zoneOf(self.x, self.z);
 
@@ -64,10 +73,21 @@ export function buildPerception(
 
   const nearestBorderDist = Math.min(self.x, map.w - self.x, self.z, map.h - self.z);
 
+  const perceivedFlag = flag
+    ? {
+        x: flag.x,
+        z: flag.z,
+        dist: Math.hypot(flag.x - self.x, flag.z - self.z),
+        zone: zoneOf(flag.x, flag.z),
+        carriedBySelf: flag.carriedBySelf,
+      }
+    : undefined;
+
   return {
     self: { x: self.x, z: self.z, hp: self.hp, maxHp: self.maxHp, level: self.level, zone: selfZone },
     enemies: perceivedEnemies,
     collectibles: perceivedCollectibles,
     nearestBorderDist,
+    flag: perceivedFlag,
   };
 }

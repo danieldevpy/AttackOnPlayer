@@ -122,6 +122,24 @@ export function updateShieldVisual(group: THREE.Group, protectedNow: boolean, t:
   if (protectedNow) mat.opacity = 0.22 + Math.sin(t * 6) * 0.08;
 }
 
+/**
+ * T-021 (SPEC-0006): glow do PORTADOR da bandeira — precisa ser lido do mapa inteiro
+ * (leitura tática "quem está com a bandeira"), não só de perto; por isso é uma luz de
+ * verdade (THREE.PointLight), não só material emissive/opacidade como os outros aros.
+ */
+export function updateFlagGlow(group: THREE.Group, carrying: boolean, t: number) {
+  let glow = group.userData.flagGlow as THREE.PointLight | undefined;
+  if (!glow) {
+    if (!carrying) return; // não cria nada até precisar
+    glow = new THREE.PointLight(0xffd54f, 0, 16, 1.5);
+    glow.position.y = 1.4;
+    group.add(glow);
+    group.userData.flagGlow = glow;
+  }
+  glow.visible = carrying;
+  if (carrying) glow.intensity = 2.4 + Math.sin(t * 4) * 0.6;
+}
+
 export function createCollectibleVisual(kind: string): THREE.Mesh {
   switch (kind) {
     case "speed_up":

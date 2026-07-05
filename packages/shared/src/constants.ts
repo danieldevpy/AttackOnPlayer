@@ -172,5 +172,13 @@ export const SPEED_BOOST_MULT = 1.5;
 export const SPEED_BOOST_MS = 8000;
 export const SPEED_MAX_MULT = 2; // teto anti-snowball
 
+// Bandeira "rei do mapa" (T-021, SPEC-0006): objetivo de mapa — default ON por room.
+// Nasce no centro (T-024/SPEC-0007 vai deixá-la ler a posição do formato de mapa versionado;
+// até lá o centro calculado em runtime é o default). Portador ganha XP passivo em dobro e
+// fica visível globalmente (glow); morre e derruba no local; sem dono por tempo demais, volta.
+export const FLAG_XP_MULT = 2;
+export const FLAG_PICKUP_DIST = COLLECT_DIST;
+export const FLAG_ABANDON_RETURN_MS = 15000;
+
 export const ROOM_NAME = "arena";
 export const SERVER_PORT = 2567;

@@ -30,9 +30,10 @@ coleta distante (`bfsPath`, inalterado); o anti-stuck (bugfix pós-teste manual,
 **rede de segurança raramente acionada** — o context steering evita a maior parte dos casos
 de esbarrão em borda/prop antes de precisar dele.
 
-**Ações candidatas nesta task:** `engage | flee | collect | wander`. `disputar_bandeira` e
-`manter_posição` (previstos no doc teórico) ficam de fora até a bandeira existir no jogo
-(T-021) — sem dado, sem consideração de utility (Gameplay First).
+**Ações candidatas:** `engage | flee | collect | wander | flag`. A ação `flag` (T-021,
+`disputar_bandeira` do doc teórico) usa perseguição direta — como `engage`/`flee` — porque o
+alvo se move (segue o portador); `manter_posição` continua fora, ainda sem dado que a
+justifique (Gameplay First).
 
 ## Perfis nomeados, política de cards e boss (T-008b, SPEC-0004 addendum)
 `packages/bots/src/ai/personality.ts` define `BOT_PROFILES` — cada perfil combina um vetor

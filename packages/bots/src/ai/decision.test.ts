@@ -7,6 +7,7 @@ const BASE_PERSONALITY: Personality = {
   caution: 0.5,
   greed: 0.5,
   wander: 0.4,
+  objective: 0.5,
   engageRange: 20,
   fleeHpFrac: 0.35,
   aimErrorRad: 0.1,
@@ -79,5 +80,26 @@ describe("decide (utility AI, T-020)", () => {
     const withInertia = decide(p, BASE_PERSONALITY, "engage");
     expect(baseline.action).toBe("collect"); // sem histórico, o escore bruto decide
     expect(withInertia.action).toBe("engage"); // com inércia, a ação anterior resiste a uma vantagem pequena
+  });
+
+  it("T-021: sem nada mais por perto e objective alto, disputa a bandeira", () => {
+    const objective: Personality = { ...BASE_PERSONALITY, objective: 0.9, wander: 0.1 };
+    const p = perception({ flag: { x: 2, z: 0, dist: 2, zone: "field", carriedBySelf: false } });
+    const result = decide(p, objective, null);
+    expect(result.action).toBe("flag");
+    expect(result.targetId).toBe("flag");
+    expect(result.scores.flag).toBeGreaterThan(0);
+  });
+
+  it("T-021: já carregando a própria bandeira não gera escore de disputa", () => {
+    const objective: Personality = { ...BASE_PERSONALITY, objective: 0.9, wander: 0.1 };
+    const p = perception({ flag: { x: 0, z: 0, dist: 0, zone: "field", carriedBySelf: true } });
+    const result = decide(p, objective, null);
+    expect(result.scores.flag).toBe(0);
+  });
+
+  it("T-021: sem bandeira na percepção (toggle off), escore de disputa é zero", () => {
+    const result = decide(perception(), BASE_PERSONALITY, null);
+    expect(result.scores.flag).toBe(0);
   });
 });
