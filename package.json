@@ -6,7 +6,9 @@
     "dev:server": "npm run dev -w @aop/server",
     "dev:client": "npm run dev -w @aop/client",
     "bots": "npm run start -w @aop/bots --",
-    "test": "npm run test -w @aop/shared"
+    "test": "npm run test -w @aop/shared",
+    "aci": "npm run aci -w @aop/aci --",
+    "aci:test": "npm run test -w @aop/aci"
   },
   "engines": { "node": ">=20" }
 }
