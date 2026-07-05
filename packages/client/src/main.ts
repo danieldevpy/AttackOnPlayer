@@ -512,7 +512,7 @@ function syncWorld() {
     // T-023: reveal-on-hit — inimigo é só skin até trocar dano (revealedUntil autoritativo).
     if (id !== mySessionId) {
       const revealed = (p.revealedUntil ?? 0) > Date.now();
-      updateNameplate(vis, revealed, p.name, p.hp, p.maxHp);
+      updateNameplate(vis, revealed, p.name, p.level ?? 1, p.hp, p.maxHp);
     }
 
     // T-022: anel de buff esvaziando — 1 por vez (o mais recente aplicado).

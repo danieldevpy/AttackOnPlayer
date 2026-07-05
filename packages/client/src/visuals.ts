@@ -186,7 +186,14 @@ interface NameplateState {
   sprite: THREE.Sprite;
   lastLabel: string;
 }
-export function updateNameplate(group: THREE.Group, revealed: boolean, name: string, hp: number, maxHp: number) {
+export function updateNameplate(
+  group: THREE.Group,
+  revealed: boolean,
+  name: string,
+  level: number,
+  hp: number,
+  maxHp: number
+) {
   let np = group.userData.nameplate as NameplateState | undefined;
   if (!revealed) {
     if (np) np.sprite.visible = false;
@@ -207,7 +214,7 @@ export function updateNameplate(group: THREE.Group, revealed: boolean, name: str
   }
   np.sprite.visible = true;
   const hpClamped = Math.max(0, Math.ceil(hp));
-  const label = `${name}|${hpClamped}/${maxHp}`;
+  const label = `${name}|${level}|${hpClamped}/${maxHp}`;
   if (label === np.lastLabel) return;
   np.lastLabel = label;
   const tex = np.sprite.material.map as THREE.CanvasTexture;
@@ -219,8 +226,9 @@ export function updateNameplate(group: THREE.Group, revealed: boolean, name: str
   g.fillStyle = "#fff";
   g.strokeStyle = "#000";
   g.lineWidth = 3;
-  g.strokeText(name, 80, 16);
-  g.fillText(name, 80, 16);
+  const text = `Lv${level} ${name}`;
+  g.strokeText(text, 80, 16);
+  g.fillText(text, 80, 16);
   // barra de HP: fundo escuro + preenchimento colorido pela fração de vida
   const frac = maxHp > 0 ? hpClamped / maxHp : 0;
   g.fillStyle = "#000a";
