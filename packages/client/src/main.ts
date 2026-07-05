@@ -525,6 +525,7 @@ initHud({
   getSessionId: () => mySessionId,
   getPing: () => ping,
   getAnnounceUntil: () => announceUntil,
+  getProfileId: () => profileManager.id,
 });
 
 // ---------- Loop ----------

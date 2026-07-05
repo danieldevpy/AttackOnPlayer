@@ -1,10 +1,11 @@
 import type { ControlProfile, Intent } from "./types";
 
 /**
- * Perfil `keyboard` (ADR-015/SPEC-0006, T-019b): para notebook sem mouse. WASD move
- * (strafe, independe da mira); setas esquerda/direita giram a mira a uma velocidade
- * angular fixa. Sem nenhuma seta pressionada ainda nesta sessão, não há mira — o
- * facing cai no fallback do servidor (direção do movimento), como prevê o ADR-015.
+ * Perfil `keyboard` (ADR-015/SPEC-0006, T-019b): para notebook sem mouse. Controle
+ * "tanque": W/S avançam/recuam na direção da rotação do jogador, A/D fazem strafe
+ * lateral relativo a ela; setas esquerda/direita giram a rotação a uma velocidade
+ * angular fixa. A rotação é o estado central do perfil, então a mira é enviada em
+ * todo tick (sem ela o facing por movimento do servidor viraria o boneco ao recuar).
  */
 export class KeyboardControlProfile implements ControlProfile {
   readonly id = "keyboard";
@@ -13,8 +14,7 @@ export class KeyboardControlProfile implements ControlProfile {
 
   private keys = new Set<string>();
   private firing = false;
-  private aimAngle = 0;
-  private hasAim = false;
+  private aimAngle = -Math.PI / 2; // nasce olhando para "cima" da tela (−z)
   private lastPollAt = performance.now();
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -48,25 +48,17 @@ export class KeyboardControlProfile implements ControlProfile {
     const dt = Math.min(0.1, (now - this.lastPollAt) / 1000);
     this.lastPollAt = now;
 
-    const moveX = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
-    const moveZ = (this.keys.has("s") ? 1 : 0) - (this.keys.has("w") ? 1 : 0);
+    if (this.keys.has("arrowleft")) this.aimAngle -= KeyboardControlProfile.ROTATE_SPEED * dt;
+    if (this.keys.has("arrowright")) this.aimAngle += KeyboardControlProfile.ROTATE_SPEED * dt;
 
-    if (this.keys.has("arrowleft")) {
-      this.aimAngle -= KeyboardControlProfile.ROTATE_SPEED * dt;
-      this.hasAim = true;
-    }
-    if (this.keys.has("arrowright")) {
-      this.aimAngle += KeyboardControlProfile.ROTATE_SPEED * dt;
-      this.hasAim = true;
-    }
+    const forward = (this.keys.has("w") ? 1 : 0) - (this.keys.has("s") ? 1 : 0);
+    const strafe = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
 
-    let aimX: number | undefined;
-    let aimZ: number | undefined;
-    if (this.hasAim) {
-      aimX = Math.cos(this.aimAngle);
-      aimZ = Math.sin(this.aimAngle);
-    }
+    const cos = Math.cos(this.aimAngle);
+    const sin = Math.sin(this.aimAngle);
+    const moveX = forward * cos - strafe * sin;
+    const moveZ = forward * sin + strafe * cos;
 
-    return { moveX, moveZ, aimX, aimZ, fire: this.firing };
+    return { moveX, moveZ, aimX: cos, aimZ: sin, fire: this.firing };
   }
 }

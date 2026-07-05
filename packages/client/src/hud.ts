@@ -9,7 +9,15 @@ export interface HudCtx {
   getSessionId(): string;
   getPing(): number;
   getAnnounceUntil(): number;
+  getProfileId(): string;
 }
+
+// Dica de controles por perfil ativo (ADR-015/T-019b) — o HUD só reflete o perfil.
+const CONTROL_HINTS: Record<string, string> = {
+  mouse: "WASD=mover • mouse=mira • espaço/click=atirar",
+  keyboard: "W/S=avançar/recuar • A/D=strafe • setas=girar • espaço=atirar",
+  touch: "alavanca esq=mover • alavanca dir=mirar/atirar",
+};
 
 interface UpgradeOffer {
   level: number;
@@ -129,7 +137,7 @@ export function updateHud(now: number) {
     (fx.includes("xp_boost") ? `  2xXP` : "") +
     `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}  cad ${me?.attackSpeed?.toFixed(2) ?? "-"}  alc ${me?.reach?.toFixed(2) ?? "-"}` +
     (me?.skills?.length ? `\n★ ${Array.from(me.skills).join(" • ")}` : "") +
-    `\ncoins: ${me?.coins ?? 0}  (R=reroll • WASD=mover • mouse=mira • espaço/click=atirar)` +
+    `\ncoins: ${me?.coins ?? 0}  (R=reroll • ${CONTROL_HINTS[ctx.getProfileId()] ?? CONTROL_HINTS.mouse})` +
     (streak >= 2 ? `\n🔥 streak: ${streak}` : "") +
     (me?.pendingUpgrades > 1 ? `\n📶 +${me.pendingUpgrades - 1} level-up na fila` : "") +
     (flagCarrierId && flagCarrierId === ctx.getSessionId() ? `\n🚩 você carrega a bandeira (2×XP)!` : "") +
