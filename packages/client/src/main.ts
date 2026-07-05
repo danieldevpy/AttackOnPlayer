@@ -3,8 +3,8 @@ import { Client, Room } from "colyseus.js";
 import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual } from "./visuals";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex, onCombatEvent } from "./hud";
-import { MouseControlProfile } from "./input/mouseProfile";
-import type { ControlProfile, Intent } from "./input/types";
+import { ProfileManager, ProfileId } from "./input/manager";
+import type { Intent } from "./input/types";
 
 const hud = document.getElementById("hud")!;
 const debugOverlay = document.getElementById("debug-overlay")!;
@@ -294,7 +294,7 @@ function updateDebugState() {
     rows.push(`<tr><td>sessão</td><td>${mySessionId}</td></tr>`);
     rows.push(`<tr><td>pos</td><td>x:${me.x?.toFixed(2)} z:${me.z?.toFixed(2)}</td></tr>`);
     rows.push(`<tr><td>facing</td><td>${((me.dir ?? 0) * 180 / Math.PI).toFixed(0)}°</td></tr>`);
-    rows.push(`<tr><td>gatilho</td><td>${lastIntent.fire ? `ativo (${activeProfile.id})` : "inativo"}</td></tr>`);
+    rows.push(`<tr><td>gatilho</td><td>${lastIntent.fire ? `ativo (${profileManager.id})` : "inativo"}</td></tr>`);
     rows.push(`<tr><td>hp</td><td>${Math.ceil(me.hp)}/${me.maxHp} (vit:${me.vitality?.toFixed(2)})</td></tr>`);
     const shieldMs = Math.max(0, (me.spawnProtectedUntil ?? 0) - Date.now());
     rows.push(`<tr><td>escudo</td><td>${shieldMs > 0 ? `${(shieldMs / 1000).toFixed(1)}s` : "—"}</td></tr>`);
@@ -322,23 +322,37 @@ function updateDebugState() {
   debugStateEl.innerHTML = rows.join("");
 }
 
-// ---------- Input por perfil de controle (ADR-015 / T-019) ----------
+// ---------- Input por perfil de controle (ADR-015 / T-019 + T-019b) ----------
 // Todo perfil produz a MESMA intenção {move, aim, fire}; o servidor não muda (já aceita
 // aimX/aimZ opcional desde SPEC-0003). Mira/rotação é atributo do PERFIL, não uma regra
-// global — perfil novo (T-019b: keyboard/touch) é só uma classe nova, zero mudança de rede.
+// global — perfil novo é só uma classe nova em input/, zero mudança de rede.
 let announceUntil = 0;
 const crosshairEl = document.getElementById("crosshair")!;
+const profileButtons = document.querySelectorAll<HTMLButtonElement>("#profile-selector button");
 
-const activeProfile: ControlProfile = new MouseControlProfile({
-  camera,
-  crosshairEl,
-  getPlayerPos: () => {
-    const st: any = room?.state;
-    const me = st?.players?.get?.(mySessionId);
-    return me ? { x: me.x, z: me.z } : null;
+const profileManager = new ProfileManager({
+  mouse: {
+    camera,
+    crosshairEl,
+    getPlayerPos: () => {
+      const st: any = room?.state;
+      const me = st?.players?.get?.(mySessionId);
+      return me ? { x: me.x, z: me.z } : null;
+    },
+  },
+  touch: {
+    moveBaseEl: document.getElementById("touch-move-base")!,
+    moveKnobEl: document.getElementById("touch-move-knob")!,
+    aimBaseEl: document.getElementById("touch-aim-base")!,
+    aimKnobEl: document.getElementById("touch-aim-knob")!,
+  },
+  onChange: (id) => {
+    profileButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.profile === id));
   },
 });
-activeProfile.attach();
+profileButtons.forEach((btn) => {
+  btn.addEventListener("click", () => profileManager.select(btn.dataset.profile as ProfileId));
+});
 
 // Ações fora da intenção de jogo (debug, cards, reroll) continuam globais — não são
 // atributo de perfil de controle.
@@ -366,7 +380,7 @@ addEventListener("keydown", (e) => {
 let lastIntent: Intent = { moveX: 0, moveZ: 0, fire: false };
 
 function sendInput() {
-  const intent = activeProfile.poll();
+  const intent = profileManager.poll();
   lastIntent = intent;
   const payload: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean } = {
     x: intent.moveX,

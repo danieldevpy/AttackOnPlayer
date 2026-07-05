@@ -1,5 +1,10 @@
 # Devlog
 
+## 2026-07-05 — Sessão 10 (cont.): T-019b (perfis keyboard/touch + seletor)
+- **T-019b (SPEC-0006/ADR-015):** perfil `keyboard` (`packages/client/src/input/keyboardProfile.ts` — WASD move + setas giram a mira + espaço dispara, fallback de facing-por-movimento até a 1ª rotação) e perfil `touch` (`touchProfile.ts` — twin-stick virtual por Pointer Events, metade esquerda move/metade direita mira+atira). `ProfileManager` (`manager.ts`) faz a auto-detecção (`matchMedia("pointer:coarse)"`+touch) e a troca manual persistida em `localStorage`; UI `#profile-selector` (3 botões sempre visíveis) + sticks visuais que só aparecem no perfil touch.
+- **Verificação:** gates automáticos verdes; os 3 perfis (mouse/keyboard/touch) foram exercitados isolando as classes reais via `preview_eval` (import dinâmico + eventos sintéticos de teclado/pointer) — sem GPU no preview headless para screenshot, mesma limitação da T-019. Detalhes em `docs/prompts/PROMPT-0028.md`.
+- Pendente: smoke manual em dispositivo touch real (bots não cobrem) + veredito do CD nos 3 perfis. Próxima: T-020 (arquitetura de IA dos bots).
+
 ## 2026-07-05 — Sessão 10: gates + merge evolução→main, T-019 (perfis de controle + mouse)
 - Início da execução agêntica sequencial da V1 (PROPOSAL-0002), sem intervenção do CD a cada task. Antes de tocar código: rodados todos os gates herdados (shared 13/13, server 19/19, tsc ×3, guarda `.js` órfão, smoke de bots) — verdes — e feito o **merge fast-forward `evolução` → `main`** recomendado pela sessão anterior.
 - **T-019 (SPEC-0006/ADR-015):** criada a camada de perfis de controle no cliente (`packages/client/src/input/types.ts` — contrato `Intent`/`ControlProfile`) e o perfil `mouse` (`mouseProfile.ts`): WASD strafe + mira por raycast do cursor no chão (vetor `aim` enviado como `aimX/aimZ`, campo que o servidor já aceitava desde SPEC-0003/bots — zero mudança de servidor) + gatilho por clique/espaço. `main.ts` passou a delegar input ao perfil ativo; crosshair 360° (`#crosshair`) substitui o cursor do SO; câmera ganha leve offset na direção da mira sem girar.

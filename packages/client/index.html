@@ -19,6 +19,31 @@
       }
       #crosshair::before { left: 50%; top: 2px; bottom: 2px; width: 2px; transform: translateX(-50%); }
       #crosshair::after { top: 50%; left: 2px; right: 2px; height: 2px; transform: translateY(-50%); }
+      /* Perfil touch (ADR-015/T-019b): twin-stick virtual — some quando o perfil não é touch */
+      body.touch-profile { touch-action: none; -webkit-user-select: none; user-select: none; }
+      .touch-stick-base {
+        position: fixed; bottom: 28px; width: 110px; height: 110px; border-radius: 50%;
+        background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.25);
+        z-index: 16; display: none;
+      }
+      body.touch-profile .touch-stick-base { display: block; }
+      #touch-move-base { left: 28px; }
+      #touch-aim-base { right: 28px; }
+      .touch-stick-knob {
+        position: absolute; left: 50%; top: 50%; width: 52px; height: 52px;
+        margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(255,255,255,.35);
+        pointer-events: none;
+      }
+      /* Seletor de perfil (ADR-015): auto-detecção decide o padrão; isto é a troca manual */
+      #profile-selector {
+        position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 17;
+        display: flex; gap: 4px; background: rgba(12,12,16,.6); border-radius: 8px; padding: 4px;
+      }
+      #profile-selector button {
+        font-size: 16px; line-height: 1; padding: 5px 9px; border-radius: 6px;
+        border: 1px solid transparent; background: transparent; color: #ccc; cursor: pointer;
+      }
+      #profile-selector button.active { background: rgba(255,213,79,.18); border-color: #ffd54f66; color: #ffd54f; }
       #hud {
         position: fixed; top: 8px; left: 8px; z-index: 10;
         font-family: monospace; font-size: 14px; color: #0f0;
@@ -124,6 +149,13 @@
   </head>
   <body>
     <div id="crosshair"></div>
+    <div id="profile-selector">
+      <button data-profile="mouse" title="Mouse">🖱️</button>
+      <button data-profile="keyboard" title="Teclado">⌨️</button>
+      <button data-profile="touch" title="Touch">📱</button>
+    </div>
+    <div id="touch-move-base" class="touch-stick-base"><div id="touch-move-knob" class="touch-stick-knob"></div></div>
+    <div id="touch-aim-base" class="touch-stick-base"><div id="touch-aim-knob" class="touch-stick-knob"></div></div>
     <div id="hud">conectando...</div>
     <div id="roster"></div>
     <div id="upgrade-cards"></div>
