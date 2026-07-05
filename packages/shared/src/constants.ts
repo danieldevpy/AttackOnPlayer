@@ -16,7 +16,14 @@ export const PLAYER_BASE_HP = 100;
 export const MAX_PLAYERS = 16;
 
 // Coletáveis (ADR-006: nascem longe de jogadores)
-export type CollectibleKind = "xp_orb" | "speed_up" | "coin_buff" | "farm_event" | "box";
+export type CollectibleKind =
+  | "xp_orb"
+  | "speed_up"
+  | "coin_buff"
+  | "farm_event"
+  | "box"
+  | "hp_orb" // SPEC-0010: orbe de vida escasso
+  | "shield_temp"; // SPEC-0010: escudo temporário
 export const COLLECT_DIST = 0.6;
 export const SPAWN_MIN_PLAYER_DIST = 4; // tiles (Manhattan)
 export const RESPAWN_DELAY_MIN_MS = 2000;
@@ -163,6 +170,39 @@ export function lossFraction(level: number): number {
 // (removida do mapa): ao nascer/renascer o player fica imune por este tempo. A imunidade
 // cai no instante em que ele dispara — não dá para "camperar" atirando invulnerável.
 export const SPAWN_PROTECTION_MS = 3000;
+
+// SPEC-0010 (ADR-017): Sobrevivência por habilidade — recompensa de kill contextual +
+// recursos de vida escassos. Todos os números aqui são calibráveis (sensação, não lógica):
+// mover uma constante move o comportamento. Referência de balance: TTK 5 tiros × 20 dano
+// em 100 HP (T-014). Anti-snowball (pilar 4): cura só onde há risco, e da vida FALTANTE.
+
+// --- Recompensa de kill contextual (T-033) ---
+export const COMBAT_THREAT_RADIUS = 6; // unidades: inimigos vivos neste raio do matador = "a briga"
+export const KILL_HEAL_MISSING_FRAC_BASE = 0.25; // 1 ameaça por perto: cura 25% da vida FALTANTE
+export const KILL_HEAL_MISSING_FRAC_PER_EXTRA = 0.1; // +10% por ameaça adicional
+export const KILL_HEAL_MISSING_FRAC_MAX = 0.5; // teto anti-snowball: 50% da vida faltante
+export const KILL_DUEL_XP_BONUS_PER_LEVEL = 8; // duelo (0 ameaças): XP extra por nível da vítima
+
+/** Fração da vida FALTANTE curada ao matar em briga, dado o nº de inimigos por perto (≥1). */
+export function killHealFraction(threats: number): number {
+  if (threats < 1) return 0;
+  return Math.min(KILL_HEAL_MISSING_FRAC_MAX, KILL_HEAL_MISSING_FRAC_BASE + (threats - 1) * KILL_HEAL_MISSING_FRAC_PER_EXTRA);
+}
+
+// --- Orbe de vida escasso (T-034) ---
+export const HP_ORB_AMOUNT = 5; // +5 HP ao coletar (clampa em maxHp)
+export const HP_ORB_MAX = 3; // teto simultâneo no mapa
+export const HP_ORB_MIN_PLAYER_DIST = 7; // tiles Manhattan de qualquer player (mais rígido que o comum)
+export const HP_ORB_MIN_SELF_DIST = 9; // tiles de outro hp_orb — nunca "chove vida" num canto
+export const HP_ORB_RESPAWN_MS = 12000; // reposição lenta
+
+// --- Escudo temporário (T-035) ---
+export const SHIELD_TEMP_MAX = 2; // no máximo 2 no mapa ao mesmo tempo
+export const SHIELD_TEMP_MIN_PLAYER_DIST = 7;
+export const SHIELD_TEMP_MIN_SELF_DIST = 9;
+export const SHIELD_TEMP_RESPAWN_MS = 15000;
+export const SHIELD_TEMP_MS = 3000; // dura 3s ao coletar
+export const SHIELD_TEMP_DAMAGE_MULT = 0.5; // recebe 50% do dano enquanto ativo (reduz, não bloqueia)
 
 // T-023 (SPEC-0006): reveal-on-hit autoritativo — inimigo é só skin até trocar dano com ele
 // (vítima OU atirador); então nameplate+HP aparecem por este tempo, renovado a cada novo hit.

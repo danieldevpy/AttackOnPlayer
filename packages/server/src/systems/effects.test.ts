@@ -68,6 +68,21 @@ describe("EffectSystem — recompute com 5 atributos (T-015)", () => {
     }
   });
 
+  it("escudo temporário (damage_reduction) ativa/expira o damageTakenMult (SPEC-0010/T-035)", () => {
+    const effects = new EffectSystem();
+    const state = new ArenaState();
+    const p = new Player();
+    state.players.set("A", p);
+    expect(p.damageTakenMult).toBe(1); // default = sem redução
+
+    effects.apply("A", p, "damage_reduction", 0);
+    expect(p.damageTakenMult).toBe(0.5); // SHIELD_TEMP_DAMAGE_MULT
+
+    // passa da duração (SHIELD_TEMP_MS=3000) → expira sozinho no tick e volta a 1
+    effects.tick(state.players, 3001);
+    expect(p.damageTakenMult).toBe(1);
+  });
+
   it("resetAttrToLevel volta ao preset equilibrado — cadência/alcance zeram (morte apaga build)", () => {
     const effects = new EffectSystem();
     const p = new Player();

@@ -178,7 +178,10 @@ export class ProjectileSystem {
           // HIT!
           const owner = state.players.get(proj.ownerId);
           const strength = owner ? owner.strength : 1;
-          const damage = launcher.damage * strength * proj.damageMult; // T-017: fator das skills
+          // T-017: fator das skills · SPEC-0010 (T-035): escudo temporário do alvo reduz o
+          // dano recebido (damageTakenMult < 1). Ordem: invulnerabilidade de nascimento já
+          // bloqueou acima (dano 0); aqui o escudo só ATENUA o que passa — o hit acontece.
+          const damage = launcher.damage * strength * proj.damageMult * target.damageTakenMult;
 
           target.hp -= damage;
           proj.hitIds.push(targetId);

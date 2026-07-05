@@ -26,7 +26,9 @@ export const VFX_DEFS: Record<string, VfxDef> = {
   blood_hit: { color: 0xd32f2f, count: 8, life: 280, speed: 1.6, intensity: "leve" },
   death_burst: { color: 0xff7043, count: 22, life: 450, speed: 2.6, intensity: "leve" },
   shield_pop: { color: 0x82b1ff, count: 14, life: 320, speed: 2.2, intensity: "leve" },
+  shield_gain: { color: 0x42a5f5, count: 16, life: 380, speed: 1.8, intensity: "leve" }, // pegar escudo temp (SPEC-0010)
   pickup_glint: { color: 0xffd54f, count: 6, life: 260, speed: 1.0, intensity: "leve" },
+  heal_pop: { color: 0x66ff8a, count: 12, life: 460, speed: 1.3, intensity: "leve" }, // cura: kill_heal / hp_orb (SPEC-0010)
   level_up_auto: { color: 0xffd54f, count: 10, life: 500, speed: 0.9, intensity: "leve" },
   upgrade_chosen_aura: { color: 0xffab00, count: 34, life: 650, speed: 2.2, intensity: "aura" },
   speed_up_trail: { color: 0x26c6da, count: 1, life: 300, speed: 0.2, intensity: "leve" },

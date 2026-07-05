@@ -132,6 +132,58 @@ describe("ProjectileSystem — invulnerabilidade de nascimento (SPEC-0005)", () 
   });
 });
 
+describe("ProjectileSystem — escudo temporário reduz dano (SPEC-0010/T-035)", () => {
+  it("com damageTakenMult<1 o hit acontece (não bloqueia) mas o dano chega reduzido", () => {
+    const map = fieldMap();
+    const state = new ArenaState();
+    const shooter = new Player();
+    shooter.x = 6; shooter.z = 10; shooter.launcher = "basic_shot";
+    const target = new Player();
+    target.x = 13; target.z = 10; target.hp = 100; target.maxHp = 100;
+    target.damageTakenMult = 0.5; // escudo ativo (SHIELD_TEMP_DAMAGE_MULT)
+    state.players.set("A", shooter);
+    state.players.set("B", target);
+
+    const sys = new ProjectileSystem();
+    const effects = new EffectSystem();
+    let now = 0;
+    let firstHit: any = null;
+    for (let i = 0; i < 200 && !firstHit; i++) {
+      shooter.dir = 0; shooter.firing = true;
+      const hits = sys.tick(state, map, 0.05, now, effects);
+      firstHit = hits.find((h) => h.targetId === "B") ?? null;
+      now += 50;
+    }
+    expect(firstHit).not.toBeNull();
+    expect(firstHit.blockedByShield).toBe(false); // reduz, não bloqueia — distinto do nascimento
+    expect(firstHit.damage).toBeCloseTo(LAUNCHERS.basic_shot.damage * 0.5, 5);
+  });
+
+  it("dano cheio quando não há escudo (damageTakenMult=1, default)", () => {
+    const map = fieldMap();
+    const state = new ArenaState();
+    const shooter = new Player();
+    shooter.x = 6; shooter.z = 10; shooter.launcher = "basic_shot";
+    const target = new Player();
+    target.x = 13; target.z = 10; target.hp = 100; target.maxHp = 100;
+    state.players.set("A", shooter);
+    state.players.set("B", target);
+
+    const sys = new ProjectileSystem();
+    const effects = new EffectSystem();
+    let now = 0;
+    let firstHit: any = null;
+    for (let i = 0; i < 200 && !firstHit; i++) {
+      shooter.dir = 0; shooter.firing = true;
+      const hits = sys.tick(state, map, 0.05, now, effects);
+      firstHit = hits.find((h) => h.targetId === "B") ?? null;
+      now += 50;
+    }
+    expect(firstHit).not.toBeNull();
+    expect(firstHit.damage).toBeCloseTo(LAUNCHERS.basic_shot.damage, 5);
+  });
+});
+
 describe("ProjectileSystem — ganchos de mobilidade por lançador (T-012)", () => {
   it("heavy_shot_dev reduz a velocidade do atirador ao disparar e expira sozinho", () => {
     const map = fieldMap();

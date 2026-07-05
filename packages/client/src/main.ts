@@ -9,6 +9,8 @@ import {
   SPEED_BOOST_MS,
   XP_BOOST_MS,
   KILL_RUSH_MS,
+  SHIELD_TEMP_MS,
+  HP_ORB_AMOUNT,
   GameMap,
   MapFileV1,
   mapFileToGameMap,
@@ -180,7 +182,7 @@ function buildWorld(map: GameMap) {
 
 // ---------- Entidades dinâmicas ----------
 const playerVisuals = new Map<string, THREE.Group>();
-const collectibleMeshes = new Map<string, THREE.Mesh>();
+const collectibleMeshes = new Map<string, THREE.Group>(); // F2: cada coletável é um grupo composto (visuals.ts)
 const projectileMeshes = new Map<string, THREE.Mesh>();
 let flagVisual: THREE.Group | undefined; // T-021: bandeira "rei do mapa" — objeto único, não um MapSchema
 
@@ -191,6 +193,7 @@ const BUFF_DURATION_MS: Record<string, number> = {
   speed_up: SPEED_BOOST_MS,
   xp_boost: XP_BOOST_MS,
   kill_rush: KILL_RUSH_MS,
+  damage_reduction: SHIELD_TEMP_MS, // SPEC-0010: escudo temporário
 };
 const buffApplied = new Map<string, { kind: string; expiresAt: number }>();
 const wasShielded = new Map<string, boolean>(); // detecta a transição p/ disparar shield_pop
@@ -268,13 +271,31 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
   if (ev.type === "death") {
     const vis = playerVisuals.get(ev.payload.playerId);
     if (vis) vfx.spawnAt("death_burst", vis.position.x, vis.position.z);
+  } else if (ev.type === "kill_heal") {
+    // SPEC-0010: cura por abate em briga — feedback verde ("+X") + partículas no matador.
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) {
+      spawnHealPopup(vis.position.x, vis.position.z, ev.payload.heal);
+      vfx.spawnAt("heal_pop", vis.position.x, vis.position.z);
+    }
   } else if (ev.type === "pickup") {
     const vis = playerVisuals.get(ev.payload.playerId);
     if (vis) vfx.spawnAt("pickup_glint", vis.position.x, vis.position.z);
-    // pickup é o instante exato em que speed_up/xp_boost são (re)aplicados no servidor —
+    // pickup é o instante exato em que os buffs temporários são (re)aplicados no servidor —
     // reseta o anel de cooldown pra refletir a renovação, não só a 1ª aplicação.
-    const kind = ev.payload.kind === "speed_up" ? "speed_up" : ev.payload.kind === "farm_event" ? "xp_boost" : null;
+    const kind =
+      ev.payload.kind === "speed_up" ? "speed_up"
+      : ev.payload.kind === "farm_event" ? "xp_boost"
+      : ev.payload.kind === "shield_temp" ? "damage_reduction"
+      : null;
     if (kind) buffApplied.set(ev.payload.playerId, { kind, expiresAt: performance.now() + BUFF_DURATION_MS[kind] });
+    // SPEC-0010: feedback dedicado dos recursos de vida.
+    if (vis && ev.payload.kind === "hp_orb") {
+      spawnHealPopup(vis.position.x, vis.position.z, HP_ORB_AMOUNT);
+      vfx.spawnAt("heal_pop", vis.position.x, vis.position.z);
+    } else if (vis && ev.payload.kind === "shield_temp") {
+      vfx.spawnAt("shield_gain", vis.position.x, vis.position.z);
+    }
   } else if (ev.type === "impulso") {
     buffApplied.set(ev.payload.playerId, { kind: "kill_rush", expiresAt: performance.now() + BUFF_DURATION_MS.kill_rush });
   } else if (ev.type === "upgrade") {
@@ -288,21 +309,19 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
 const damagePopups: Array<{ sprite: THREE.Sprite; born: number }> = [];
 const POPUP_LIFE_MS = 900;
 
-function spawnDamagePopup(x: number, z: number, damage: number, kill: boolean) {
+/** Núcleo do popup flutuante (dano/cura): texto colorido em sprite, orçamento compartilhado. */
+function pushPopup(x: number, z: number, text: string, color: string, fontSize: number) {
   if (damagePopups.length >= 24) return;
   const canvas = document.createElement("canvas");
   canvas.width = 128;
   canvas.height = 64;
   const g = canvas.getContext("2d")!;
-  // fonte cresce com o dano — golpe forte É visivelmente forte
-  const fontSize = Math.round(Math.min(46, 20 + damage * 0.6));
   g.font = `bold ${fontSize}px monospace`;
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.strokeStyle = "#000";
   g.lineWidth = 5;
-  g.fillStyle = kill ? "#ff5252" : damage >= 30 ? "#ffb300" : "#ffe082";
-  const text = kill ? `${Math.round(damage)} ☠` : `${Math.round(damage)}`;
+  g.fillStyle = color;
   g.strokeText(text, 64, 34);
   g.fillText(text, 64, 34);
   const sprite = new THREE.Sprite(
@@ -312,6 +331,18 @@ function spawnDamagePopup(x: number, z: number, damage: number, kill: boolean) {
   sprite.position.set(x, 1.35, z);
   scene.add(sprite);
   damagePopups.push({ sprite, born: performance.now() });
+}
+
+function spawnDamagePopup(x: number, z: number, damage: number, kill: boolean) {
+  // fonte cresce com o dano — golpe forte É visivelmente forte
+  const fontSize = Math.round(Math.min(46, 20 + damage * 0.6));
+  const color = kill ? "#ff5252" : damage >= 30 ? "#ffb300" : "#ffe082";
+  pushPopup(x, z, kill ? `${Math.round(damage)} ☠` : `${Math.round(damage)}`, color, fontSize);
+}
+
+/** SPEC-0010: "+X" verde de cura (kill em briga / hp_orb). */
+function spawnHealPopup(x: number, z: number, amount: number) {
+  pushPopup(x, z, `+${Math.round(amount)}`, "#66ff8a", Math.round(Math.min(40, 22 + amount * 0.4)));
 }
 
 function updateDamagePopups(now: number) {

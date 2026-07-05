@@ -13,6 +13,7 @@ export class Player extends Schema {
   @type("number") vitality = 1; // multiplica vida máxima (combat.md, T-006)
   @type("number") attackSpeed = 1; // T-015 (cadência): multiplica cooldown do lançador — <1 = atira mais rápido
   @type("number") reach = 1; // T-015 (alcance): multiplica range do projétil
+  @type("number") damageTakenMult = 1; // SPEC-0010 (T-035): <1 = escudo temporário reduz dano recebido
   @type("number") xpMult = 1; // farm_event (T-004): XP em dobro por 20s
   @type(["string"]) effects = new ArraySchema<string>(); // kinds ativos, só p/ HUD
   @type("number") hp = 100; // T-005

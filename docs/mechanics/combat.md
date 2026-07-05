@@ -29,7 +29,9 @@ interface LauncherDef {
 ## Regras
 - Servidor simula tudo: spawn do projétil, integração por tick, colisão com props (some) e jogadores (dano).
 - Colisão com jogadores usa o segmento percorrido pelo projétil no tick, não só a posição final, para evitar tiro "atravessar" em baixa taxa de simulação.
-- Dano efetivo = `damage × força do atirador`; vida = `vitalidade` (ver growth.md).
+- Dano efetivo = `damage × força do atirador × damageTakenMult do alvo`; vida = `vitalidade` (ver growth.md).
+- **Escudo temporário (SPEC-0010, `shield_temp`):** coletável do mapa aplica o efeito `damage_reduction` (`EffectSystem`) → `Player.damageTakenMult = 0.5` por 3s. Ao contrário da invulnerabilidade de nascimento, **reduz** o dano em vez de bloquear: o hit acontece normalmente (evento `hit`, `blockedByShield=false`), só chega atenuado.
+- **Recompensa de kill contextual (SPEC-0010/T-033):** no abate, o servidor conta inimigos vivos no raio `COMBAT_THREAT_RADIUS` do matador. **Duelo** (0 por perto) → bônus de XP (`kill_duel_bonus`); **briga** (≥1) → cura `killHealFraction(threats)` da vida **faltante** do matador (`kill_heal`), com teto `KILL_HEAL_MISSING_FRAC_MAX` e sem overheal. Anti-snowball: cura só existe onde havia risco, e da faltante (quem está inteiro ganha pouco).
 - **Invulnerabilidade de nascimento (SPEC-0005):** se o tiro encostar num player com escudo ativo (3s ao nascer/renascer, `SPAWN_PROTECTION_MS`), o projétil é consumido e emite evento `shield_block` no debug — proteção, não falha de hitbox. O escudo cai no instante em que o próprio player dispara. (Substitui a antiga zona safe, removida do mapa — o código do `safe_block` permanece só para os testes.)
 - Escalabilidade: padrão de disparo novo = implementar 1 função `pattern` nova; arma nova = 1 entrada de dados. NUNCA lógica de arma no Room.
 

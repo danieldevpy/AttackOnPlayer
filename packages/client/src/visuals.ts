@@ -10,17 +10,77 @@ const playerGeo = new THREE.CapsuleGeometry(0.35, 0.5, 4, 8);
 const ringGeo = new THREE.RingGeometry(0.45, 0.58, 24);
 const noseGeo = new THREE.ConeGeometry(0.18, 0.5, 8); // T-011: indicador placeholder de facing
 const noseMat = new THREE.MeshLambertMaterial({ color: 0xffee58, emissive: 0x8a7600 });
-const xpOrbGeo = new THREE.SphereGeometry(0.25, 12, 12);
-const speedUpGeo = new THREE.OctahedronGeometry(0.28);
-const coinBuffGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.08, 16);
-const farmEventGeo = new THREE.ConeGeometry(0.28, 0.4, 4);
-const boxLootGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+// Coletáveis — fase F2 (composição de primitivas): cada tipo tem forma RECONHECÍVEL
+// (cruz = vida, escudo = domo azul, moeda em pé, baú = corpo+tampa…) em vez de uma
+// primitiva genérica. Geometrias e materiais são singletons de módulo — N coletáveis do
+// mesmo tipo reusam os mesmos objetos (nada alocado por instância, "leve sempre" §5).
+const collGeo = {
+  gem: new THREE.OctahedronGeometry(0.24), // xp: gema/cristal valioso
+  crossV: new THREE.BoxGeometry(0.14, 0.44, 0.14), // hp: cruz médica (haste vertical)
+  crossH: new THREE.BoxGeometry(0.44, 0.14, 0.14), // hp: cruz médica (haste horizontal)
+  dome: new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), // escudo: domo/bolha
+  ringBase: new THREE.TorusGeometry(0.24, 0.035, 8, 20), // aro no chão (grounding)
+  arrow: new THREE.ConeGeometry(0.2, 0.42, 4), // velocidade/2xXP: seta pra cima
+  arrowSmall: new THREE.ConeGeometry(0.14, 0.28, 4),
+  coin: new THREE.CylinderGeometry(0.26, 0.26, 0.07, 20), // moeda (fica em pé, gira = "flip")
+  chestBody: new THREE.BoxGeometry(0.46, 0.26, 0.34), // baú: corpo
+  chestLid: new THREE.BoxGeometry(0.48, 0.16, 0.36), // baú: tampa
+  latch: new THREE.BoxGeometry(0.1, 0.14, 0.06), // baú: fecho dourado
+};
+const collMat = {
+  xp: new THREE.MeshLambertMaterial({ color: 0xffd54f, emissive: 0x8a6300 }),
+  hp: new THREE.MeshLambertMaterial({ color: 0xff5252, emissive: 0x7a0d0d }),
+  shield: new THREE.MeshLambertMaterial({ color: 0x42a5f5, emissive: 0x123a6b, transparent: true, opacity: 0.72 }),
+  speed: new THREE.MeshLambertMaterial({ color: 0x26c6da, emissive: 0x006064 }),
+  coin: new THREE.MeshLambertMaterial({ color: 0xffc107, emissive: 0x6d4c00 }),
+  farm: new THREE.MeshLambertMaterial({ color: 0x66bb6a, emissive: 0x1b5e20 }),
+  box: new THREE.MeshLambertMaterial({ color: 0x8e24aa, emissive: 0x3a0d47 }),
+  gold: new THREE.MeshLambertMaterial({ color: 0xffca28, emissive: 0x6d4c00 }),
+};
 
-const xpOrbMat = new THREE.MeshLambertMaterial({ color: 0xffd54f, emissive: 0x7a5c00 });
-const speedUpMat = new THREE.MeshLambertMaterial({ color: 0x26c6da, emissive: 0x005662 });
-const coinBuffMat = new THREE.MeshLambertMaterial({ color: 0xffc107, emissive: 0x7a5c00 });
-const farmEventMat = new THREE.MeshLambertMaterial({ color: 0x66bb6a, emissive: 0x1b4d1e });
-const boxLootMat = new THREE.MeshLambertMaterial({ color: 0x8e24aa, emissive: 0x3a0d47 });
+interface CollPart {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  pos?: [number, number, number];
+  rot?: [number, number, number];
+  scale?: [number, number, number];
+}
+
+/** Peças de cada coletável (F2). Composição legível com poucas partes por tipo. */
+function collectibleParts(kind: string): CollPart[] {
+  switch (kind) {
+    case "hp_orb": // cruz de vida vermelha
+      return [
+        { geometry: collGeo.crossV, material: collMat.hp },
+        { geometry: collGeo.crossH, material: collMat.hp },
+      ];
+    case "shield_temp": // domo/bolha azul sobre um aro
+      return [
+        { geometry: collGeo.dome, material: collMat.shield, pos: [0, -0.02, 0] },
+        { geometry: collGeo.ringBase, material: collMat.shield, pos: [0, -0.06, 0], rot: [Math.PI / 2, 0, 0] },
+      ];
+    case "speed_up": // seta ciano pra cima ("boost") sobre um aro
+      return [
+        { geometry: collGeo.arrow, material: collMat.speed, pos: [0, 0.06, 0] },
+        { geometry: collGeo.ringBase, material: collMat.speed, pos: [0, -0.18, 0], rot: [Math.PI / 2, 0, 0] },
+      ];
+    case "coin_buff": // moeda em pé (o giro do grupo vira o "flip")
+      return [{ geometry: collGeo.coin, material: collMat.coin, rot: [Math.PI / 2, 0, 0] }];
+    case "farm_event": // seta dupla verde = XP em dobro
+      return [
+        { geometry: collGeo.arrow, material: collMat.farm, pos: [0, 0.12, 0] },
+        { geometry: collGeo.arrowSmall, material: collMat.farm, pos: [0, -0.14, 0] },
+      ];
+    case "box": // baú: corpo + tampa + fecho dourado
+      return [
+        { geometry: collGeo.chestBody, material: collMat.box, pos: [0, -0.04, 0] },
+        { geometry: collGeo.chestLid, material: collMat.box, pos: [0, 0.16, 0] },
+        { geometry: collGeo.latch, material: collMat.gold, pos: [0, 0.06, 0.19] },
+      ];
+    default: // xp_orb: gema dourada
+      return [{ geometry: collGeo.gem, material: collMat.xp, scale: [1, 1.3, 1] }];
+  }
+}
 
 /** Cor estável por id (inimigos variam de tom, mas o ANEL é o sinal). */
 export function colorFor(id: string): number {
@@ -151,6 +211,7 @@ const BUFF_RING_COLOR: Record<string, number> = {
   speed_up: 0x26c6da,
   xp_boost: 0xffd54f,
   kill_rush: 0xff7043,
+  damage_reduction: 0x42a5f5, // SPEC-0010: escudo temporário
 };
 const buffRingGeo = new THREE.RingGeometry(0.8, 0.9, 24);
 export function updateBuffCooldownRing(group: THREE.Group, active: { kind: string; frac: number } | null) {
@@ -238,19 +299,17 @@ export function updateNameplate(
   tex.needsUpdate = true;
 }
 
-export function createCollectibleVisual(kind: string): THREE.Mesh {
-  switch (kind) {
-    case "speed_up":
-      return new THREE.Mesh(speedUpGeo, speedUpMat);
-    case "coin_buff":
-      return new THREE.Mesh(coinBuffGeo, coinBuffMat);
-    case "farm_event":
-      return new THREE.Mesh(farmEventGeo, farmEventMat);
-    case "box":
-      return new THREE.Mesh(boxLootGeo, boxLootMat);
-    default:
-      return new THREE.Mesh(xpOrbGeo, xpOrbMat);
+/** F2: coletável = grupo de primitivas com forma reconhecível (ver `collectibleParts`). */
+export function createCollectibleVisual(kind: string): THREE.Group {
+  const group = new THREE.Group();
+  for (const part of collectibleParts(kind)) {
+    const mesh = new THREE.Mesh(part.geometry, part.material);
+    if (part.pos) mesh.position.set(part.pos[0], part.pos[1], part.pos[2]);
+    if (part.rot) mesh.rotation.set(part.rot[0], part.rot[1], part.rot[2]);
+    if (part.scale) mesh.scale.set(part.scale[0], part.scale[1], part.scale[2]);
+    group.add(mesh);
   }
+  return group;
 }
 
 /**

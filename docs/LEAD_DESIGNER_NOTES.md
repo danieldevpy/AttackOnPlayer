@@ -2,6 +2,22 @@
 
 Voz da IA. Opiniões, riscos e sugestões. Status: proposta → aprovada/rejeitada pelo CD.
 
+## 2026-07-05 — Proposta: sobrevivência por habilidade (SPEC-0010, pré-V1)
+
+O CD pediu "formas de viver mais" antes do go-live da V1. Transformei o pedido numa spec (`SPEC-0010`) com três peças de um mesmo eixo — *jogar bem = viver mais* — e três tasks (T-033..T-035, fase F2.5). Registro aqui o racional de design e o que estou de olho, porque isto mexe direto com os pilares 3 (risco real) e 4 (anti-snowball).
+
+**A ideia central que defendo — kill contextual.** O abate paga conforme a *temperatura da briga*: duelo isolado → XP (progressão); cercado → cura % da vida **faltante** (sobrevivência). Isso não é enfeite: é o que impede a cura de virar bola de neve. Num 1v1 o dominante **não** se sustenta de graça (ganha XP, não vida), então o loop "mato→curo→mato" contra alvos isolados nunca abre. E curar da *faltante* faz o recurso ir para quem estava por um fio, não para quem já domina — recompensa proporcional ao risco corrido. É a mesma filosofia da aura (oportunidade ganha por mecânica), só que determinística e sem tocar no sistema de aura (que fica Pós-V1).
+
+**Escassez como design, não como limitação.** `hp_orb` (poucos, longe de todos e uns dos outros) e `shield_temp` (máx. 2) forçam **deslocamento** e exposição — você tem que sair da toca para se curar. Reusa o espaçamento que o spawner já faz, só com distâncias próprias e teto por kind, num passe dedicado (não polui o orçamento/pesos do coletável comum).
+
+**Riscos que estou vigiando (medir antes de mexer):**
+1. *Aglomerado curador* — brigas grandes premiando quem mata pode incentivar teamfight eterno. Mitigado por "cura da faltante" + mapa grande; confirmar com métrica `kill_heal`.
+2. *Proxy de "briga"* — usei proximidade de inimigos vivos no abate (barato, imediato). Alternativa: "tomou dano de N fontes nos últimos Xs". Se soar errado jogando, troco o proxy sem mudar a interface.
+3. *Confusão escudo × invulnerabilidade de nascimento* — mantidos como caminhos distintos no servidor: nascimento **bloqueia** (dano 0), escudo **reduz**. Eventos de debug separados.
+4. *Calibração é sensação* — os 4 tunables-chave (`KILL_HEAL_MISSING_FRAC_BASE`, `COMBAT_THREAT_RADIUS`, `HP_ORB_AMOUNT`, `SHIELD_TEMP_DAMAGE_MULT`) só o CD fecha jogando; entrego com defaults e marco pendente de veredito, como fiz com VFX/progressão.
+
+**O que deliberadamente deixei de fora** (para não nascer meio-pronto): regen passiva parado (contraria jogo ativo), cura por `box`/armadura/crítico/lifesteal-por-dano, escudo como skill de build, e qualquer amarra com aura ou persistência entre rounds. *Status: proposta — aguardando veredito do CD na SPEC-0010 (especialmente os 4 tunables).*
+
 ## 2026-07-04 — Feedback de arquitetura (pedido no PROMPT-0003)
 
 **Saudável.** O pivô Bomberman → campo aberto custa UMA função (`buildMap`) porque colisão, rede, seed sync e bots são camadas independentes — é exatamente o teste que uma boa arquitetura deve passar. O EffectSystem absorveu speed_up sem tocar o Room e vai absorver dano/atributos igual; o shared já evitou drift 3 vezes (cliente, servidor e bots reconstroem o mesmo mapa de 3 números).

@@ -25,6 +25,8 @@ Feedback deve ser proporcional à **agência**: o jogo comemora as *decisões* d
 | `level_up_auto` ✔ | evolução automática: anel leve + som futuro | pedido CD 2026-07-05 — entregue T-022/PROMPT-0034 |
 | `upgrade_chosen_aura` ✔ | escolha manual (card/skill/reroll): aura chamativa no boneco | pedido CD 2026-07-05 — entregue T-022/PROMPT-0034 |
 | `toast_text` ✔ | **sistema de mensagens de texto**: toasts curtos com efeito personalizado (fade/slide), fila não invasiva (canto, nunca no centro), substitui os textos crus do HUD (streak, card, farm_event) | pedido CD 2026-07-05 — entregue T-023/PROMPT-0035 |
+| `heal_pop` ✔ | partículas verdes + número "+X" verde flutuante ao curar (kill em briga `kill_heal` e `hp_orb`) | pedido CD 2026-07-05 (passe visual) — entregue T-036/PROMPT-0038 |
+| `shield_gain` ✔ | burst azul ao pegar `shield_temp`; reusa o anel de cooldown de buff (cor azul) enquanto o escudo dura | pedido CD 2026-07-05 (passe visual) — entregue T-036/PROMPT-0038 |
 
 ## Restrições permanentes
 

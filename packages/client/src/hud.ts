@@ -177,43 +177,102 @@ export function onCombatEvent(ev: { type: string; payload: any }, myId: string) 
   }
 }
 
-// ---------- HUD principal + roster ----------
+// ---------- HUD principal gamificado + roster ----------
+// Painel estruturado (badge de nível + barras de HP/XP + chips de efeito) em vez do bloco
+// de texto cru. Regra mantida: HUD só EXIBE estado sincronizado — nada é calculado aqui.
+// A casca é montada UMA vez; por frame só mudam larguras/textos (sem innerHTML por frame,
+// exceto os chips, que são poucos). Comportamento dev/prod da T-023 preservado.
+interface HudRefs {
+  level: HTMLElement;
+  hpFill: HTMLElement;
+  hpLabel: HTMLElement;
+  xpFill: HTMLElement;
+  xpLabel: HTMLElement;
+  chips: HTMLElement;
+  details: HTMLElement;
+  ping: HTMLElement;
+}
+let refs: HudRefs | undefined;
 
+function buildHudShell(): HudRefs {
+  hudEl.classList.add("hud-panel");
+  hudEl.innerHTML = `
+    <div class="hud-top">
+      <div class="hud-badge"><span class="hud-badge-lv" id="hud-level">1</span></div>
+      <div class="hud-bars">
+        <div class="hud-bar hp"><div class="hud-bar-fill" id="hud-hp-fill"></div><span class="hud-bar-label" id="hud-hp-label"></span></div>
+        <div class="hud-bar xp"><div class="hud-bar-fill" id="hud-xp-fill"></div><span class="hud-bar-label" id="hud-xp-label"></span></div>
+      </div>
+    </div>
+    <div class="hud-chips" id="hud-chips"></div>
+    <div class="hud-details" id="hud-details"></div>
+    <div class="hud-ping" id="hud-ping"></div>`;
+  const byId = (id: string) => document.getElementById(id)!;
+  return {
+    level: byId("hud-level"),
+    hpFill: byId("hud-hp-fill"),
+    hpLabel: byId("hud-hp-label"),
+    xpFill: byId("hud-xp-fill"),
+    xpLabel: byId("hud-xp-label"),
+    chips: byId("hud-chips"),
+    details: byId("hud-details"),
+    ping: byId("hud-ping"),
+  };
+}
+
+let lastChipsKey = "";
 let rosterNext = 0;
 export function updateHud(now: number) {
   updateToasts(now);
+  if (!refs) refs = buildHudShell();
 
   const st: any = ctx.getRoom()?.state;
   const me = st?.players?.get?.(ctx.getSessionId());
   const fx: string[] = me?.effects ? Array.from(me.effects) : [];
-  const xpNeed = me ? xpToNext(me.level) : 0;
   const ping = ctx.getPing();
   // T-021: bandeira "rei do mapa" — só existe leitura quando a room liga o toggle.
   const flagCarrierId: string | undefined = st?.flagEnabled ? st?.flag?.carrierId : undefined;
+  const carryingFlag = !!flagCarrierId && flagCarrierId === ctx.getSessionId();
 
-  // T-023: linha sempre visível (dev e prod) — ping discreto + HP/nível + tags de efeito.
-  let text =
-    `ping: ${ping < 0 ? "..." : ping + "ms"}\n` +
-    `nível: ${me?.level ?? "-"} (xp ${Math.floor(me?.xp ?? 0)}/${xpNeed})  HP: ${Math.ceil(me?.hp ?? 0)}/${me?.maxHp ?? 100}` +
-    (fx.includes("speed_up") ? `  ⚡x${me.speed?.toFixed(1)}` : "") +
-    (fx.includes("xp_boost") ? `  2xXP` : "");
+  const level = me?.level ?? 1;
+  const hp = Math.max(0, Math.ceil(me?.hp ?? 0));
+  const maxHp = me?.maxHp ?? 100;
+  const xp = Math.floor(me?.xp ?? 0);
+  const xpNeed = me ? xpToNext(level) : 1;
 
-  // T-023: painel próprio compacto em prod — atributos/skills/coins só aparecem em dev
-  // ou segurando [Tab]; em dev fica tudo sempre visível, como antes.
-  if (attrsHeld) {
-    text +=
-      `\nforça ${me?.strength?.toFixed(2) ?? "-"}  vel ${me?.speed?.toFixed(2) ?? "-"}  vita ${me?.vitality?.toFixed(2) ?? "-"}  cad ${me?.attackSpeed?.toFixed(2) ?? "-"}  alc ${me?.reach?.toFixed(2) ?? "-"}` +
-      (me?.skills?.length ? `\n★ ${Array.from(me.skills).join(" • ")}` : "") +
-      `\ncoins: ${me?.coins ?? 0}  (R=reroll • ${CONTROL_HINTS[ctx.getProfileId()] ?? CONTROL_HINTS.mouse})`;
-  } else if (!IS_DEV) {
-    text += `\n[Tab] atributos`;
+  refs.level.textContent = String(level);
+  const hpFrac = maxHp > 0 ? Math.min(1, hp / maxHp) : 0;
+  refs.hpFill.style.width = `${hpFrac * 100}%`;
+  refs.hpFill.style.background = hpFrac > 0.5 ? "#4caf50" : hpFrac > 0.25 ? "#ffb300" : "#ef5350";
+  refs.hpLabel.textContent = `${hp}/${maxHp}`;
+  refs.xpFill.style.width = `${Math.min(1, xp / xpNeed) * 100}%`;
+  refs.xpLabel.textContent = `XP ${xp}/${xpNeed}`;
+  refs.ping.textContent = ping < 0 ? "···" : `${ping}ms`;
+
+  // Chips de efeito — só reconstrói o innerHTML quando o conjunto muda (barato e estável).
+  const chips: string[] = [];
+  if (fx.includes("speed_up")) chips.push(`<span class="chip speed">⚡ x${me.speed?.toFixed(1)}</span>`);
+  if (fx.includes("xp_boost")) chips.push(`<span class="chip xp">2×XP</span>`);
+  if (fx.includes("damage_reduction")) chips.push(`<span class="chip shield">🛡 escudo</span>`);
+  if (carryingFlag) chips.push(`<span class="chip flag">🚩 bandeira 2×XP</span>`);
+  if ((me?.pendingUpgrades ?? 0) > 1) chips.push(`<span class="chip queue">＋${me.pendingUpgrades - 1} level-up</span>`);
+  const chipsKey = chips.join("|");
+  if (chipsKey !== lastChipsKey) {
+    refs.chips.innerHTML = chips.join("");
+    lastChipsKey = chipsKey;
   }
 
-  text +=
-    (me?.pendingUpgrades > 1 ? `\n📶 +${me.pendingUpgrades - 1} level-up na fila` : "") +
-    (flagCarrierId && flagCarrierId === ctx.getSessionId() ? `\n🚩 você carrega a bandeira (2×XP)!` : "");
-
-  hudEl.textContent = text;
+  // T-023: atributos/skills/coins só aparecem em dev ou segurando [Tab].
+  if (attrsHeld) {
+    refs.details.innerHTML =
+      `<span>💪 ${me?.strength?.toFixed(2) ?? "-"}</span><span>🏃 ${me?.speed?.toFixed(2) ?? "-"}</span>` +
+      `<span>❤ ${me?.vitality?.toFixed(2) ?? "-"}</span><span>🔫 ${me?.attackSpeed?.toFixed(2) ?? "-"}</span>` +
+      `<span>🎯 ${me?.reach?.toFixed(2) ?? "-"}</span><span>🪙 ${me?.coins ?? 0}</span>` +
+      (me?.skills?.length ? `<span class="skills">★ ${Array.from(me.skills).join(" • ")}</span>` : "") +
+      `<span class="hint">R=reroll • ${CONTROL_HINTS[ctx.getProfileId()] ?? CONTROL_HINTS.mouse}</span>`;
+  } else {
+    refs.details.innerHTML = !IS_DEV ? `<span class="hint">[Tab] atributos</span>` : "";
+  }
 
   if (!IS_DEV || now < rosterNext || !st?.players) return;
   rosterNext = now + 250;

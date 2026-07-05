@@ -44,12 +44,55 @@
         border: 1px solid transparent; background: transparent; color: #ccc; cursor: pointer;
       }
       #profile-selector button.active { background: rgba(255,213,79,.18); border-color: #ffd54f66; color: #ffd54f; }
-      #hud {
-        position: fixed; top: 8px; left: 8px; z-index: 10;
-        font-family: monospace; font-size: 14px; color: #0f0;
-        background: rgba(0,0,0,.55); padding: 8px 10px; border-radius: 6px;
-        pointer-events: none; white-space: pre;
+      /* HUD gamificado (passe visual): badge de nível + barras HP/XP + chips de efeito.
+         Regra mantida: só exibe estado — a UI é a "camada de leitura", nada é calculado. */
+      #hud.hud-panel {
+        position: fixed; top: 10px; left: 10px; z-index: 10;
+        font-family: "Segoe UI", system-ui, sans-serif; color: #eaeaea;
+        background: linear-gradient(160deg, rgba(20,22,32,.86), rgba(12,13,20,.86));
+        border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+        padding: 9px 12px 8px; width: 244px;
+        box-shadow: 0 4px 18px rgba(0,0,0,.45); pointer-events: none;
+        backdrop-filter: blur(3px);
       }
+      #hud .hud-top { display: flex; align-items: center; gap: 10px; }
+      #hud .hud-badge {
+        flex: none; width: 40px; height: 40px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #ffe082, #ffab00);
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 0 10px rgba(255,171,0,.5), inset 0 0 4px rgba(0,0,0,.3);
+        border: 2px solid #fff3; }
+      #hud .hud-badge-lv { font-weight: 800; font-size: 19px; color: #241a00; text-shadow: 0 1px 0 #fff6; }
+      #hud .hud-bars { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+      #hud .hud-bar {
+        position: relative; height: 15px; border-radius: 8px; overflow: hidden;
+        background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.08); }
+      #hud .hud-bar-fill { height: 100%; width: 0%; border-radius: 8px; transition: width .18s ease, background .3s ease; }
+      #hud .hud-bar.xp .hud-bar-fill { background: linear-gradient(90deg, #4fc3f7, #29b6f6); }
+      #hud .hud-bar-label {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 700; color: #fff; letter-spacing: .3px;
+        text-shadow: 0 1px 2px #000, 0 0 2px #000; }
+      #hud .hud-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+      #hud .hud-chips:empty { display: none; }
+      #hud .chip {
+        font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+        background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); color: #fff; }
+      #hud .chip.speed { background: rgba(38,198,218,.22); border-color: #26c6da88; color: #7be7f5; }
+      #hud .chip.xp { background: rgba(255,213,79,.2); border-color: #ffd54f88; color: #ffe082; }
+      #hud .chip.shield { background: rgba(66,165,245,.22); border-color: #42a5f588; color: #90caf9; }
+      #hud .chip.flag { background: rgba(255,171,0,.22); border-color: #ffab0088; color: #ffcc66; }
+      #hud .chip.queue { background: rgba(126,231,170,.18); border-color: #7fffaa66; color: #9affc4; }
+      #hud .hud-details { display: flex; flex-wrap: wrap; gap: 4px 9px; margin-top: 7px;
+        font-size: 11px; color: #b8c0cc; font-family: monospace; }
+      #hud .hud-details:empty { display: none; }
+      #hud .hud-details .skills { color: #ffd54f; width: 100%; }
+      #hud .hud-details .hint { color: #6b7280; width: 100%; }
+      #hud .hud-ping { position: absolute; top: 8px; right: 11px; font-size: 10px; color: #6b7280; font-family: monospace; }
+      /* Estado inicial (antes da 1ª atualização, ainda como texto "conectando...") */
+      #hud:not(.hud-panel) {
+        position: fixed; top: 10px; left: 10px; z-index: 10;
+        font-family: monospace; font-size: 13px; color: #8a8; }
       /* Lista de players — design neutro em desenvolvimento (SPEC-0002) */
       #roster {
         position: fixed; top: 8px; right: 8px; z-index: 10;

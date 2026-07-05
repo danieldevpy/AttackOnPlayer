@@ -43,6 +43,19 @@ import {
   XP_PER_SECOND,
   REROLL_XP_REWARD,
   SPAWN_PROTECTION_MS,
+  CollectibleKind,
+  COMBAT_THREAT_RADIUS,
+  KILL_DUEL_XP_BONUS_PER_LEVEL,
+  killHealFraction,
+  HP_ORB_AMOUNT,
+  HP_ORB_MAX,
+  HP_ORB_MIN_PLAYER_DIST,
+  HP_ORB_MIN_SELF_DIST,
+  HP_ORB_RESPAWN_MS,
+  SHIELD_TEMP_MAX,
+  SHIELD_TEMP_MIN_PLAYER_DIST,
+  SHIELD_TEMP_MIN_SELF_DIST,
+  SHIELD_TEMP_RESPAWN_MS,
   LAUNCHERS,
   UpgradeCard,
   UPGRADE_CHOICE_TIMEOUT_MS,
@@ -80,6 +93,10 @@ export class ArenaRoom extends Room<ArenaState> {
   private curatedSpawns?: Array<{ x: number; z: number }>;
   private collectibleSeq = 0;
   private nextSpawnAt = 0;
+  // SPEC-0010: recursos de vida escassos têm passe de spawn PRÓPRIO (fora do orçamento/pesos
+  // do coletável comum) — teto e espaçamento por kind, cadência lenta. Timers independentes.
+  private nextHpSpawnAt = 0;
+  private nextShieldSpawnAt = 0;
   public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
   // T-016: fila de ofertas de card por player — levels[0] é a oferta aberta; o resto aguarda.
   // T-017: `cards` guarda a oferta REAL enviada (marcos incluem skills e dependem do estado
@@ -295,6 +312,21 @@ export class ArenaRoom extends Room<ArenaState> {
         killerByVictim.set(hit.targetId, hit.killerId);
         this.metrics.addKill(hit.killerId);
         this.grantXp(hit.killerId, killer, XP_PER_KILL_PER_LEVEL * victim.level);
+        // SPEC-0010 (T-033): recompensa de kill CONTEXTUAL. Conta inimigos vivos perto do
+        // matador no instante do abate = "temperatura da briga". Duelo isolado (0) → bônus
+        // de XP (progressão); briga (≥1) → cura % da vida FALTANTE, escalando com o nº de
+        // inimigos até um teto, sem overheal. Anti-snowball: cura só onde havia risco real.
+        const threats = this.countLivingEnemiesNear(hit.killerId, hit.targetId, killer.x, killer.z);
+        if (threats === 0) {
+          this.grantXp(hit.killerId, killer, KILL_DUEL_XP_BONUS_PER_LEVEL * victim.level);
+          this.emitDebug("kill_duel_bonus", { playerId: hit.killerId, xp: KILL_DUEL_XP_BONUS_PER_LEVEL * victim.level });
+        } else {
+          const heal = Math.round((killer.maxHp - killer.hp) * killHealFraction(threats));
+          if (heal > 0) {
+            killer.hp = Math.min(killer.maxHp, killer.hp + heal);
+            this.emitDebug("kill_heal", { playerId: hit.killerId, heal, threats });
+          }
+        }
         // T-017 (skill impulso): kill reseta o cooldown e dá boost curto de velocidade
         if (combinedSkillMods(Array.from(killer.skills)).onKillImpulso) {
           killer.lastFireAt = 0;
@@ -406,6 +438,14 @@ export class ArenaRoom extends Room<ArenaState> {
           case "farm_event":
             this.effects.apply(pid, p, "xp_boost", now);
             break;
+          case "hp_orb":
+            // SPEC-0010 (T-034): +HP fixo pequeno, nunca acima do maxHp.
+            p.hp = Math.min(p.maxHp, p.hp + HP_ORB_AMOUNT);
+            break;
+          case "shield_temp":
+            // SPEC-0010 (T-035): escudo temporário — reduz dano recebido por SHIELD_TEMP_MS.
+            this.effects.apply(pid, p, "damage_reduction", now);
+            break;
           case "box":
             // bônus forte no round (vs. 1 do level-up normal)
             this.effects.addAttrPoints(pid, p, {
@@ -451,6 +491,70 @@ export class ArenaRoom extends Room<ArenaState> {
           : now + RESPAWN_DELAY_MIN_MS + Math.random() * (RESPAWN_DELAY_MAX_MS - RESPAWN_DELAY_MIN_MS);
       }
     }
+
+    // SPEC-0010: passe de recursos de vida — escasso e espaçado, separado do genérico.
+    // Cada kind tem teto próprio, distâncias mínimas próprias (player + mesmo-kind) e
+    // cadência lenta. Só tenta quando abaixo do teto e o timer venceu.
+    if (now >= this.nextHpSpawnAt && this.countKind("hp_orb") < HP_ORB_MAX) {
+      if (this.spawnSurvivalItem("hp_orb", HP_ORB_MIN_PLAYER_DIST, HP_ORB_MIN_SELF_DIST)) {
+        this.nextHpSpawnAt = now + HP_ORB_RESPAWN_MS;
+      }
+    }
+    if (now >= this.nextShieldSpawnAt && this.countKind("shield_temp") < SHIELD_TEMP_MAX) {
+      if (this.spawnSurvivalItem("shield_temp", SHIELD_TEMP_MIN_PLAYER_DIST, SHIELD_TEMP_MIN_SELF_DIST)) {
+        this.nextShieldSpawnAt = now + SHIELD_TEMP_RESPAWN_MS;
+      }
+    }
+  }
+
+  /** SPEC-0010: quantas instâncias de um kind existem hoje no mapa. */
+  private countKind(kind: CollectibleKind): number {
+    let n = 0;
+    this.state.collectibles.forEach((c) => {
+      if (c.kind === kind) n += 1;
+    });
+    return n;
+  }
+
+  /**
+   * SPEC-0010 (T-033): nº de inimigos VIVOS (fora matador e vítima) dentro do raio de combate
+   * do matador no instante do abate. Proxy barato de "briga generalizada".
+   */
+  private countLivingEnemiesNear(killerId: string, victimId: string, kx: number, kz: number): number {
+    let n = 0;
+    this.state.players.forEach((p, id) => {
+      if (id === killerId || id === victimId || p.hp <= 0) return;
+      if (Math.hypot(p.x - kx, p.z - kz) <= COMBAT_THREAT_RADIUS) n += 1;
+    });
+    return n;
+  }
+
+  /**
+   * SPEC-0010: coloca um recurso de vida respeitando distância mínima de QUALQUER player e
+   * de outra instância do MESMO kind. Amostragem aleatória (mapa grande). Falha silenciosa
+   * (sem drop este tick) se não achar célula boa — o timer não avança, tenta de novo.
+   */
+  private spawnSurvivalItem(kind: CollectibleKind, minPlayerDist: number, minSelfDist: number): boolean {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const tx = 1 + Math.floor(Math.random() * (this.map.w - 2));
+      const tz = 1 + Math.floor(Math.random() * (this.map.h - 2));
+      if (isWall(this.map, tx, tz)) continue;
+      const cx = tx + 0.5;
+      const cz = tz + 0.5;
+      if (zoneAt(this.map, cx, cz) === "safe") continue; // recurso de sobrevivência é de campo aberto
+      let blocked = false;
+      this.state.players.forEach((p) => {
+        if (Math.abs(p.x - cx) + Math.abs(p.z - cz) < minPlayerDist) blocked = true;
+      });
+      if (blocked) continue;
+      this.state.collectibles.forEach((c) => {
+        if (c.kind === kind && Math.abs(c.x - cx) + Math.abs(c.z - cz) < minSelfDist) blocked = true;
+      });
+      if (blocked) continue;
+      this.createCollectible(cx, cz, kind);
+      return true;
+    }
+    return false;
   }
 
   private pickRespawnPoint(deadPlayerId: string) {
@@ -605,10 +709,14 @@ export class ArenaRoom extends Room<ArenaState> {
     return false; // mapa lotado perto de todo mundo — sem drop (design!)
   }
 
-  private createCollectible(x: number, z: number) {
+  /**
+   * `forceKind` presente (SPEC-0010) = spawn direto desse kind (recursos de vida têm passe
+   * próprio, sem peso de zona). Ausente = caminho original: sorteia pelo peso da zona.
+   */
+  private createCollectible(x: number, z: number, forceKind?: CollectibleKind) {
     const zone = zoneAt(this.map, x, z);
     const weights = zone === "safe" ? SAFE_WEIGHTS : zone === "war" ? WAR_WEIGHTS : FIELD_WEIGHTS;
-    const kind = pickWeighted(Math.random, weights);
+    const kind = forceKind ?? pickWeighted(Math.random, weights);
     const c = new Collectible();
     c.x = x;
     c.z = z;
