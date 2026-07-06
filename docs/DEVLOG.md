@@ -1,5 +1,35 @@
 # Devlog
 
+## 2026-07-06 — Sessão 34: Personagens procedurais V2 (evolui T-053/T-054, SPEC-0014)
+- **Pedido do CD (fora da numeração):** evoluir o arqueiro procedural pra qualidade de arte
+  mobile low-poly (Kingshot/Archero/Whiteout), 100% por código Three.js, sem asset externo,
+  rodando com centenas de players (compartilhar tudo, nada por instância/frame).
+- **Arquitetura V2:** esqueleto de **pivôs** (hip→chest→head/ombros; ombro→cotovelo;
+  perna→joelho; arco na mão esq. com corda[Line] + flecha). **Cada segmento animável = 1 malha**
+  cuja geometria é o MERGE de sub-formas facetadas com **cor por vértice** — todo o detalhe de
+  silhueta (capuz pontudo, barba, cabelo, gola, cinto, aljava+flechas, botas, nariz,
+  sobrancelhas) entra sem draw call extra. **Um material flat global**; geometria por
+  `classId:skin` (cacheada). Arco por **CatmullRomCurve3 + TubeGeometry** (substitui o Torus da
+  V1). Formas por CylinderGeometry de 6/4 lados (hexágono / caixa trapezoidal) — faceted sem
+  hand-rolling de winding.
+- **Perf:** 13 draw calls/char (12 malhas + 1 Line) vs 8 na V1. Verificado singleton: 2
+  instâncias → **1 material, 8 geometrias** compartilhadas. Animação sem alocação por frame
+  (`updateCharacterAnimation` virou args posicionais, elimina o objeto de opções por frame).
+- **Animações (por pivô):** idle (respiração/estabilização), walk (passada+joelho, quadril
+  oscila, ombros compensam, braços contra-fase), shoot (esq. segura arco / dir. puxa corda /
+  tronco gira / flecha recua e dispara / arco flexiona), hit (recuo+inclinação), death
+  (tomba+encolhe). Hit/death ligados aos eventos do `main.ts` — mas morte no servidor é respawn
+  imediato (cliente nunca vê hp<=0), então mal aparecem em produção (documentado).
+- **API preservada:** `createCharacterVisual`/`updateCharacterAnimation`/`triggerCharacterShoot`
+  + novos `triggerCharacterHit`/`triggerCharacterDeath`.
+- **Verificado:** tsc client+server limpo · vite build OK · shared 38/38 · bots 5×12 sem
+  regressão · **teste headless 24/25** (a 1 "falha" era artefato do próprio teste — colisão de
+  nome pivô/malha, corrigida; partilha de material confirmada à parte). `npm run aci -- index`
+  ao final. Detalhes: `docs/prompts/PROMPT-0051.md`.
+- **Limitação:** screenshot pro CD segue impossível no harness (preview oculto, rAF pausado);
+  geometria/animação provadas em runtime pelo headless. Caminho futuro pra centenas com 1 draw
+  call/char: SkinnedMesh (pivôs viram bones) — estrutura já desenhada pra isso.
+
 ## 2026-07-06 — Sessão 33: T-055 (SPEC-0014) — Projéteis do arqueiro
 - **Task (agente worker, Frente C — Personagens/classe/skin, client):** placeholder de esfera
   do projétil (T-039) virou **flecha** (haste cilindro fino + ponta cone 4 lados, mesmo

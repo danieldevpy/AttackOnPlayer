@@ -43,8 +43,18 @@ velocidade nos 3 launchers de player); `trail` leve só no `heavy_shot` (`arrow_
 `vfx.ts`). Sem mudança em schema/rede. tsc ×3 limpo · shared 38/38 · server 80/80 · bots 35/35 ·
 smoke com bots reais disparando pelos 3 launchers, console sem erro. Screenshot pro CD
 **pendente** (mesma limitação de preview oculto das sessões 31/32). Ver `docs/DEVLOG.md`
-(Sessão 33) e `docs/prompts/PROMPT-0050.md`. Outras frentes (T-056 skins, T-060 Backend) podem
-estar em andamento em paralelo por outros agentes — conferir BACKLOG antes de assumir status.
+(Sessão 33) e `docs/prompts/PROMPT-0050.md`.
+**Sessão 34 (pedido direto do CD, Frente C): Personagens procedurais V2** entregue: reescrita do
+arqueiro em `characters.ts` pra qualidade mobile low-poly (Kingshot/Archero) 100% por código —
+esqueleto de **pivôs** + **1 malha vertex-color por segmento** (todo o detalhe de silhueta no
+merge, 0 draw call extra), material flat global único, geometria por `classId:skin` cacheada,
+arco por CatmullRomCurve3+TubeGeometry. **13 draw calls/char** (vs 8); singleton confirmado (2
+instâncias → 1 material, 8 geometrias). Animações por pivô: idle/walk/shoot/hit/death. API
+preservada (+`triggerCharacterHit`/`triggerCharacterDeath`). tsc client+server limpo · vite build
+OK · shared 38/38 · bots 5×12 sem regressão · **teste headless 24/25** (1 falha era artefato do
+teste). Screenshot pro CD **pendente** (preview oculto). Caminho futuro p/ centenas com 1 draw
+call/char: SkinnedMesh. Ver `docs/DEVLOG.md` (Sessão 34) e `docs/prompts/PROMPT-0051.md`. Outras
+frentes (T-056 skins, T-060 Backend) podem estar em paralelo — conferir BACKLOG antes de assumir.
 
 ---
 

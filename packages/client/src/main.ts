@@ -17,7 +17,7 @@ import {
   LAUNCHERS,
 } from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate } from "./visuals";
-import { updateCharacterAnimation, triggerCharacterShoot } from "./characters";
+import { updateCharacterAnimation, triggerCharacterShoot, triggerCharacterHit, triggerCharacterDeath } from "./characters";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
 import { createVfxSystem } from "./vfx";
 import { createAudioSystem } from "./audio";
@@ -400,6 +400,7 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
       spawnDamagePopup(vis.position.x, vis.position.z, ev.payload.damage, ev.payload.isKill === true);
       vfx.spawnAt("hit_spark", vis.position.x, vis.position.z);
       vfx.spawnAt("blood_hit", vis.position.x, vis.position.z);
+      triggerCharacterHit(vis, performance.now()); // V2: recuo procedural de "levou dano"
     }
     // T-050: hit dado/recebido — pessoal (só o próprio jogador ouve, senão o combate dos
     // bots ao redor vira ruído contínuo). "Recebido" pesa mais que "dado" (regra de risco real).
@@ -410,7 +411,10 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
   // T-022: registry de VFX — cada efeito nasce de um evento que o servidor já emite.
   if (ev.type === "death") {
     const vis = playerVisuals.get(ev.payload.playerId);
-    if (vis) vfx.spawnAt("death_burst", vis.position.x, vis.position.z);
+    if (vis) {
+      vfx.spawnAt("death_burst", vis.position.x, vis.position.z);
+      triggerCharacterDeath(vis, performance.now()); // V2: queda cosmética (servidor respawna imediato)
+    }
     // T-050: própria morte é dramática/pessoal; morte alheia é ambiente, posicional (T-051).
     if (ev.payload.playerId === mySessionId) audio.play("death_self");
     else if (vis) audio.play("death_other", vis.position.x, vis.position.z);
@@ -841,7 +845,7 @@ function syncWorld() {
         const inst = Math.min(1, step / 0.09); // ~passada cheia perto do topo de velocidade
         av.moveSpeed = (av.moveSpeed ?? 0) + (inst - (av.moveSpeed ?? 0)) * 0.25; // suaviza
       }
-      updateCharacterAnimation(vis, { t, moveSpeed: av.moveSpeed ?? 0, nowMs: performance.now() });
+      updateCharacterAnimation(vis, t, av.moveSpeed ?? 0, performance.now());
     }
 
     updatePowerVisual(vis, p.level ?? 1, t); // T-018: aro de poder por faixa de nível
