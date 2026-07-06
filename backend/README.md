@@ -63,4 +63,6 @@ ruff check .                                          # lint
 - Nenhum segredo no repo; tudo em `.env` (ver `.env.example`).
 
 ## Rotas
-Ver `config/urls.py`. Endpoints da API sob `/api/v1/`; ativados por sub-task (T-027c..f).
+Ver `config/urls.py`. Endpoints da API sob `/api/v1/`; ativados por sub-task (T-027c..f, T-028a).
+`/api/v1/auth/`: `guest`, `register`, `login`, `jwks.json` (públicos) · `me`, `link` (JWT). Google
+OAuth fica fora de escopo por ora (ADR-020) — `Account.google_sub` já reservado no schema.

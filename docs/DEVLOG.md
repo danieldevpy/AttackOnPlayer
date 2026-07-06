@@ -1,5 +1,41 @@
 # Devlog
 
+## 2026-07-06 — Sessão 26: T-028 — Auth email+senha (SPEC-0008/ADR-020)
+- **Pedido do CD:** retomar T-028, mas separar Google OAuth como opcional/futuro — só a fatia
+  email+senha entra agora. Virou `ADR-020` + T-028 fechada em 3 sub-tasks incrementais
+  (T-028a/b/c), cada uma com gate verde e commit próprio.
+- **T-028a (Django):** `POST /auth/register` e `/auth/login` (`accounts/views.py`), reaproveitando
+  `Account.objects.create_user` e `jwt.sign_account` já existentes da T-027c. `RegisterSerializer`
+  valida email único (`normalize_email`) e senha forte (`validate_password`, os 4 validators já
+  configurados desde a T-027); `LoginSerializer` checa `check_password` e rejeita contas guest.
+  9 testes novos (`test_register_login.py`) → pytest 79/79.
+- **T-028b (Colyseus):** `platform/authVerifier.ts` — `jose` + `createRemoteJWKSet` contra
+  `/api/v1/auth/jwks.json`; JWKS cacheado internamente pela lib, sem round-trip por join.
+  `ArenaRoom.onJoin` virou `async` e aceita `options.authToken` opcional atrás de
+  `PLATFORM_ENABLED` (mesma flag da T-027g — off por default, zero mudança de comportamento
+  atual); token válido seta `Player.accountId` (campo novo, não sincronizado — identidade, nunca
+  poder in-round) e o `display_name` da conta; token ausente/expirado/inválido cai pra guest sem
+  rejeitar o join. 6 testes novos (`authVerifier.test.ts`, chave RSA gerada em memória) → vitest
+  server 76/76. Verificado ponta a ponta com token real emitido pelo `/auth/register` rodando
+  contra o Django de verdade (script descartável, não commitado).
+- **T-028c (client):** `auth.ts` — pill discreta no canto (`#auth-widget`, `bottom:150px;
+  left:10px`, fora da área de jogo e da touch-stick), nunca modal, guest continua o default de
+  1 clique. Ao carregar, registra o guest local no Django via `/auth/guest` em best-effort
+  (`ensureGuestRegistered` — Django fora do ar não afeta o guest, aceite #3); clicar na pill
+  abre um painel Entrar/Registrar; sucesso chama `/auth/link` com o `player_token` local pra
+  herdar `PlayerStats` (aceite #5) e guarda o JWT (`aop_jwt`) pro próximo `joinOrCreate`
+  (`authToken`). `CORS_ALLOWED_ORIGINS` ganhou a porta do `client-verify` (5299) além da
+  padrão (5173) — necessário pro fetch direto do client ao Django.
+- **Verificação ponta a ponta no preview** (`server-verify`:2604 + `client-verify`:5299 +
+  Django:8000): registrar conta nova (pill passa a mostrar o nome), logout (volta pra "guest"),
+  login com senha errada (mensagem de erro no painel, sem travar) e com senha certa (fecha o
+  painel, loga) — em todos os casos a partida seguiu rodando sem interrupção (HUD subiu de
+  nível 1→6 o tempo todo). Cadeia guest→registro→link validada via curl direto no Django.
+- **Fora de escopo, adiado (ADR-020):** Google OAuth — `Account.google_sub` já reservado no
+  schema desde a T-027b, plugar depois não pede migração. Vira T-028-google no BACKLOG.
+- Gates: shared 30/30 · server 76/76 · bots 35/35 · tsc ×3 · backend pytest 79/79 · ruff limpo
+  · `makemigrations --check` limpo.
+
 ## 2026-07-06 — Sessão 25: T-048 — imersão de navegador (SPEC-0012, fora de fase)
 - **Pedido direto do CD, antes de retomar T-028:** "quero que o jogo ganhe uma imersão no
   navegador, estilo tela cheia, sem que atalhos, cliques errados etc, atrapalhem o jogador."

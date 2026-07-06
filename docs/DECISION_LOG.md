@@ -2,6 +2,24 @@
 
 Formato: contexto → decisão → consequência. Decisões são reversíveis via novo ADR.
 
+## ADR-020 — Auth email+senha na V1; Google OAuth adiado (T-028)
+**Data:** 2026-07-06 · **Status:** Aprovado (CD) — implementado T-028a..c
+SPEC-0008 previa "anônimo default + Google + registre-se" na T-028. A pedido direto do CD,
+Google OAuth foi separado como opcional/futuro — a T-028 entregou só a fatia email+senha:
+`POST /auth/register` e `/auth/login` (Django, reaproveitando `Account.objects.create_user`
+e a assinatura JWT já existente da T-027c); verificação do JWT no join do Colyseus
+(`authVerifier.ts`, lib `jose` + `createRemoteJWKSet` contra o JWKS do Django — cache
+interno, sem round-trip por join); e uma janela discreta de conta no client (`auth.ts`) —
+pill no canto, nunca modal, guest continua o default de 1 clique. O campo `google_sub` no
+model `Account` (T-027b) permanece reservado sem uso; retomar Google é só plugar um provider
+novo nesse mesmo endpoint de emissão de JWT, sem migração de schema.
+**Consequência:** guest local se registra no Django em best-effort (`ensureGuestRegistered`,
+silencioso se o Django estiver fora do ar); login/registro chamam `/auth/link` pra herdar
+`PlayerStats` do guest (aceite #5 da SPEC-0008) — hoje isso ainda migra só o scaffold vazio,
+já que a progressão real só passa a alimentar `PlayerStats` na T-029. `CORS_ALLOWED_ORIGINS`
+ganhou a porta do client-verify (5299) além do dev padrão (5173). Login/logout nunca derruba
+a partida em andamento (verificado no preview: HUD seguiu subindo de nível o tempo todo).
+
 ## ADR-019 — Backend Django (T-027): stack concreto da plataforma (SPEC-0008/ADR-016)
 **Data:** 2026-07-06 · **Status:** Aprovado (CD) — implementado T-027a..g
 ADR-016 definiu a fronteira (tempo real no Node, plataforma no Django); faltava fixar o stack concreto. Decisões: **pip + venv** (sem uv/poetry — simplicidade na VPS); **Postgres em dev/test/prod via Docker** desde o início (paridade total — pytest roda contra Postgres real, não sqlite); **auth JWT RS256** (PyJWT) com JWKS público (`/api/v1/auth/jwks.json`) para o Colyseus verificar localmente sem round-trip por join; **guest como default** (1 clique, `AbstractBaseUser` custom com PK uuid) com vínculo guest→conta via `GuestLink` (`player_token` → `Account`), preservando `PlayerStats` no `link`; **fronteira Node↔Django por `service token`** compartilhado (header `ServiceToken`/`X-Service-Token`), nunca uma conta de usuário. `packages/server` ganhou um cliente fino (`platformClient.ts`) que cacheia `gameops/config` (TTL) e envia telemetria em batch, tudo atrás de `PLATFORM_ENABLED` (default off) — Django cair nunca derruba uma partida em andamento nem impede novas rooms (cache/defaults).
