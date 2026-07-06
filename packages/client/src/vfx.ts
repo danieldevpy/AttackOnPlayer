@@ -41,6 +41,9 @@ export const VFX_DEFS: Record<string, VfxDef> = {
   // T-045 (SPEC-0011): materialização de nascimento/renascimento — discreta, não chamativa.
   // Partículas suaves em branco-azulado convergindo para o ponto de spawn. "Leve sempre" §5.
   spawn_materialize: { color: 0xa0c4ff, count: 14, life: 380, speed: 1.0, intensity: "leve" },
+  // T-055 (SPEC-0014): rastro leve em voo, só do tiro pesado — reforça "arma vantajosa" sem
+  // virar aura (regra da T-022: automático continua discreto mesmo no lançador mais forte).
+  arrow_trail_heavy: { color: 0xffa726, count: 1, life: 200, speed: 0.15, intensity: "leve" },
 };
 
 const MAX_PARTICLES = 260; // orçamento global fixo — custo de render não varia com o combate

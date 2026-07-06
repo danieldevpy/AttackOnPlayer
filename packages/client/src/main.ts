@@ -196,41 +196,80 @@ function buildWorld(map: GameMap) {
 // ---------- Entidades dinâmicas ----------
 const playerVisuals = new Map<string, THREE.Group>();
 const collectibleMeshes = new Map<string, THREE.Group>(); // F2: cada coletável é um grupo composto (visuals.ts)
-const projectileMeshes = new Map<string, THREE.Mesh>();
+const projectileMeshes = new Map<string, THREE.Group>(); // T-055: flecha = grupo (haste+ponta)
 let flagVisual: THREE.Group | undefined; // T-021: bandeira "rei do mapa" — objeto único, não um MapSchema
 
-// T-039 (SPEC-0011): visual do projétil POR lançador. Basic = discreto (esfera laranja
-// pequena, como antes). Vantajosos = maiores e mais vistosos + muzzle mais rico (regra de
+// T-055 (SPEC-0014): visual do projétil do arqueiro = flecha (haste + ponta), não mais a
+// esfera de placeholder da T-039. Geometria "deitada" ao longo do local +X (mesma convenção
+// de "nariz" dos personagens, ver syncWorld) — cada parte é rotacionada UMA vez na criação
+// da geometria singleton, então a montagem em grupo não precisa de rotação extra por parte.
+function arrowShaftGeo(len: number, radius: number): THREE.CylinderGeometry {
+  const g = new THREE.CylinderGeometry(radius, radius, len, 6);
+  g.rotateZ(-Math.PI / 2); // eixo Y (padrão do cilindro) -> eixo X local
+  return g;
+}
+function arrowHeadGeo(len: number, radius: number): THREE.ConeGeometry {
+  const g = new THREE.ConeGeometry(radius, len, 4); // 4 lados: mesmo padrão low-poly da T-053
+  g.rotateZ(-Math.PI / 2); // ápice (+Y) -> +X local, ponta aponta pra frente
+  return g;
+}
+
+// T-039/T-055: visual do projétil POR lançador. Basic = discreto (flecha pequena, como
+// antes era a esfera). Vantajosos = maiores e mais vistosos + muzzle mais rico (regra de
 // intensidade da T-022: automático é leve, arma "boa" chama atenção). Geo/mat são singletons
 // de módulo — N projéteis do mesmo lançador reusam os mesmos objetos ("leve sempre" §5).
 interface ProjStyle {
-  geo: THREE.SphereGeometry;
+  shaftGeo: THREE.CylinderGeometry;
+  headGeo: THREE.ConeGeometry;
   mat: THREE.MeshBasicMaterial;
+  shaftLen: number;
+  headLen: number;
   muzzle: string; // entrada em VFX_DEFS disparada no nascimento do projétil
   sound: string; // T-050: entrada em AUDIO_REGISTRY — fire distinto por launcher
+  trail?: string; // T-055: entrada em VFX_DEFS pro rastro leve em voo (só heavy_shot)
 }
 const projStyles: Record<string, ProjStyle> = {
   basic_shot: {
-    geo: new THREE.SphereGeometry(0.22), // acompanha o sceneryRadius fino da T-038
+    shaftGeo: arrowShaftGeo(0.32, 0.035),
+    headGeo: arrowHeadGeo(0.18, 0.09), // acompanha o sceneryRadius fino da T-038
     mat: new THREE.MeshBasicMaterial({ color: 0xffaa00 }),
+    shaftLen: 0.32,
+    headLen: 0.18,
     muzzle: "muzzle_flash",
     sound: "fire_basic",
   },
   heavy_shot: {
-    geo: new THREE.SphereGeometry(0.34), // bala pesada, bem visível
+    shaftGeo: arrowShaftGeo(0.42, 0.05),
+    headGeo: arrowHeadGeo(0.24, 0.13), // flecha pesada, bem visível
     mat: new THREE.MeshBasicMaterial({ color: 0xff6d00 }),
+    shaftLen: 0.42,
+    headLen: 0.24,
     muzzle: "muzzle_heavy",
     sound: "fire_heavy",
+    trail: "arrow_trail_heavy", // T-055: única com rastro — reforça a leitura de "arma pesada"
   },
   rapid_shot: {
-    geo: new THREE.SphereGeometry(0.2), // pequena e ágil
+    shaftGeo: arrowShaftGeo(0.26, 0.03),
+    headGeo: arrowHeadGeo(0.14, 0.07), // pequena e ágil
     mat: new THREE.MeshBasicMaterial({ color: 0x40c4ff }),
+    shaftLen: 0.26,
+    headLen: 0.14,
     muzzle: "muzzle_rapid",
     sound: "fire_rapid",
   },
 };
 function projStyleFor(launcherId: string): ProjStyle {
   return projStyles[launcherId] ?? projStyles.basic_shot;
+}
+/** T-055: monta o grupo haste+ponta de uma flecha a partir da geometria/material singleton do
+ * lançador — a ponta fica na frente (nariz local +X), a haste logo atrás. */
+function createArrowMesh(style: ProjStyle): THREE.Group {
+  const group = new THREE.Group();
+  const shaft = new THREE.Mesh(style.shaftGeo, style.mat);
+  const head = new THREE.Mesh(style.headGeo, style.mat);
+  head.position.x = style.shaftLen / 2 + style.headLen / 2;
+  group.add(shaft, head);
+  return group;
 }
 
 // T-022: instante exato de aplicação de cada buff temporário (evento já emitido pelo
@@ -245,6 +284,7 @@ const BUFF_DURATION_MS: Record<string, number> = {
 const buffApplied = new Map<string, { kind: string; expiresAt: number }>();
 const wasShielded = new Map<string, boolean>(); // detecta a transição p/ disparar shield_pop
 const lastTrailSpawn = new Map<string, number>();
+const lastArrowTrailAt = new Map<string, number>(); // T-055: rastro leve em voo, por projétil (só heavy_shot)
 let lastFlagAuraAt = 0;
 
 // T-045 (SPEC-0011): transição de nascimento — materialização scale-in + fade-in.
@@ -915,37 +955,54 @@ function syncWorld() {
     seenProj.add(id);
     let mesh = projectileMeshes.get(id);
     if (!mesh) {
-      // T-039: cor/tamanho e muzzle por lançador (proj.launcherId vem do servidor).
+      // T-039/T-055: forma+cor+tamanho e muzzle por lançador (proj.launcherId vem do servidor).
       const style = projStyleFor(proj.launcherId);
-      mesh = new THREE.Mesh(style.geo, style.mat);
+      mesh = createArrowMesh(style);
       mesh.position.set(proj.x, 0.5, proj.z);
+      // T-054/T-055: o projétil nasce na posição do atirador (ownerId não é sincronizado) —
+      // atribui o disparo ao player mais próximo do ponto de spawn (heurística cosmética,
+      // tolerante a erro se dois players estiverem colados). O `dir` desse player É a direção
+      // real do disparo (servidor: dirX/dirZ = cos/sin(dir) no instante do tiro, ver
+      // projectiles.ts) — como o padrão de disparo é sempre "straight", orientar a flecha UMA
+      // vez na criação basta, sem recalcular por frame.
+      let shooterId: string | undefined;
+      let bestD = 1.6 * 1.6;
+      st.players.forEach((pl: any, pid: string) => {
+        const dx = pl.x - proj.x;
+        const dz = pl.z - proj.z;
+        const d = dx * dx + dz * dz;
+        if (d < bestD) {
+          bestD = d;
+          shooterId = pid;
+        }
+      });
+      const shooterDir = shooterId ? st.players.get(shooterId)?.dir ?? 0 : 0;
+      mesh.rotation.y = -shooterDir; // mesma convenção de facing dos personagens (syncWorld)
       scene.add(mesh);
       projectileMeshes.set(id, mesh);
       vfx.spawnAt(style.muzzle, proj.x, proj.z); // T-022/T-039: muzzle no cano (leve p/ basic, rico p/ vantajosos)
       audio.play(style.sound, proj.x, proj.z); // T-050: fire distinto por launcher, posicional (T-051)
-      // T-054: o projétil nasce na posição do atirador (ownerId não é sincronizado) — atribui o
-      // disparo ao player mais próximo do ponto de spawn e dispara a animação de puxar o arco.
-      // Heurística puramente cosmética, tolerante a erro se dois players estiverem colados.
-      let shooter: THREE.Group | undefined;
-      let bestD = 1.6 * 1.6;
-      playerVisuals.forEach((pv) => {
-        const dx = pv.position.x - proj.x;
-        const dz = pv.position.z - proj.z;
-        const d = dx * dx + dz * dz;
-        if (d < bestD) {
-          bestD = d;
-          shooter = pv;
-        }
-      });
-      if (shooter) triggerCharacterShoot(shooter, performance.now());
+      const shooterVis = shooterId ? playerVisuals.get(shooterId) : undefined;
+      if (shooterVis) triggerCharacterShoot(shooterVis, performance.now());
     }
     mesh.position.x += (proj.x - mesh.position.x) * 0.5;
     mesh.position.z += (proj.z - mesh.position.z) * 0.5;
+    // T-055: rastro leve em voo — só o lançador que define `style.trail` (hoje, só heavy_shot).
+    const style = projStyleFor(proj.launcherId);
+    if (style.trail) {
+      const last = lastArrowTrailAt.get(id) ?? 0;
+      const now = performance.now();
+      if (now - last > 90) {
+        vfx.spawnAt(style.trail, mesh.position.x, mesh.position.z, 0.5);
+        lastArrowTrailAt.set(id, now);
+      }
+    }
   });
   projectileMeshes.forEach((mesh, id) => {
     if (!seenProj.has(id)) {
       scene.remove(mesh);
       projectileMeshes.delete(id);
+      lastArrowTrailAt.delete(id);
     }
   });
 }

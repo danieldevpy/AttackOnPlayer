@@ -34,7 +34,16 @@ deslocamento renderizado), shoot (puxar arco no spawn de projétil), spawn/death
 scale-in da T-045 (morte = respawn imediato no servidor). tsc client+server limpo · vite build OK
 · shared 38/38 · bots 4×12 sem regressão · **teste headless da animação 11/11**. Screenshot dos
 4 estados pro CD **pendente** (preview oculto). Ver `docs/DEVLOG.md` (Sessão 32) e
-`docs/prompts/PROMPT-0049.md`. Outras frentes (T-055 flechas, T-056 skins, T-060 Backend) podem
+`docs/prompts/PROMPT-0049.md`.
+**Sessão 33 (agente worker, Frente C): T-055 — Projéteis do arqueiro** entregue: placeholder de
+esfera virou **flecha** (haste+ponta, geometrias singleton por launcher), orientada **uma vez**
+na criação lendo `Player.dir` do atirador mais próximo (dirX/dirZ do projétil não são
+sincronizados, mas coincidem com o `dir` já sincronizado — disparo sempre reto, sem herança de
+velocidade nos 3 launchers de player); `trail` leve só no `heavy_shot` (`arrow_trail_heavy`,
+`vfx.ts`). Sem mudança em schema/rede. tsc ×3 limpo · shared 38/38 · server 80/80 · bots 35/35 ·
+smoke com bots reais disparando pelos 3 launchers, console sem erro. Screenshot pro CD
+**pendente** (mesma limitação de preview oculto das sessões 31/32). Ver `docs/DEVLOG.md`
+(Sessão 33) e `docs/prompts/PROMPT-0050.md`. Outras frentes (T-056 skins, T-060 Backend) podem
 estar em andamento em paralelo por outros agentes — conferir BACKLOG antes de assumir status.
 
 ---
@@ -116,9 +125,9 @@ ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
 2. **Frente S (Som) fechada:** T-049 ✅ · T-050 ✅ · T-051 ✅ (Sessões 28/29).
 3. **Frente C (Personagens):** T-052 ✅ (Sessão 30 — contrato) · T-053 ✅ (Sessão 31 — visual
    procedural do arqueiro em F2) · T-054 ✅ (Sessão 32 — animação procedural idle/walk/shoot/
-   spawn em `characters.ts`). Próximas: **T-055** (projéteis/flecha) · **T-056** (skins por
-   paleta) — dependem de T-053 ✅. **T-060** (KDA/ranking) paralelizável. Lobby (T-057+, reusa
-   `createCharacterVisual` no preview) só depois de T-053 ✅ e T-061.
+   spawn em `characters.ts`) · T-055 ✅ (Sessão 33 — flecha orientada + trail no heavy). Próxima:
+   **T-056** (skins por paleta, depende de T-053 ✅). **T-060** (KDA/ranking) paralelizável.
+   Lobby (T-057+, reusa `createCharacterVisual` no preview) só depois de T-053 ✅ e T-061.
 
 **F4 — Plataforma (SPEC-0008), continuação:**
 1. **T-029** 〔P〕 — ADR-012 liga na conta: a progressão persistente (acumulador da box, hoje

@@ -1,5 +1,35 @@
 # Devlog
 
+## 2026-07-06 — Sessão 33: T-055 (SPEC-0014) — Projéteis do arqueiro
+- **Task (agente worker, Frente C — Personagens/classe/skin, client):** placeholder de esfera
+  do projétil (T-039) virou **flecha** (haste cilindro fino + ponta cone 4 lados, mesmo
+  low-poly da T-053), orientada pela direção real do disparo — sem mudar dano/rede.
+- **Geometria:** haste e ponta rotacionadas **uma vez na criação** (`rotateZ(-Math.PI/2)`) pra
+  já nascerem deitadas no local +X (convenção de "nariz" dos personagens); `createArrowMesh`
+  monta um `THREE.Group` novo por projétil referenciando geometria/material **singleton** por
+  launcher (`projectileMeshes` passou de `Map<string, THREE.Mesh>` pra `Map<string,
+  THREE.Group>`).
+- **Orientação sem campo novo na rede:** `Projectile.dirX/dirZ` não são sincronizados (só
+  internos do servidor); como todo `LauncherDef` de player dispara em linha reta sem herdar
+  velocidade, a direção real do tiro é exatamente `Player.dir` do atirador no instante do fogo
+  (`projectiles.ts:41-42`, já sincronizado). A flecha lê esse `dir` **uma vez**, na criação do
+  mesh — reaproveita a mesma heurística de "player mais próximo do spawn" que a T-054 já usava
+  pra disparar a animação de puxar o arco.
+- **Trail leve só no `heavy_shot`:** `ProjStyle.trail?` novo + `arrow_trail_heavy` em
+  `vfx.ts` (`intensity: "leve"`, mesma regra de intensidade da T-022 — reforça "arma
+  vantajosa" sem virar aura), spawnado a cada 90ms de voo via `lastArrowTrailAt` (por
+  projétil, limpo no despawn).
+- **Verificado:** `tsc --noEmit` limpo em client/server/bots · shared 38/38 · server 80/80 ·
+  bots 35/35 (task não toca shared/server, rodados por completude do gate). Smoke real:
+  `server-verify`:2604 + `client-verify`:5299, client conectou como player de verdade na sala,
+  2 rodadas de `npm run bots -- 4 20`/`4 15` dispararam pelos 3 launchers sem NENHUM erro de
+  console. `npm run aci -- index` ao final. Detalhes: `docs/prompts/PROMPT-0050.md`.
+- **Limitação (mesma das sessões 31/32):** screenshot/F3 pro CD segue pendente — preview roda
+  oculto (`document.visibilityState === "hidden"`, rAF pausado), reproduzido de novo mesmo
+  reiniciando o server de preview. Confirmação visual de "flecha aponta pra onde voa" fica
+  pro CD num navegador real; lógica de orientação revisada e consistente com o facing já
+  testado dos personagens.
+
 ## 2026-07-06 — Sessão 32: T-054 (SPEC-0014) — Animações procedurais
 - **Task (agente worker, Frente C — Personagens/classe/skin, client):** animação procedural do
   arqueiro, update central por frame em `characters.ts`, **sem clock global novo** (reusa o
