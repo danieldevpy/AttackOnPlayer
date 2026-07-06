@@ -19,6 +19,7 @@ import {
 import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate } from "./visuals";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
 import { createVfxSystem } from "./vfx";
+import { createAudioSystem } from "./audio";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
 import { initImmersion, setUnloadGuard } from "./immersion";
@@ -73,6 +74,10 @@ scene.add(sun);
 // T-022 (SPEC-0006): registry de VFX nomeados — 1 pool de partículas para todo o jogo.
 const vfx = createVfxSystem();
 scene.add(vfx.points);
+
+// T-049 (SPEC-0013): registry de sons nomeados — mesmo AudioContext pra todo o jogo,
+// destravado no primeiro gesto do usuário (regra de autoplay dos browsers).
+const audio = createAudioSystem();
 
 // ---------- Mundo (construído após receber mapW/mapH/mapSeed OU "map_data" do servidor) ----------
 let worldBuilt = false;
@@ -347,12 +352,14 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
       spawnDamagePopup(vis.position.x, vis.position.z, ev.payload.damage, ev.payload.isKill === true);
       vfx.spawnAt("hit_spark", vis.position.x, vis.position.z);
       vfx.spawnAt("blood_hit", vis.position.x, vis.position.z);
+      audio.play("hit"); // T-049: som de teste — mapeamento completo é T-050
     }
   }
   // T-022: registry de VFX — cada efeito nasce de um evento que o servidor já emite.
   if (ev.type === "death") {
     const vis = playerVisuals.get(ev.payload.playerId);
     if (vis) vfx.spawnAt("death_burst", vis.position.x, vis.position.z);
+    audio.play("death"); // T-049: som de teste — mapeamento completo é T-050
   } else if (ev.type === "kill_heal") {
     // SPEC-0010: cura por abate em briga — feedback verde ("+X") + partículas no matador.
     const vis = playerVisuals.get(ev.payload.playerId);
@@ -634,6 +641,7 @@ addEventListener("keydown", (e) => {
     if (chooseUpgradeByIndex(Number(e.key) - 1)) return;
   }
   if (e.key.toLowerCase() === "r") room?.send("reroll"); // T-004: coins compram reroll de atributo
+  if (e.key.toLowerCase() === "m") audio.toggleMuted(); // T-049: mute — UI dedicada vem no lobby (T-051/T-058)
 });
 
 // Última intenção enviada; a câmera (followCamera) reusa o vetor de mira para o leve
@@ -844,6 +852,7 @@ function syncWorld() {
       scene.add(mesh);
       projectileMeshes.set(id, mesh);
       vfx.spawnAt(style.muzzle, proj.x, proj.z); // T-022/T-039: muzzle no cano (leve p/ basic, rico p/ vantajosos)
+      audio.play("fire"); // T-049: som de teste — mapeamento completo é T-050
     }
     mesh.position.x += (proj.x - mesh.position.x) * 0.5;
     mesh.position.z += (proj.z - mesh.position.z) * 0.5;

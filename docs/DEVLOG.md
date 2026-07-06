@@ -1,5 +1,29 @@
 # Devlog
 
+## 2026-07-06 — Sessão 28: T-049 (SPEC-0013) — AudioSystem + registry procedural
+- **Task (agente worker, Frente S de PROPOSAL-0004):** `packages/client/src/audio.ts` novo —
+  `SoundDef` (`wave: sine|square|sawtooth|triangle|noise`, `freq`/`freqEnd` opcional pra sweep,
+  `envelope {attack, decay}`, `gain`, `file?` reservado pra sample gravado futuro), `AUDIO_REGISTRY`
+  com 3 sons de teste (`fire`/`hit`/`death`), `createAudioSystem()` com `AudioContext` único
+  destravado no primeiro gesto (`pointerdown`/`keydown`/`touchstart`, `{once:true}`), master gain
+  + `setMuted`/`isMuted`/`toggleMuted`, pool de vozes com teto (`MAX_VOICES=12`, rouba a mais
+  antiga quando satura) — espelha 1:1 o padrão do `vfx.ts` (T-022): "som novo" = 1 entrada no
+  registry, nada solto em `main.ts`.
+- **`main.ts`:** os 3 sons de teste plugados exatamente nos pontos onde o `vfx.ts` já dispara
+  (`fire` no spawn de projétil, junto do `vfx.spawnAt(style.muzzle,...)`; `hit` em `ev.type ===
+  "hit"`; `death` em `ev.type === "death"`); tecla `M` (handler global existente de F3/1-2-3/R)
+  chama `audio.toggleMuted()` — só pra validar o aceite nesta task, UI/persistência de volume é
+  T-051/T-058.
+- **Verificado:** `cd packages/client && npx tsc --noEmit` limpo. Preview manual
+  (`server-verify`:2604 + `client-verify`:5299) — client conectou numa sala real, clique
+  destravou o `AudioContext` (`state: running`), `AUDIO_REGISTRY` carregado com as 3 chaves,
+  `play()`/`toggleMuted()` sem exceção; bots reais (`SERVER_URL=ws://localhost:2604 npm run bots
+  -- 2 15`) rodaram na mesma sala — console sem erro (autoplay ou outro), só warning padrão do
+  Electron. `npm run aci -- index` rodado ao final.
+- **Fora do escopo desta task (fica pra T-050):** mapeamento evento→som completo (xp/coin/hp/
+  box/farm_event, fire por launcher, kill/death/respawn, level-up, bandeira, xp_combo, toast).
+  Detalhes: `docs/prompts/PROMPT-0045.md`.
+
 ## 2026-07-06 — Sessão 27 (design): PROPOSAL-0004 — som, personagens/classes e lobby
 - **Pedido do CD:** 4 frentes pra fechar na V1 (som procedural; classe `archer` low poly por
   composição direto no Three.js com animações; fechamento backend/admin — ranking/KDA/settings/
