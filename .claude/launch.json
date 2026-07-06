@@ -12,6 +12,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:client"],
       "port": 5173
+    },
+    {
+      "name": "server-verify",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "PORT=2604 DEBUG=1 npm run dev:server"],
+      "port": 2604
+    },
+    {
+      "name": "client-verify",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "npm run dev -w @aop/client -- --port 5299 --strictPort"],
+      "port": 5299
     }
   ]
 }

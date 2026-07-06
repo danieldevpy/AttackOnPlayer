@@ -72,7 +72,7 @@ export const BOT_PROFILES: Record<ProfileName, BotProfile> = {
       fireIntervalMsRange: [400, 800],
       giveUpMs: 8000,
     },
-    cardPolicy: { preferredCardIds: ["forca_bruta", "gatilho_rapido"] },
+    cardPolicy: { preferredCardIds: ["forca_bruta", "gatilho_rapido", "fera", "rajada"] },
   },
   cauteloso: {
     // build "tanque": concentra Vitalidade/Agilidade — sobrevive, foge cedo, hostiliza pouco
@@ -91,7 +91,7 @@ export const BOT_PROFILES: Record<ProfileName, BotProfile> = {
       fireIntervalMsRange: [700, 1300],
       giveUpMs: 4000,
     },
-    cardPolicy: { preferredCardIds: ["casca_grossa", "pes_ligeiros"] },
+    cardPolicy: { preferredCardIds: ["casca_grossa", "pes_ligeiros", "muralha", "sobrevivente"] },
   },
   cacador: {
     // build "caçador": concentra Alcance/Agilidade — persegue o mapa todo, atira de longe
@@ -110,7 +110,7 @@ export const BOT_PROFILES: Record<ProfileName, BotProfile> = {
       fireIntervalMsRange: [350, 700],
       giveUpMs: 12000,
     },
-    cardPolicy: { preferredCardIds: ["olhar_de_aguia", "pes_ligeiros"] },
+    cardPolicy: { preferredCardIds: ["olhar_de_aguia", "pes_ligeiros", "mira_longa", "cacador_furtivo"] },
   },
   equilibrado: {
     // auto-pick de sempre — sem especialização, mediano em tudo

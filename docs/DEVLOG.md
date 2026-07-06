@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-06 — Sessão 21: 3 correções (bandeira, verificação SPEC-0010, variedade de cards)
+- **Bandeira:** pedido do CD já estava coberto por T-041/T-042 (livre=acesa/carregada=apagada/cooldown=some) — código revisado, sem bug. F3 ganhou linha de estado textual (`bandeira: livre/carregada/cooldown`) porque o ambiente de preview desta sessão não sustenta o loop de render WebGL (`document.hidden` pausa o `requestAnimationFrame` — causa raiz confirmada, mesma limitação já suspeitada em sessões anteriores).
+- **SPEC-0010:** confirmada funcional via smoke ao vivo (8 bots, 100s, polling do `/debug/rooms`) — `kill_heal`/`kill_duel_bonus` batendo a fórmula da spec, `hp_orb`/`shield_temp` respeitando teto e respawn; redução de dano do escudo já coberta por teste unitário.
+- **Cards de level-up:** reversão pedida pelo CD do princípio "determinístico, nunca sorteio" de T-016 — pool de 6→12 cards (`UPGRADE_CARD_POOL`, novos: `rajada`/`mira_longa` puros de Cadência/Alcance + combos `fera`/`muralha`/`cacador_furtivo`/`sobrevivente`); `upgradeCardsForLevel` agora sorteia 3 distintos por level-up em vez de janela fixa por `level % 6`. Escolha dentro da oferta continua do jogador. Perfis de bot (T-008b) ganharam `preferredCardIds` estendidos pra não perder identidade de build.
+- **Gates:** shared 30/30 · server 49/49 · bots 35/35 · tsc ×3 limpo. Detalhes em `docs/prompts/PROMPT-0041.md`.
+- **Próximo passo:** F4 — Plataforma (SPEC-0008), começando por T-026 (telemetria NDJSON).
+
 ## 2026-07-06 — Sessão 20: fix de boot dos bots + T-046/T-047 (fecha SPEC-0011) + T-025 (CLI de mapas, fecha SPEC-0007/F3)
 - **Fix:** `packages/shared/package.json` sem `"type": "module"` quebrava o boot de `@aop/bots` (`SyntaxError: does not provide an export named 'POWER_BAND_HIGH'`) — interop CJS→ESM falha em detectar named exports que atravessam várias camadas de `export * from`. Fix de 1 linha, sem regressão em nenhum dos 4 pacotes.
 - **T-046 (smoke QA da SPEC-0011):** servidor + 10 bots headless, duas rodadas (200s/240s), polling de `/debug/rooms` a cada 16s (1262 eventos únicos, 265s reais — o ring buffer sozinho só retém ~30s de sessão com 10 bots). Confirmado ao vivo: arma nunca duplicada (9 ciclos spawn→pickup, 19–30s), ciclo completo `flag_cooldown_start`→`flag_respawn` = 60028ms (bate com `FLAG_COOLDOWN_MS`), combo de XP boosted a partir da 3ª coleta, `kill_heal`+`kill_duel_bonus` coexistindo (sem monopólio de alvo). Sem mudança de código de jogo.

@@ -35,14 +35,19 @@ describe("xpToNext (curva de XP, T-003)", () => {
   });
 });
 
-describe("upgradeCardsForLevel (cards de level-up, T-016)", () => {
-  it("é determinística por nível e devolve 3 cards distintos", () => {
+describe("upgradeCardsForLevel (cards de level-up, T-016 + variedade sorteada 2026-07-06)", () => {
+  it("sempre devolve 3 cards distintos do pool", () => {
     for (let level = 1; level <= 40; level++) {
-      const a = upgradeCardsForLevel(level);
-      const b = upgradeCardsForLevel(level);
-      expect(a.map((c) => c.id)).toEqual(b.map((c) => c.id)); // sem sorteio — habilidade > sorte
-      expect(new Set(a.map((c) => c.id)).size).toBe(3);
+      const offer = upgradeCardsForLevel(level);
+      expect(offer.length).toBe(3);
+      expect(new Set(offer.map((c) => c.id)).size).toBe(3);
+      for (const card of offer) expect(UPGRADE_CARD_POOL.some((p) => p.id === card.id)).toBe(true);
     }
+  });
+
+  it("é sorteada — repetir a chamada produz ofertas variadas (não sempre a mesma tripla)", () => {
+    const offers = Array.from({ length: 30 }, () => upgradeCardsForLevel(1).map((c) => c.id).sort().join(","));
+    expect(new Set(offers).size).toBeGreaterThan(1);
   });
 
   it("todo card do pool vale exatamente UPGRADE_CARD_POINTS pontos", () => {

@@ -48,3 +48,13 @@ Voz do Daniel. A IA registra aqui, mas o conteúdo é decisão dele.
 **Bug reportado depois:** o menu de escolha de level-up fica aberto na tela mesmo depois do jogador morrer, mesmo não servindo mais pra nada — quer que feche.
 
 **Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0033.md`.
+
+## 2026-07-06 — Três correções antes de continuar o backlog
+
+**Bandeira parada no mapa:** deve ter estado de enable/disable conforme alguém pegar, estar em cooldown, ou estar "pegável". *(Já implementado desde T-041/T-042 — livre = acesa pulsante, carregada = apagada, cooldown = some do mapa. IA confirmou por código + eventos de servidor (T-046) e adicionou linha de estado no F3 pra dar veredito textual; verificação visual em pixel segue bloqueada — ambiente de preview sem GPU para WebGL, mesmo risco já registrado em `LEAD_DESIGNER_NOTES.md` 2026-07-05.)*
+
+**Verificar se a SPEC-0010 está funcional:** pediu checagem + teste. *(Confirmado funcional: smoke ao vivo com 8 bots — `kill_heal`/`kill_duel_bonus` com a matemática exata da spec, `hp_orb`/`shield_temp` respeitando teto e janela de respawn; redução de dano do escudo já coberta por teste unitário dedicado.)*
+
+**Cards de level-up repetitivos:** quer mais variações de atributo e sorteio, "para não ficar sempre repetitivo". *(Reverte a decisão de T-016/SPEC-0004 — "determinístico, nunca sorteio" — registrada como pilar habilidade>sorte. IA implementou o pedido (pool de 6→12 cards, oferta sorteada a cada level-up) e registrou a tensão com a decisão anterior em `LEAD_DESIGNER_NOTES.md`, mas seguiu a instrução explícita do CD.)*
+
+**Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0041.md`.

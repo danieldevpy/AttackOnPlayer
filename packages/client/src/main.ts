@@ -265,9 +265,12 @@ function triggerSpawnFade() {
 }
 
 // ---------- Rede ----------
+// `?port=NNNN` só pra testar contra um servidor local em porta alternativa (ex.: quando a
+// porta padrão já está ocupada por outra sessão de dev) — nunca usado fora de localhost.
+const devPortOverride = new URLSearchParams(location.search).get("port");
 const url =
   location.hostname === "localhost" || location.hostname.startsWith("192.")
-    ? `ws://${location.hostname}:${SERVER_PORT}`
+    ? `ws://${location.hostname}:${devPortOverride ?? SERVER_PORT}`
     : `wss://${location.host}`;
 
 const client = new Client(url);
@@ -522,6 +525,14 @@ function updateDebugState() {
   rows.push(`<tr><td>coletáveis</td><td>${st?.collectibles?.size ?? 0}</td></tr>`);
   rows.push(`<tr><td>projéteis</td><td>${st?.projectiles?.size ?? 0}</td></tr>`);
   rows.push(`<tr><td>ping</td><td>${ping < 0 ? "..." : ping + " ms"}</td></tr>`);
+  if (st?.flagEnabled && st?.flag) {
+    const flagLabel = st.flag.carrierId
+      ? `carregada por ${st.players?.get?.(st.flag.carrierId)?.name ?? st.flag.carrierId}`
+      : st.flag.state === "cooldown"
+      ? "cooldown (fora do mapa)"
+      : "livre (pegável)";
+    rows.push(`<tr><td>bandeira</td><td>${flagLabel}</td></tr>`);
+  }
 
   // Meu player
   if (me) {

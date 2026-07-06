@@ -114,8 +114,10 @@ export function attrMult(key: AttrKey, points: number): number {
 }
 
 // Cards de level-up (T-016, SPEC-0004) — escolha do jogador a cada nível.
-// DETERMINÍSTICOS por nível (nunca sorteio): quem conhece a tabela planeja a build
-// (pilar habilidade > sorte). Todo card vale UPGRADE_CARD_POINTS pontos.
+// SORTEADOS por nível (feedback do CD, 2026-07-06: pool antigo de 6 cards com janela
+// determinística ficava repetitivo — sempre os mesmos 3 no mesmo nível mod 6). Todo card
+// vale UPGRADE_CARD_POINTS pontos. A oferta é aleatória a cada level-up, mas a escolha DENTRO
+// da oferta continua 100% do jogador (habilidade > sorte na hora de decidir, não na oferta).
 export interface UpgradeCard {
   id: string;
   label: string;
@@ -125,20 +127,37 @@ export interface UpgradeCard {
 export const UPGRADE_CARD_POINTS = 6; // dobro do valor original (feedback CD: progressão pouco sentida entre marcos de skill)
 export const UPGRADE_CHOICE_TIMEOUT_MS = 5000; // sem escolha → auto-pick; o jogo NUNCA pausa
 export const UPGRADE_CARD_POOL: UpgradeCard[] = [
+  // puros — 1 por atributo, pra quem quer build concentrada
   { id: "forca_bruta", label: "+6 Força", points: { forca: 6 } },
   { id: "casca_grossa", label: "+6 Vitalidade", points: { vitalidade: 6 } },
   { id: "pes_ligeiros", label: "+6 Agilidade", points: { agilidade: 6 } },
+  { id: "rajada", label: "+6 Cadência", points: { cadencia: 6 } },
+  { id: "mira_longa", label: "+6 Alcance", points: { alcance: 6 } },
+  // combos — pares que fecham um estilo de jogo
   { id: "gatilho_rapido", label: "+4 Cadência  +2 Alcance", points: { cadencia: 4, alcance: 2 } },
   { id: "olhar_de_aguia", label: "+4 Alcance  +2 Cadência", points: { alcance: 4, cadencia: 2 } },
+  { id: "fera", label: "+4 Força  +2 Agilidade", points: { forca: 4, agilidade: 2 } },
+  { id: "muralha", label: "+4 Vitalidade  +2 Força", points: { vitalidade: 4, forca: 2 } },
+  { id: "cacador_furtivo", label: "+4 Agilidade  +2 Alcance", points: { agilidade: 4, alcance: 2 } },
+  { id: "sobrevivente", label: "+4 Vitalidade  +2 Cadência", points: { vitalidade: 4, cadencia: 2 } },
+  // espalhado — auto-pick de sempre
   { id: "equilibrado", label: "+2 Força  +2 Vitalidade  +2 Agilidade", points: { forca: 2, vitalidade: 2, agilidade: 2 } },
 ];
-/** Timeout/AFK e bots sem política: o preset equilibrado de sempre. */
-export const UPGRADE_AUTO_PICK: UpgradeCard = UPGRADE_CARD_POOL[5];
-/** 3 cards da oferta do nível — janela determinística sobre o pool (offsets 0/2/4 são sempre distintos mod 6). */
-export function upgradeCardsForLevel(level: number): UpgradeCard[] {
-  const n = UPGRADE_CARD_POOL.length;
-  const base = ((level % n) + n) % n;
-  return [UPGRADE_CARD_POOL[base], UPGRADE_CARD_POOL[(base + 2) % n], UPGRADE_CARD_POOL[(base + 4) % n]];
+/** Timeout/AFK e bots sem política: o preset equilibrado de sempre (procurado por id — a
+ * posição no pool não é mais estável agora que o pool cresce). */
+export const UPGRADE_AUTO_PICK: UpgradeCard = UPGRADE_CARD_POOL.find((c) => c.id === "equilibrado")!;
+/** 3 cards distintos sorteados do pool a cada level-up — `level` não influencia mais o sorteio
+ * (mantido no assinatura só pra não mexer nos chamadores); ver nota acima sobre o motivo da
+ * mudança. Sorteio server-side (ArenaRoom chama isto na hora do level-up), então nunca é
+ * previsível/reexecutável pelo cliente. */
+export function upgradeCardsForLevel(_level: number): UpgradeCard[] {
+  const pool = [...UPGRADE_CARD_POOL];
+  const picks: UpgradeCard[] = [];
+  for (let i = 0; i < 3 && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picks.push(pool.splice(idx, 1)[0]);
+  }
+  return picks;
 }
 
 // Boss de bot (T-008b, SPEC-0004 addendum): nasce alto e com build concentrada — o
