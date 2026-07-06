@@ -124,6 +124,8 @@ Isto **estende** a ADR-004 (fica coerente): continua sendo processo leve in-repo
 
 > **Nota de execução (F1):** na implementação, o índice de código usou o **TypeScript Compiler API** (`typescript`, já devDependency do pacote, usada pelo próprio `tsc`) em vez de tree-sitter. Mesmo resultado — parse estrutural exato de símbolos `.ts`/`.tsx` — sem acrescentar dependência nativa/WASM nova, o que é mais coerente ainda com a leveza que a própria F0 já escolheu (`JsonStore` em vez de `better-sqlite3`). Nenhum contrato muda: as tools MCP da tabela abaixo continuam as mesmas; só a técnica interna de extração é outra. Reavaliar tree-sitter só se um dia for preciso indexar linguagens além de TS/TSX.
 
+> **Nota de execução (F2):** o corpus real do projeto não usa front-matter YAML (nenhum arquivo `.md` tem bloco `---`) — os docs seguem a convenção observada no F0 (`# Título` na primeira linha + metadados em negrito logo abaixo). A unidade de indexação é a **seção de heading** (`#`..`######` fecha a anterior e abre a próxima), a mesma técnica "estrutural, não semântica" da F1, agora aplicada a markdown em vez de símbolos TS. Isso classifica `docs/DECISION_LOG.md` automaticamente: cada `## ADR-NNN` já é uma seção própria, sem parser dedicado — só a extração de `docId` muda por tipo de arquivo (`specs/SPEC-*` → nome do arquivo, `docs/DECISION_LOG.md` → regex no heading da seção). Snippet truncado por `budget.summaryMaxTokens` (já existia na F0, agora usado pela primeira vez). Nenhum contrato muda; front-matter YAML fica reavaliável se o projeto adotar essa convenção no futuro.
+
 ---
 
 ## 5. Estimativa de ganho
@@ -147,7 +149,7 @@ Cada fase é entregável sozinha, testada, e **não bloqueia o desenvolvimento d
 |---|---|---|---|
 | **F0 — Scaffold** | `packages/aci` no workspace, `aci.config.json`, CLI vazia, README, SQLite store, esqueleto de métricas. Zero import do jogo. | — | `npm run aci -- doctor` verde |
 | **F1 — Índice de código** ✅ | TypeScript Compiler API parseia os 4 pacotes (nota de execução acima); `findSymbol`/`searchCode` + CLI `index`/`search`; cache incremental por hash | F0 | achar `EffectKind`, `ArenaRoom`, `LauncherDef` com linha+assinatura |
-| **F2 — Índice de docs/corpus** | markdown/front-matter: specs, ADRs, prompts, roadmap, backlog, AGENTS, instrucoes; busca por doc/spec/ADR/conceito | F0 | achar "ADR sobre facing", "spec de skills" |
+| **F2 — Índice de docs/corpus** ✅ | markdown por heading (nota de execução abaixo): specs, ADRs, prompts, proposals, roadmap, backlog, AGENTS, instrucoes; `searchDocs` + CLI `index`/`search --kind=doc\|spec\|adr\|prompt\|proposal`; cache incremental por hash | F0 | achar "ADR sobre facing" (`search facing --kind=adr` → ADR-014, ~90% economia), "spec de skills" (`search skills --kind=spec` → SPEC-0004, ~79% economia) |
 | **F3 — Grafo de relações + resumos** | arestas doc↔código↔spec↔ADR; `aci_related_docs`; resumo automático de cada spec/doc/pacote | F1, F2 | "quem governa `ProjectileSystem`?" → ADR-011, SPEC-0004 |
 | **F4 — Contexto por feature (a joia)** | `aci_context_for_feature` com orçamento de tokens + progressive disclosure | F1–F3 | "T-020 IA dos bots" retorna só arquivos+trechos+ADR+deps |
 | **F5 — Servidor MCP + integração agentes** | `mcp/server.ts` (stdio); ponteiro aditivo no AGENTS.md; config para Claude Code/Codex/Gemini/Cursor. (Slot opcional p/ embeddings fica documentado, não implementado.) | F4 | agente externo chama as tools |

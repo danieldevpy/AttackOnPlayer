@@ -1,8 +1,14 @@
 import type { Store } from "../store/store.js";
 import type { CodeSymbol, SymbolKind } from "../index/code.js";
+import type { DocKind, DocSection } from "../index/docs.js";
 
 export interface SearchOptions {
   kind?: SymbolKind;
+  limit?: number;
+}
+
+export interface DocSearchOptions {
+  kind?: DocKind;
   limit?: number;
 }
 
@@ -47,4 +53,32 @@ export function searchCode(
   }
   const limit = opts.limit ?? 20;
   return [...nameHits, ...sigHits].slice(0, limit);
+}
+
+function loadAllDocSections(store: Store): DocSection[] {
+  return store.get<DocSection[]>("docs:all") ?? [];
+}
+
+/**
+ * Busca textual sobre o corpus de documentação (docs/specs/ADRs/prompts/proposals).
+ * Prioridade: docId exato (ex.: "ADR-014") > heading > corpo da seção — o caso
+ * "ADR sobre facing" ou "spec de skills" acha a seção certa sem abrir o arquivo inteiro.
+ */
+export function searchDocs(
+  store: Store,
+  query: string,
+  opts: DocSearchOptions = {},
+): DocSection[] {
+  const q = query.toLowerCase();
+  const all = loadAllDocSections(store).filter((s) => !opts.kind || s.kind === opts.kind);
+  const idHits: DocSection[] = [];
+  const headingHits: DocSection[] = [];
+  const snippetHits: DocSection[] = [];
+  for (const s of all) {
+    if (s.docId && s.docId.toLowerCase().includes(q)) idHits.push(s);
+    else if (s.heading.toLowerCase().includes(q)) headingHits.push(s);
+    else if (s.snippet.toLowerCase().includes(q)) snippetHits.push(s);
+  }
+  const limit = opts.limit ?? 20;
+  return [...idHits, ...headingHits, ...snippetHits].slice(0, limit);
 }

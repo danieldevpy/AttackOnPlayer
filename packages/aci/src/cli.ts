@@ -6,7 +6,10 @@ import { JsonStore } from "./store/store.js";
 import { resolveGlobs } from "./util/glob.js";
 import { Timer, queryMetrics } from "./metrics/metrics.js";
 import { indexCode, type SymbolKind } from "./index/code.js";
-import { searchCode } from "./query/search.js";
+import { indexDocs, type DocKind } from "./index/docs.js";
+import { searchCode, searchDocs } from "./query/search.js";
+
+const DOC_KINDS = new Set<string>(["doc", "spec", "adr", "prompt", "proposal"]);
 
 const COMMANDS = [
   "doctor",
@@ -26,8 +29,10 @@ Comandos:
   doctor              Diagnóstico do ambiente e da configuração (F0)
   stats               Estado do índice e cache
   index [--force]     Reindexa símbolos de código (F1); --force ignora cache
-  search <query>      Busca símbolo por nome/assinatura (F1)
-                       [--kind=function|class|interface|type|enum|const]
+  search <query>      Busca símbolo (F1) e/ou seção de doc/spec/ADR (F2) por
+                       nome/assinatura/heading/conteúdo
+                       [--kind=function|class|interface|type|enum|const
+                               |doc|spec|adr|prompt|proposal]
   context <feature>   (F4+) Pacote de contexto mínimo — stub
   summary <id>        (F3+) Resumo de spec/doc/pacote — stub
 `);
@@ -77,62 +82,99 @@ function codeStore(cfg: ReturnType<typeof loadConfig>): JsonStore {
   return new JsonStore(cfg.cacheAbs, "code.json");
 }
 
+function docsStore(cfg: ReturnType<typeof loadConfig>): JsonStore {
+  return new JsonStore(cfg.cacheAbs, "docs.json");
+}
+
 function stats(): number {
   const cfg = loadConfig();
-  const store = codeStore(cfg);
-  const symbols = store.get<unknown[]>("code:all") ?? [];
+  const code = codeStore(cfg);
+  const docs = docsStore(cfg);
+  const symbols = code.get<unknown[]>("code:all") ?? [];
+  const sections = docs.get<unknown[]>("docs:all") ?? [];
   console.log("ACI stats");
   console.log("  cache:", cfg.cacheDir);
-  console.log("  arquivos indexados:", store.keys("code:file:").length);
+  console.log("  arquivos de código indexados:", code.keys("code:file:").length);
   console.log("  símbolos indexados:", symbols.length);
-  console.log("  (F2+ somará docs/specs/ADRs às métricas)");
+  console.log("  arquivos de doc indexados:", docs.keys("docs:file:").length);
+  console.log("  seções de doc indexadas:", sections.length);
+  console.log("  (F3+ somará grafo de relações e resumos)");
   return 0;
 }
 
 function indexCmd(args: string[]): number {
   const force = args.includes("--force");
   const cfg = loadConfig();
-  const store = codeStore(cfg);
-  const result = indexCode(cfg, store, { force });
-  store.flush();
-  console.log("ACI index (código)\n");
-  console.log("  arquivos encontrados:", result.metrics.filesTotal);
-  console.log("  reparseados:", result.metrics.filesParsed);
-  console.log("  do cache (hash igual):", result.metrics.filesSkipped);
-  console.log("  símbolos indexados:", result.metrics.symbolsIndexed);
-  console.log("  tempo:", result.metrics.indexMs + "ms");
+
+  const code = codeStore(cfg);
+  const codeResult = indexCode(cfg, code, { force });
+  code.flush();
+
+  const docs = docsStore(cfg);
+  const docsResult = indexDocs(cfg, docs, { force });
+  docs.flush();
+
+  console.log("ACI index\n");
+  console.log("  código:");
+  console.log("    arquivos encontrados:", codeResult.metrics.filesTotal);
+  console.log("    reparseados:", codeResult.metrics.filesParsed);
+  console.log("    do cache (hash igual):", codeResult.metrics.filesSkipped);
+  console.log("    símbolos indexados:", codeResult.metrics.symbolsIndexed);
+  console.log("    tempo:", codeResult.metrics.indexMs + "ms");
+  console.log("  documentação (docs/specs/ADRs/prompts/proposals):");
+  console.log("    arquivos encontrados:", docsResult.metrics.filesTotal);
+  console.log("    reparseados:", docsResult.metrics.filesParsed);
+  console.log("    do cache (hash igual):", docsResult.metrics.filesSkipped);
+  console.log("    seções indexadas:", docsResult.metrics.sectionsIndexed);
+  console.log("    tempo:", docsResult.metrics.indexMs + "ms");
   return 0;
 }
 
 function searchCmd(args: string[]): number {
   const kindFlag = args.find((a) => a.startsWith("--kind="));
-  const kind = kindFlag ? (kindFlag.split("=")[1] as SymbolKind) : undefined;
+  const kindArg = kindFlag ? kindFlag.split("=")[1] : undefined;
+  const isDocKind = kindArg ? DOC_KINDS.has(kindArg) : false;
+  const codeKind = kindArg && !isDocKind ? (kindArg as SymbolKind) : undefined;
+  const docKind = isDocKind ? (kindArg as DocKind) : undefined;
   const query = args.filter((a) => !a.startsWith("--")).join(" ");
   if (!query) {
     console.error(
-      "Uso: npm run aci -- search <query> [--kind=function|class|interface|type|enum|const]",
+      "Uso: npm run aci -- search <query> [--kind=function|class|interface|type|enum|const|doc|spec|adr|prompt|proposal]",
     );
     return 1;
   }
 
   const cfg = loadConfig();
-  const store = codeStore(cfg);
   const t = new Timer();
-  const hits = searchCode(store, query, { kind });
+  const codeHits = docKind ? [] : searchCode(codeStore(cfg), query, { kind: codeKind });
+  const docHits = codeKind ? [] : searchDocs(docsStore(cfg), query, { kind: docKind });
   const searchMs = t.ms();
 
-  if (hits.length === 0) {
-    console.log(`Nenhum símbolo encontrado para "${query}". Rode "npm run aci -- index" primeiro?`);
+  if (codeHits.length === 0 && docHits.length === 0) {
+    console.log(`Nada encontrado para "${query}". Rode "npm run aci -- index" primeiro?`);
     return 0;
   }
 
   console.log(`ACI search — "${query}"\n`);
-  for (const h of hits) {
-    console.log(`  ${h.file}:${h.line}  [${h.kind}${h.exported ? "" : ", interno"}]  ${h.signature}`);
+  if (codeHits.length > 0) {
+    console.log("  Código:");
+    for (const h of codeHits) {
+      console.log(`    ${h.file}:${h.line}  [${h.kind}${h.exported ? "" : ", interno"}]  ${h.signature}`);
+    }
+  }
+  if (docHits.length > 0) {
+    console.log("  Documentação:");
+    for (const h of docHits) {
+      const label = h.docId ? `${h.docId} — ${h.heading}` : h.heading;
+      console.log(`    ${h.file}:${h.line}  [${h.kind}]  ${label}`);
+    }
   }
 
-  const returnedText = hits.map((h) => h.signature).join("\n");
-  const uniqueFiles = [...new Set(hits.map((h) => h.file))];
+  const returnedText = [
+    ...codeHits.map((h) => h.signature),
+    ...docHits.map((h) => `${h.heading}\n${h.snippet}`),
+  ].join("\n");
+  const uniqueFiles = [...new Set([...codeHits.map((h) => h.file), ...docHits.map((h) => h.file)])];
   const fullFilesText = uniqueFiles
     .map((f) => {
       try {
@@ -142,9 +184,10 @@ function searchCmd(args: string[]): number {
       }
     })
     .join("\n");
-  const m = queryMetrics(query, searchMs, hits.length, returnedText, fullFilesText);
+  const hitCount = codeHits.length + docHits.length;
+  const m = queryMetrics(query, searchMs, hitCount, returnedText, fullFilesText);
   console.log(
-    `\n  ${hits.length} resultado(s) em ${m.searchMs}ms — ~${m.tokensReturned} tokens (vs ~${m.tokensIfFullFiles} lendo os arquivos inteiros; economia ~${m.savedPct}%)`,
+    `\n  ${hitCount} resultado(s) em ${m.searchMs}ms — ~${m.tokensReturned} tokens (vs ~${m.tokensIfFullFiles} lendo os arquivos inteiros; economia ~${m.savedPct}%)`,
   );
   return 0;
 }

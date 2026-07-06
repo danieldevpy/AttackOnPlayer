@@ -22,4 +22,18 @@ export {
   type IndexCodeMetrics,
   type IndexCodeResult,
 } from "./index/code.js";
-export { findSymbol, searchCode, type SearchOptions } from "./query/search.js";
+export {
+  extractDocSections,
+  indexDocs,
+  type DocSection,
+  type DocKind,
+  type IndexDocsMetrics,
+  type IndexDocsResult,
+} from "./index/docs.js";
+export {
+  findSymbol,
+  searchCode,
+  searchDocs,
+  type SearchOptions,
+  type DocSearchOptions,
+} from "./query/search.js";
