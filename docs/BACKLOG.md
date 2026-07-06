@@ -153,7 +153,7 @@
 
 **F4 — Plataforma (SPEC-0008)**
 - **T-026** 〔M〕 ✅ (PROMPT-0042) **Telemetria estruturada p/ IA**: 1 NDJSON versionado por partida (`packages/server/logs/telemetry/<roomId>.ndjson`) com `match_start`/`match_end`, `kill` (posições+níveis dos dois lados, threats), `upgrade_offer`/`upgrade_choice` (ofertados E recusados), `flag_possession`, `quit`, `tick_slow` (watchdog, >100ms), `error` (tick nunca derruba a sala). `npm run analyze -- [matchId|--list]` imprime funil, cards mais recusados, heatmap ASCII de mortes, watchdog/erros — lógica pura testável em `telemetry/analyze.ts`. Validado ponta a ponta com 8 bots reais. Gates 30/62/35 + tsc ×3.
-- **T-027** 〔G〕 Backend Django: accounts/maps/gameops/telemetry + admin (ADR-016 — fronteira Node×Django)
+- **T-027** 〔G〕 ✅ (Sessão 24, ADR-019) **Backend Django**: `accounts` (Account/PlayerStats/GuestLink, JWT RS256+JWKS+guest+link) + `maps` (registry, validador espelho do TS, `import_maps`) + `gameops` (RoomConfig/GameEvent, config efetiva por evento) + `telemetry` (ingestão batch, schema T-026) + admin + `platformClient.ts` no Node (cache+TTL de config, batch de telemetria, degradação atrás de `PLATFORM_ENABLED`). 71 testes pytest (Postgres real) + 8 vitest novos; aceites #2 (evento sem deploy) e #3 (degradação) verificados manualmente ponta a ponta. `backend/dev.sh` sobe tudo com 1 comando.
 - **T-028** 〔G〕 Auth: anônimo default + Google + "registre-se" (JWT no join; guest vincula ao logar) · depende: T-027
 - **T-029** 〔P〕 ADR-012 liga na conta (estatística, nunca poder in-round) · depende: T-028
 
