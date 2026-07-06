@@ -37,12 +37,20 @@ export class Flag extends Schema {
   @type("number") x = 0;
   @type("number") z = 0;
   @type("string") carrierId = ""; // "" = ninguém carrega (T-021)
+  // SPEC-0011 (T-042): "active" = no jogo (livre ou carregada); "cooldown" = fora do jogo
+  // (invisível, sem pickup) por FLAG_COOLDOWN_MS antes de renascer no centro. O cliente usa
+  // pra esconder o mesh e trocar o feedback (acesa vs. fora do mapa).
+  @type("string") state = "active"; // FlagState (@aop/shared)
 }
 
 export class Collectible extends Schema {
   @type("number") x = 0;
   @type("number") z = 0;
-  @type("string") kind = "xp_orb"; // xp_orb | speed_up | coin_buff | farm_event | box (T-004)
+  @type("string") kind = "xp_orb"; // xp_orb | speed_up | coin_buff | farm_event | box | hp_orb | shield_temp | weapon
+  // SPEC-0011 (T-039): só o kind "weapon" preenche — qual lançador a arma concede, definido
+  // NO SPAWN (sorteio entre os vantajosos). Vazio para todos os outros kinds. O cliente lê
+  // isto para desenhar a arma certa; a coleta troca `player.launcher` por este valor.
+  @type("string") weaponId = "";
 }
 
 export class Projectile extends Schema {

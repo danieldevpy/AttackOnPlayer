@@ -33,6 +33,14 @@ export const VFX_DEFS: Record<string, VfxDef> = {
   upgrade_chosen_aura: { color: 0xffab00, count: 34, life: 650, speed: 2.2, intensity: "aura" },
   speed_up_trail: { color: 0x26c6da, count: 1, life: 300, speed: 0.2, intensity: "leve" },
   flag_aura: { color: 0xffd54f, count: 2, life: 420, speed: 0.5, intensity: "aura" },
+  // T-039 (SPEC-0011): muzzle mais rico dos lançadores vantajosos (o basic segue no
+  // muzzle_flash leve — regra de intensidade da T-022). Só entradas de DADOS, sem sistema novo.
+  muzzle_heavy: { color: 0xff8f00, count: 8, life: 200, speed: 1.8, intensity: "aura" }, // pesado: fogo laranja denso
+  muzzle_rapid: { color: 0x40c4ff, count: 4, life: 110, speed: 1.6, intensity: "aura" }, // rápido: faísca ciano curta
+  weapon_pickup: { color: 0xffab00, count: 20, life: 520, speed: 2.0, intensity: "aura" }, // pegar arma: brilho forte
+  // T-045 (SPEC-0011): materialização de nascimento/renascimento — discreta, não chamativa.
+  // Partículas suaves em branco-azulado convergindo para o ponto de spawn. "Leve sempre" §5.
+  spawn_materialize: { color: 0xa0c4ff, count: 14, life: 380, speed: 1.0, intensity: "leve" },
 };
 
 const MAX_PARTICLES = 260; // orçamento global fixo — custo de render não varia com o combate

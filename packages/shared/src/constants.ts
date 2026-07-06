@@ -23,7 +23,8 @@ export type CollectibleKind =
   | "farm_event"
   | "box"
   | "hp_orb" // SPEC-0010: orbe de vida escasso
-  | "shield_temp"; // SPEC-0010: escudo temporário
+  | "shield_temp" // SPEC-0010: escudo temporário
+  | "weapon"; // SPEC-0011 (T-039): arma coletável única — troca o lançador do jogador
 export const COLLECT_DIST = 0.6;
 export const SPAWN_MIN_PLAYER_DIST = 4; // tiles (Manhattan)
 export const RESPAWN_DELAY_MIN_MS = 2000;
@@ -228,3 +229,70 @@ export const FLAG_ABANDON_RETURN_MS = 5000; // caída e não disputada em 5s →
 
 export const ROOM_NAME = "arena";
 export const SERVER_PORT = 2567;
+
+// ===========================================================================
+// SPEC-0011 (T-038/T-039) — projétil menor + arsenal com arma coletável única
+// (Seção mantida no FIM do arquivo de propósito: outro agente pode editar este
+//  arquivo em paralelo; adições da SPEC-0011 ficam agrupadas aqui.)
+// ===========================================================================
+
+// --- T-039: arma coletável única (server autoritativo) ---
+/** Lançadores VANTAJOSOS que a arma do chão pode sortear (o basic_shot nunca cai — é o padrão). */
+export const WEAPON_PICKUP_LAUNCHERS = ["heavy_shot", "rapid_shot"] as const;
+/** Exatamente 1 arma no mapa por vez. Teto explícito (o passe de spawn respeita). */
+export const WEAPON_MAX = 1;
+/** Distância mínima (tiles Manhattan) de qualquer player — pequena, só pra não nascer em cima de alguém. */
+export const WEAPON_MIN_PLAYER_DIST = 2;
+/** Respawn sorteado APÓS a coleta — janela ampla pra não virar rotina de "camperar o ponto". */
+export const WEAPON_RESPAWN_MIN_MS = 15000;
+export const WEAPON_RESPAWN_MAX_MS = 30000;
+/** Lançador padrão — todos nascem com ele; a morte devolve este (T-039). */
+export const DEFAULT_LAUNCHER = "basic_shot";
+
+/** Sorteia o cooldown de respawn da arma dentro de [MIN, MAX] ms (T-039). */
+export function weaponRespawnDelay(rnd: () => number): number {
+  return WEAPON_RESPAWN_MIN_MS + rnd() * (WEAPON_RESPAWN_MAX_MS - WEAPON_RESPAWN_MIN_MS);
+}
+
+// ===========================================================================
+// SPEC-0011 (T-043..T-045) — Combo de XP + popups de coleta + transição nascimento
+// (Seção no fim do arquivo; outro agente pode editar regiões anteriores em paralelo.)
+// ===========================================================================
+
+// --- T-043: Combo de XP (server autoritativo) ---
+/** A partir da N-ésima coleta CONSECUTIVA de xp_orb sem tomar dano, cada orbe vale 2×. */
+export const XP_COMBO_START = 3;
+/** Multiplicador de XP quando o combo está ativo. */
+export const XP_COMBO_MULT = 2;
+/**
+ * Limite mínimo de coletas que um combo pode durar (sorteado ao iniciar).
+ * O limite é sorteado uma vez por início de combo e pode cair em [MIN, MAX].
+ */
+export const XP_COMBO_LIMIT_MIN = 3;
+/** Limite máximo de coletas que um combo pode durar. */
+export const XP_COMBO_LIMIT_MAX = 5;
+
+/**
+ * Sorteia o limite de duração de um combo de XP (T-043).
+ * Chamado na 1ª coleta de cada combo; o limite vale até o combo fechar e recomeçar.
+ */
+export function xpComboLimit(rnd: () => number): number {
+  return XP_COMBO_LIMIT_MIN + Math.floor(rnd() * (XP_COMBO_LIMIT_MAX - XP_COMBO_LIMIT_MIN + 1));
+}
+
+// ===========================================================================
+// SPEC-0011 (T-040..T-042) — bandeira nunca bloqueada + ciclo de cooldown
+// (Seção no fim do arquivo; outro agente pode editar regiões anteriores em paralelo.
+//  O helper puro `nearestReachableCell` da T-040 vive em map.ts, junto do resto da
+//  geometria de mapa — aqui ficam só as constantes/tipos da bandeira.)
+// ===========================================================================
+
+// --- T-042: cooldown da bandeira ---
+/**
+ * Estado da bandeira sincronizado com o cliente (schema `Flag.state`). "active" = no jogo
+ * (livre no chão ou carregada); "cooldown" = fora do jogo (invisível, sem pickup), renasce
+ * no centro ao fim de FLAG_COOLDOWN_MS.
+ */
+export type FlagState = "active" | "cooldown";
+/** Dropada e não disputada por FLAG_ABANDON_RETURN_MS entra em cooldown por este tempo. */
+export const FLAG_COOLDOWN_MS = 60000; // 60s fora do jogo antes de renascer no centro (acesa)

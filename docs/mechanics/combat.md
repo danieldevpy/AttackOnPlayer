@@ -69,6 +69,25 @@ Camada de modificadores **por player** sobre o lançador equipado — registro d
 - **Como ganhar:** marcos de nível 3/6/9/12/15 (`SKILL_MILESTONE_LEVELS`) — a oferta vira 2 cards de atributo + 1 card ★ de skill (`SKILL_MILESTONE_SKILL`, uma por marco); ou box (sorteia uma que falte). Morte apaga as skills (pilar risco real).
 - Decisão de design: skills são modificadores por player; `LauncherDef` fica reservado a **lançadores novos** (armas trocáveis) — os dois empilham.
 
+## Arsenal — 3 lançadores + arma coletável única (T-039, SPEC-0011)
+Combate deixa de ter um projétil só. Todos nascem com `basic_shot`; o mapa tem **1 arma no chão por vez** que troca o lançador ao coletar.
+
+| Lançador | Dano | Cooldown | Vel. projétil | DPS aprox. | Papel |
+|---|---|---|---|---|---|
+| `basic_shot` | 20 | 600ms | 12 | 33.3/s | padrão, discreto (sem VFX chamativo) |
+| `heavy_shot` | 28 (1.4×) | 780ms | 9 (lento) | ~35.9/s | pesado: bala forte e lenta, exige mira |
+| `rapid_shot` | 13 | 340ms | 13 | ~38.2/s | rápido: cadência alta, dano baixo por tiro |
+
+- **Vantagem clara mas não absurda** (anti-snowball, pilar 4): os vantajosos dão +8%/+15% de DPS sobre o basic, não um salto. `pattern` continua `"straight"` — números/visual mudam, não o padrão (novos padrões são das skills, T-017). `heavy_shot_dev` segue dev-only (ganchos de mobilidade), fora do arsenal jogável.
+- **Arma coletável (server autoritativo, T-039):** kind de coletável `weapon` com o lançador sorteado **no spawn** (`WEAPON_PICKUP_LAUNCHERS = [heavy_shot, rapid_shot]`), exposto no schema (`Collectible.weaponId`). Passe de spawn dedicado (molde do `hp_orb`): **exatamente 1** por vez (`WEAPON_MAX`), posição **totalmente aleatória** — célula walkable **e alcançável** (`reachableCells`, BFS do spawn), ignorando zonas/pesos, só afastando `WEAPON_MIN_PLAYER_DIST` (2 tiles) de qualquer player.
+- **Coleta:** `player.launcher` troca na hora, a arma some, respawn agendado com cooldown **sorteado ∈ [15s, 30s]** (`weaponRespawnDelay` / `WEAPON_RESPAWN_MIN_MS`/`MAX_MS`). Evento `pickup` leva `weaponId` (cliente → VFX `weapon_pickup` + toast + chip do HUD).
+- **Morte devolve `basic_shot`** (`DEFAULT_LAUNCHER`) — a arma não persiste (mesma regra da build; o ciclo de spawn repõe). Sem drop no chão ao morrer.
+
+## Projétil fino contra o cenário (T-038, SPEC-0011)
+Projétil menor para **atravessar o vão diagonal** entre dois props colidíveis adjacentes na diagonal (o raio cheio batia no canto e morria).
+- `LauncherDef.projectile.sceneryRadius` (< `radius`) é o raio usado **só contra o cenário** (props/paredes) no `ProjectileSystem`; o `radius` cheio continua valendo para o **hit em player** (TTK e sensação de acerto preservados — não se "erra tiro que parecia acertar"). Ausente = usa `radius` (retrocompat).
+- Valores: `basic_shot` cenário 0.22 (hit 0.4), `heavy_shot` 0.24 (hit 0.42), `rapid_shot` 0.20 (hit 0.38). O visual do projétil no cliente acompanha o tamanho fino.
+
 ## Evolução planejada
 Padrões novos (lob/homing/orbit), troca de lançador por drop (box), skills ativas por input, i-frames de esquiva (insumo da aura, ADR-005).
 

@@ -73,6 +73,16 @@ import {
   FLAG_PICKUP_DIST,
   REVEAL_ON_HIT_MS,
   MapFileV1,
+  reachableCells,
+  nearestReachableCell,
+  WEAPON_PICKUP_LAUNCHERS,
+  WEAPON_MAX,
+  WEAPON_MIN_PLAYER_DIST,
+  weaponRespawnDelay,
+  DEFAULT_LAUNCHER,
+  XP_COMBO_START,
+  XP_COMBO_MULT,
+  xpComboLimit,
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
 import { loadMap } from "../mapLoader";
@@ -97,6 +107,12 @@ export class ArenaRoom extends Room<ArenaState> {
   // do coletável comum) — teto e espaçamento por kind, cadência lenta. Timers independentes.
   private nextHpSpawnAt = 0;
   private nextShieldSpawnAt = 0;
+  // SPEC-0011 (T-039): passe DEDICADO da arma coletável — exatamente 1 no mapa por vez.
+  // Timer independente; após a coleta é reagendado com cooldown sorteado [15s,30s].
+  private nextWeaponSpawnAt = 0;
+  // SPEC-0011: conjunto de células alcançáveis (BFS do centro do mapa), calculado 1x no
+  // onCreate. A arma nasce em célula walkable E alcançável (ignora zonas/pesos).
+  private reachable!: Uint8Array;
   public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
   // T-016: fila de ofertas de card por player — levels[0] é a oferta aberta; o resto aguarda.
   // T-017: `cards` guarda a oferta REAL enviada (marcos incluem skills e dependem do estado
@@ -105,6 +121,13 @@ export class ArenaRoom extends Room<ArenaState> {
   // SPEC-0005 (correção): acumulador fracionário do XP passivo por player. O XP só entra em
   // `p.xp` em unidades INTEIRAS (1 por segundo), então o HUD nunca mostra "1.478/88".
   private xpAccum = new Map<string, number>();
+
+  // T-043 (SPEC-0011): combo de XP — estado runtime puro (não sincronizado no schema).
+  // Só coletas de xp_orb contam/avançam o combo; outros kinds NÃO zeram (só dano zera).
+  // `xpComboCount`: coletas consecutivas de xp_orb desde o último reset.
+  // `xpComboLimit`: limite sorteado ao iniciar o combo (1ª coleta); -1 = ainda não sorteado.
+  private xpComboCount = new Map<string, number>();
+  private xpComboLimitMap = new Map<string, number>();
 
   onCreate(options?: { expectedPlayers?: number; flagEnabled?: boolean; mapId?: string }) {
     this.setState(new ArenaState());
@@ -136,8 +159,17 @@ export class ArenaRoom extends Room<ArenaState> {
       this.flagCenter = mapCenter(size.w, size.h);
     }
 
+    // SPEC-0011 (T-039): células alcançáveis a partir de um spawn de player (célula livre
+    // garantida). Base para o spawn "totalmente aleatório mas válido" da arma coletável.
+    const reachSeed = this.curatedSpawns?.[0] ?? spawnPoints(this.map.w, this.map.h)[0];
+    this.reachable = reachableCells(this.map, Math.floor(reachSeed.x), Math.floor(reachSeed.z));
+
     // T-021: toggle por room (default ON) — bandeira nasce no centro do mapa (seed) ou
     // na posição curada pelo arquivo (mapId).
+    // SPEC-0011 (T-040): toda posição em que a bandeira assenta (init/volta ao centro/drop)
+    // é ajustada para a célula walkable ALCANÇÁVEL mais próxima — reusa o `reachable` já
+    // pré-computado acima (BFS de um spawn de player).
+    this.flagSystem.setSettle((x, z) => nearestReachableCell(this.map, x, z, this.reachable));
     this.state.flagEnabled = options?.flagEnabled ?? true;
     this.flagSystem.initAt(this.state.flag, this.flagCenter.x, this.flagCenter.z);
 
@@ -255,6 +287,8 @@ export class ArenaRoom extends Room<ArenaState> {
     this.effects.clear(client.sessionId);
     this.pendingUpgrade.delete(client.sessionId); // T-016
     this.xpAccum.delete(client.sessionId); // SPEC-0005
+    this.xpComboCount.delete(client.sessionId); // T-043
+    this.xpComboLimitMap.delete(client.sessionId); // T-043
     this.state.players.delete(client.sessionId);
   }
 
@@ -301,6 +335,12 @@ export class ArenaRoom extends Room<ArenaState> {
       // tempo, renovado a cada novo hit — "inimigo é só skin até trocar dano com ele".
       if (victim) victim.revealedUntil = now + REVEAL_ON_HIT_MS;
       if (killer) killer.revealedUntil = now + REVEAL_ON_HIT_MS;
+      // T-043 (SPEC-0011): dano REAL zera o combo de XP da vítima.
+      // "Dano real" = não bloqueado por safe zone e não bloqueado por escudo de nascimento.
+      if (victim) {
+        this.xpComboCount.set(hit.targetId, 0);
+        this.xpComboLimitMap.delete(hit.targetId);
+      }
       this.emitDebug("hit", {
         victimId: hit.targetId,
         shooterId: hit.killerId,
@@ -360,7 +400,10 @@ export class ArenaRoom extends Room<ArenaState> {
         }
         p.pendingUpgrades = 0;
         p.skills = new ArraySchema<string>();
-        
+        // SPEC-0011 (T-039): a morte devolve o lançador padrão — a arma coletada não persiste
+        // (pilar risco real, mesma regra da build). O ciclo de spawn repõe a arma no mapa.
+        p.launcher = DEFAULT_LAUNCHER;
+
         // Respawn em ponto safe escolhido por distância/risco, não sorte pura.
         const spawn = this.pickRespawnPoint(id);
         p.x = spawn.x;
@@ -410,8 +453,12 @@ export class ArenaRoom extends Room<ArenaState> {
 
     // T-021: bandeira — segue o portador (ou conta o abandono), depois checa pickup por distância.
     if (this.state.flagEnabled) {
-      this.flagSystem.tick(this.state.flag, this.state.players, this.flagCenter, now);
-      if (!this.state.flag.carrierId) {
+      // SPEC-0011 (T-042): o tick decide as transições de cooldown; devolve o evento pra o
+      // cliente/toast (flag_cooldown_start = saiu do jogo; flag_respawn = renasceu no centro).
+      const flagEvent = this.flagSystem.tick(this.state.flag, this.state.players, this.flagCenter, now);
+      if (flagEvent) this.emitDebug(flagEvent, { x: this.state.flag.x, z: this.state.flag.z });
+      // T-042: pickup só quando ATIVA (em cooldown a bandeira está fora do jogo).
+      if (this.state.flag.state === "active" && !this.state.flag.carrierId) {
         this.state.players.forEach((p, id) => {
           if (this.state.flag.carrierId || p.hp <= 0) return;
           if (Math.hypot(p.x - this.state.flag.x, p.z - this.state.flag.z) < FLAG_PICKUP_DIST) {
@@ -427,7 +474,9 @@ export class ArenaRoom extends Room<ArenaState> {
       this.state.players.forEach((p, pid) => {
         if (Math.hypot(p.x - c.x, p.z - c.z) >= COLLECT_DIST) return;
         this.state.collectibles.delete(cid);
-        this.emitDebug("pickup", { playerId: pid, kind: c.kind });
+        // SPEC-0011 (T-039): pickup da arma leva o weaponId no evento — o cliente usa pra
+        // VFX/toast ("pegou Tiro Pesado") e chip do HUD. Demais kinds mandam weaponId undefined.
+        this.emitDebug("pickup", { playerId: pid, kind: c.kind, weaponId: c.weaponId || undefined });
         switch (c.kind) {
           case "speed_up":
             this.effects.apply(pid, p, "speed_up", now);
@@ -445,6 +494,39 @@ export class ArenaRoom extends Room<ArenaState> {
           case "shield_temp":
             // SPEC-0010 (T-035): escudo temporário — reduz dano recebido por SHIELD_TEMP_MS.
             this.effects.apply(pid, p, "damage_reduction", now);
+            break;
+          case "weapon":
+            // SPEC-0011 (T-039): troca o lançador NA HORA pelo sorteado no spawn. A arma some
+            // (já deletada acima) e o respawn é agendado com cooldown sorteado [15s,30s] — enquanto
+            // isso, não há arma no chão (WEAPON_MAX = 1 garantido pelo timer + countKind).
+            if (c.weaponId && LAUNCHERS[c.weaponId]) p.launcher = c.weaponId;
+            this.nextWeaponSpawnAt = now + weaponRespawnDelay(Math.random);
+            break;
+          case "xp_orb":
+            // T-043 (SPEC-0011): combo de XP. Coletas consecutivas sem tomar dano formam combo.
+            // A partir da XP_COMBO_START-ésima coleta o orbe vale o dobro (XP_COMBO_MULT).
+            // O limite do combo é sorteado na 1ª coleta; ao atingir, a coleta ainda dá bônus
+            // e o combo reseta (novo sorteio no próximo início). Outros kinds NÃO zeram o combo.
+            {
+              const prevCount = this.xpComboCount.get(pid) ?? 0;
+              const newCount = prevCount + 1;
+              // Se ainda não há limite sorteado (início de sequência), sorteia agora.
+              if (!this.xpComboLimitMap.has(pid) || prevCount === 0) {
+                this.xpComboLimitMap.set(pid, xpComboLimit(Math.random));
+              }
+              const limit = this.xpComboLimitMap.get(pid)!;
+              const boosted = newCount >= XP_COMBO_START;
+              const xpAmount = boosted ? XP_PICKUP_AMOUNT * XP_COMBO_MULT : XP_PICKUP_AMOUNT;
+              this.grantXp(pid, p, xpAmount);
+              this.emitDebug("xp_combo", { playerId: pid, count: newCount, boosted, limit });
+              // Verifica se atingiu o limite: a coleta atual ainda deu bônus; agora reseta.
+              if (newCount >= limit) {
+                this.xpComboCount.set(pid, 0);
+                this.xpComboLimitMap.delete(pid);
+              } else {
+                this.xpComboCount.set(pid, newCount);
+              }
+            }
             break;
           case "box":
             // bônus forte no round (vs. 1 do level-up normal)
@@ -505,6 +587,17 @@ export class ArenaRoom extends Room<ArenaState> {
         this.nextShieldSpawnAt = now + SHIELD_TEMP_RESPAWN_MS;
       }
     }
+
+    // SPEC-0011 (T-039): arma coletável — exatamente 1 no mapa por vez. Passe dedicado,
+    // posição TOTALMENTE aleatória (walkable + alcançável, ignora zonas/pesos), só afasta
+    // um pouco de qualquer player pra não nascer em cima de alguém. O timer só existe pra
+    // segurar o respawn pós-coleta ([15s,30s]); enquanto houver arma no chão, não tenta.
+    if (now >= this.nextWeaponSpawnAt && this.countKind("weapon") < WEAPON_MAX) {
+      if (this.spawnWeapon()) {
+        // nascida: sem próximo agendamento até ser coletada (respawn agendado na coleta).
+        this.nextWeaponSpawnAt = Infinity;
+      }
+    }
   }
 
   /** SPEC-0010: quantas instâncias de um kind existem hoje no mapa. */
@@ -552,6 +645,34 @@ export class ArenaRoom extends Room<ArenaState> {
       });
       if (blocked) continue;
       this.createCollectible(cx, cz, kind);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * SPEC-0011 (T-039): nasce a arma coletável em célula TOTALMENTE aleatória do mapa —
+   * walkable (não-parede) E alcançável (BFS pré-computado), ignorando zonas/pesos. Só exige
+   * distância mínima PEQUENA de qualquer player (WEAPON_MIN_PLAYER_DIST) pra não cair em cima
+   * de alguém. O lançador da arma é sorteado AQUI (no spawn) entre os vantajosos e gravado no
+   * schema (`weaponId`) — o cliente lê pra desenhar a arma certa. Falha silenciosa se não
+   * achar célula boa (timer não avança, tenta no próximo tick).
+   */
+  private spawnWeapon(): boolean {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const tx = 1 + Math.floor(Math.random() * (this.map.w - 2));
+      const tz = 1 + Math.floor(Math.random() * (this.map.h - 2));
+      if (isWall(this.map, tx, tz)) continue; // walkable
+      if (!this.reachable[tz * this.map.w + tx]) continue; // alcançável (nada de bolsão fechado)
+      const cx = tx + 0.5;
+      const cz = tz + 0.5;
+      let blocked = false;
+      this.state.players.forEach((p) => {
+        if (Math.abs(p.x - cx) + Math.abs(p.z - cz) < WEAPON_MIN_PLAYER_DIST) blocked = true;
+      });
+      if (blocked) continue;
+      const weaponId = WEAPON_PICKUP_LAUNCHERS[Math.floor(Math.random() * WEAPON_PICKUP_LAUNCHERS.length)];
+      this.createCollectible(cx, cz, "weapon", weaponId);
       return true;
     }
     return false;
@@ -713,7 +834,7 @@ export class ArenaRoom extends Room<ArenaState> {
    * `forceKind` presente (SPEC-0010) = spawn direto desse kind (recursos de vida têm passe
    * próprio, sem peso de zona). Ausente = caminho original: sorteia pelo peso da zona.
    */
-  private createCollectible(x: number, z: number, forceKind?: CollectibleKind) {
+  private createCollectible(x: number, z: number, forceKind?: CollectibleKind, weaponId?: string) {
     const zone = zoneAt(this.map, x, z);
     const weights = zone === "safe" ? SAFE_WEIGHTS : zone === "war" ? WAR_WEIGHTS : FIELD_WEIGHTS;
     const kind = forceKind ?? pickWeighted(Math.random, weights);
@@ -721,9 +842,11 @@ export class ArenaRoom extends Room<ArenaState> {
     c.x = x;
     c.z = z;
     c.kind = kind;
+    // SPEC-0011 (T-039): só a arma carrega qual lançador concede (sorteado no spawn).
+    if (kind === "weapon" && weaponId) c.weaponId = weaponId;
     const id = `c${this.collectibleSeq++}`;
     this.state.collectibles.set(id, c);
-    this.emitDebug("spawn", { id, x, z, kind, zone });
+    this.emitDebug("spawn", { id, x, z, kind, zone, weaponId: c.weaponId || undefined });
     if (kind === "farm_event") this.broadcast("announce", { kind: "farm_event", x, z });
   }
 

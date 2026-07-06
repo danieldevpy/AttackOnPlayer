@@ -49,6 +49,21 @@ perseguição direta); bandeira **carregada por inimigo** vira bônus de `engage
 - **Separação:** dentro de ~1.8u de outro player, cada vizinho empurra o vetor de movimento
   para fora — vários bots caçando o mesmo portador não viram um bolo empilhado.
 
+**Caça poder + coragem com vida cheia (T-037, SPEC-0011):** a "aura" do jogo (banda de poder
+por nível — `POWER_BAND_MID`/`POWER_BAND_HIGH` do shared, mesma fonte do aro visual da T-018)
+agora atrai ameaça — um jogador forte parado não fica em paz. (1) **Percepção estendida:**
+inimigo em banda mid/high é percebido além do raio normal (× 1.6 mid / × 2.5 high), como o
+aro é visível de longe. (2) **Peso de engage por aura:** o alvo forte recebe mais peso de
+engage (× 1.25 mid / × 1.5 high, com TETO) e ganha um piso em `advantageConf` — vale caçá-lo
+mesmo em desvantagem de nível; o `targetBias` determinístico por (bot, alvo) e a confiança por
+distância seguem valendo, então os alvos continuam distribuídos (nunca "todos contra um").
+(3) **Coragem com vida cheia:** HP ≥ ~90% e inimigo fora de safe percebido ⇒ o bot parte pra
+cima do alvo escolhido (engage vence farm/perambular/bandeira). (4) **Fuga só com plano:** fugir
+só é opção com HP baixo **e** um coletável de cura percebido (`hp_orb`, também `box`) para onde
+correr; sem rota de cura, luta (kite/desespero seguem valendo). Tudo em `decision.ts`/
+`perception.ts` (funções puras, testadas); constantes de calibração em `personality.ts`
+(`AURA_PERCEPTION_MULT_*`, `AURA_ENGAGE_MULT_*`, `FULL_HP_COURAGE_FRAC`).
+
 ## Perfis nomeados, política de cards e boss (T-008b, SPEC-0004 addendum)
 `packages/bots/src/ai/personality.ts` define `BOT_PROFILES` — cada perfil combina um vetor
 `Personality` (como o bot **luta**) com uma `CardPolicy` (como o bot **constrói**), sorteado

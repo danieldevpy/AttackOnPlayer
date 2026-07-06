@@ -118,13 +118,17 @@ export class ProjectileSystem {
       }
 
       // check hit props (props are not explicitly in grid like walls, but wait, they are in map.props)
+      // T-038 (SPEC-0011): colisão contra o CENÁRIO usa o raio FINO (sceneryRadius), não o de
+      // hit em player. Assim um projétil atravessa o vão diagonal entre dois props que se tocam
+      // no canto — o raio cheio (0.4) batia no canto e morria. Fallback = radius (retrocompat).
+      const sceneryR = launcher.projectile.sceneryRadius ?? launcher.projectile.radius;
       let hitProp = false;
       for (const prop of map.props) {
         // Simple AABB vs circle collision
         const px = Math.max(prop.x, Math.min(proj.x, prop.x + prop.w));
         const pz = Math.max(prop.z, Math.min(proj.z, prop.z + prop.h));
         const distance = Math.hypot(proj.x - px, proj.z - pz);
-        if (distance < launcher.projectile.radius) {
+        if (distance < sceneryR) {
           hitProp = true;
           break;
         }

@@ -10,6 +10,7 @@
 | `box` | cubo roxo | bônus forte de atributo no round + acumulador persistente (ADR-012) | só zona de guerra, muito raro |
 | `hp_orb` | esfera vermelha | +5 HP (clampa em maxHp) — SPEC-0010 | campo aberto, **passe de spawn próprio** (escasso) |
 | `shield_temp` | icosaedro azul | escudo temporário: recebe 50% do dano por 3s (`damage_reduction`) — SPEC-0010 | campo aberto, **passe próprio**, máx. 2 no mapa |
+| `weapon` | arma sobre aro âmbar (cano por tipo) | troca `player.launcher` pelo `weaponId` sorteado no spawn — SPEC-0011 | **passe próprio**, **1 por vez**, célula walkable+alcançável totalmente aleatória (ver combat.md → Arsenal) |
 
 ## Recursos de vida escassos (SPEC-0010 — passe de spawn dedicado)
 `hp_orb` e `shield_temp` NÃO entram no orçamento/pesos do coletável comum: têm um passe próprio no tick (`spawnSurvivalItem`), com teto por kind (`HP_ORB_MAX=3`, `SHIELD_TEMP_MAX=2`), distâncias mínimas MAIORES que o comum — de qualquer player (`*_MIN_PLAYER_DIST=7`) **e** de outra instância do mesmo kind (`*_MIN_SELF_DIST=9`) — e cadência lenta (`HP_ORB_RESPAWN_MS=12s`, `SHIELD_TEMP_RESPAWN_MS=15s`). Nascem só em campo aberto (nunca safe). Design: escassez força deslocamento/exposição — sobreviver é ação, não camping perto de um ponto de cura.

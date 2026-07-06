@@ -184,6 +184,106 @@ describe("ProjectileSystem — escudo temporário reduz dano (SPEC-0010/T-035)",
   });
 });
 
+/**
+ * T-038 (SPEC-0011): projétil fino contra o cenário. Dois props colidíveis adjacentes na
+ * diagonal (um tile livre entre eles) formam um vão diagonal. Com o raio de HIT cheio (0.4)
+ * o projétil batia no canto do prop e morria; com o raio de CENÁRIO fino (basic_shot
+ * sceneryRadius = 0.22) ele atravessa o vão. Um tiro reto contra um prop continua colidindo.
+ */
+describe("ProjectileSystem — colisão diagonal com o cenário (T-038)", () => {
+  // props em `map.props` (não no grid de cells) — a colisão contra props usa AABB×círculo.
+  function propsMap(props: any[]): any {
+    return { w: 40, h: 40, seed: 1, cells: new Uint8Array(40 * 40), props, zones: [] };
+  }
+
+  it("atravessa o vão diagonal entre dois props colidíveis na diagonal", () => {
+    // A(5,5) e B(7,7): adjacentes na diagonal com o tile (6,6) livre entre eles.
+    const map = propsMap([
+      { x: 5, z: 5, w: 1, h: 1, type: "caixa" },
+      { x: 7, z: 7, w: 1, h: 1, type: "caixa" },
+    ]);
+    const state = new ArenaState();
+    const shooter = new Player();
+    shooter.x = 3;
+    shooter.z = 4.5;
+    shooter.launcher = "basic_shot";
+    shooter.dir = Math.PI / 4; // 45° para nordeste, mirando o vão
+    shooter.firing = true;
+    state.players.set("A", shooter);
+
+    const sys = new ProjectileSystem();
+    const effects = new EffectSystem();
+    let now = LAUNCHERS.basic_shot.fire.cooldownMs; // fora do cooldown inicial (lastFireAt=0)
+    sys.tick(state, map, 0.05, now, effects); // dispara
+    shooter.firing = false;
+    const proj = Array.from(state.projectiles.values())[0]!;
+    expect(proj).toBeDefined();
+
+    // simula o voo: se atravessar, o projétil chega ao outro lado dos props (x,z > 7) antes de sumir.
+    let passedThrough = false;
+    for (let i = 0; i < 60 && state.projectiles.size > 0; i++) {
+      now += 50;
+      sys.tick(state, map, 0.05, now, effects);
+      if (proj.x > 7.2 && proj.z > 7.2) passedThrough = true;
+    }
+    expect(passedThrough).toBe(true); // atravessou o vão — o raio fino (0.22) não bateu no canto
+  });
+
+  it("mesmo vão, mas o raio de HIT cheio (0.4) teria colidido — prova de que o raio fino é o que passa", () => {
+    // Repete a geometria acima mas colide contra o raio de HIT (radius, 0.4) para confirmar
+    // que sem o raio fino o projétil morreria no canto (justifica separar cenário × hit).
+    const map = propsMap([
+      { x: 5, z: 5, w: 1, h: 1, type: "caixa" },
+      { x: 7, z: 7, w: 1, h: 1, type: "caixa" },
+    ]);
+    const dx = Math.cos(Math.PI / 4);
+    const dz = Math.sin(Math.PI / 4);
+    const PLAYER_RADIUS = 0.35;
+    let x = 3 + dx * PLAYER_RADIUS;
+    let z = 4.5 + dz * PLAYER_RADIUS;
+    const fatRadius = LAUNCHERS.basic_shot.projectile.radius; // 0.4
+    let fatHit = false;
+    for (let i = 0; i < 60; i++) {
+      x += dx * 12 * 0.05;
+      z += dz * 12 * 0.05;
+      for (const p of map.props as any[]) {
+        const px = Math.max(p.x, Math.min(x, p.x + p.w));
+        const pz = Math.max(p.z, Math.min(z, p.z + p.h));
+        if (Math.hypot(x - px, z - pz) < fatRadius) fatHit = true;
+      }
+    }
+    expect(fatHit).toBe(true); // com 0.4 bateria no canto — daí a necessidade do sceneryRadius (0.22)
+  });
+
+  it("tiro reto contra um prop continua colidindo (raio fino não fura parede)", () => {
+    const map = propsMap([{ x: 9, z: 10, w: 1, h: 1, type: "caixa" }]);
+    const state = new ArenaState();
+    const shooter = new Player();
+    shooter.x = 5;
+    shooter.z = 10.5;
+    shooter.launcher = "basic_shot";
+    shooter.dir = 0; // reto para +x, direto no prop
+    shooter.firing = true;
+    state.players.set("A", shooter);
+
+    const sys = new ProjectileSystem();
+    const effects = new EffectSystem();
+    let now = LAUNCHERS.basic_shot.fire.cooldownMs; // fora do cooldown inicial (lastFireAt=0)
+    sys.tick(state, map, 0.05, now, effects);
+    shooter.firing = false;
+    const proj = Array.from(state.projectiles.values())[0]!;
+    let maxX = proj.x;
+    for (let i = 0; i < 60 && state.projectiles.size > 0; i++) {
+      now += 50;
+      sys.tick(state, map, 0.05, now, effects);
+      maxX = Math.max(maxX, proj.x);
+    }
+    // o projétil foi removido ANTES de passar do prop (x < 9): colidiu, não atravessou.
+    expect(state.projectiles.size).toBe(0);
+    expect(maxX).toBeLessThan(9.2);
+  });
+});
+
 describe("ProjectileSystem — ganchos de mobilidade por lançador (T-012)", () => {
   it("heavy_shot_dev reduz a velocidade do atirador ao disparar e expira sozinho", () => {
     const map = fieldMap();

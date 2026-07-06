@@ -43,6 +43,8 @@ export interface PerceivedCollectible {
   x: number;
   z: number;
   dist: number;
+  /** T-037: kind do coletável (ex.: xp_orb, hp_orb, box) — habilita a rota de cura da fuga. */
+  kind?: string;
 }
 
 /** T-021: bandeira "rei do mapa" — visível o mapa inteiro (não filtrada por raio). */

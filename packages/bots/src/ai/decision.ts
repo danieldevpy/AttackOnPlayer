@@ -1,8 +1,17 @@
+import { auraEngageMult } from "./personality";
 import type { ActionKind, DecisionResult, Perception, Personality } from "./types";
 
 function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
 }
+
+/** T-037: HP >= isto (~vida cheia) + inimigo percebido ⇒ coragem: parte pra cima do mais
+ * próximo (engage vence farm/wander). Gate no scoring, não hack fora do utility. */
+export const FULL_HP_COURAGE_FRAC = 0.9;
+
+/** T-037: kinds de coletável que contam como "rota de cura" — fugir só é opção se um deles
+ * for percebido (pra onde correr). hp_orb é a cura direta; box também pode conter cura. */
+const HEAL_COLLECTIBLE_KINDS = new Set(["hp_orb", "box"]);
 
 // Margem de inércia (bot-architecture.md §3): só troca de ação se a nova superar a atual
 // por essa margem — evita oscilação de decisão a cada tick.
@@ -59,19 +68,30 @@ export function decide(
     const range = e.id === enemyCarrierId ? personality.engageRange * 1.6 : personality.engageRange;
     const distConf = clamp01(1 - e.dist / range);
     if (distConf <= 0) continue;
-    const advantageConf = clamp01(0.5 + 0.12 * (self.level - e.level));
+    // T-037: aura atrai ameaça — o alvo forte (banda mid/high) é FAMA e vale ser caçado
+    // mesmo em desvantagem de nível: a banda impõe um PISO em advantageConf (senão o "não
+    // ataco quem é mais forte" zeraria justo o alvo que a spec quer perigoso — a dor do CD).
+    const auraFloor = auraEngageMult(e.level) - 1; // 0 (none) / 0.25 (mid) / 0.5 (high)
+    const advantageConf = Math.max(auraFloor, clamp01(0.5 + 0.12 * (self.level - e.level)));
     const bias = opts.targetBias?.(e.id) ?? 1;
     const sticky = opts.stickyTargetId === e.id ? 1.15 : 1;
     const carrierBonus = e.id === enemyCarrierId ? 1 + personality.objective : 1;
-    const score = personality.aggression * hpFrac * distConf * advantageConf * bias * sticky * carrierBonus;
+    // Peso extra por aura, COM TETO (auraEngageMult, ×1.25/×1.5 no máx.). targetBias e
+    // distConf seguem valendo: "alvo forte recebe mais atenção", nunca "todos contra um".
+    const auraBonus = auraEngageMult(e.level);
+    const score = personality.aggression * hpFrac * distConf * advantageConf * bias * sticky * carrierBonus * auraBonus;
     if (score > engageScore) {
       engageScore = score;
       engageTargetId = e.id;
     }
   }
 
+  // T-037: fuga só com plano — só é opção se existe um coletável de CURA percebido para
+  // onde correr (hp_orb / box). Sem rota de cura ⇒ não foge: luta (kite/desespero seguem
+  // valendo na atuação). Combina com o HP baixo já embutido em (1 - hpFrac).
+  const hasHealRoute = collectibles.some((c) => c.kind !== undefined && HEAL_COLLECTIBLE_KINDS.has(c.kind));
   let fleeScore = 0;
-  if (nearestEnemy) {
+  if (nearestEnemy && hasHealRoute) {
     const threatConf = clamp01(1 - nearestEnemy.dist / (personality.engageRange * 1.6));
     fleeScore = personality.caution * (1 - hpFrac) * threatConf;
   }
@@ -114,6 +134,21 @@ export function decide(
       bestScore = effective;
       bestAction = action;
     }
+  }
+
+  // T-037: coragem com vida cheia — HP >= ~90% e inimigo (fora de safe) percebido ⇒ parte
+  // pra cima do mais próximo. Gate no scoring: engage vence farm/wander/flag, mas só quando
+  // a ação escolhida seria passiva (não sobrescreve uma fuga real — que a vida cheia já
+  // torna improvável). Um alvo forte parado NÃO fica em paz.
+  if (
+    hpFrac >= FULL_HP_COURAGE_FRAC &&
+    nearestFightable &&
+    (bestAction === "collect" || bestAction === "wander" || bestAction === "flag")
+  ) {
+    // usa o melhor alvo de engage já pontuado (respeita targetBias/aura/portador);
+    // sem candidato pontuado (ex.: fora de todo range), cai no fightable mais próximo.
+    bestAction = "engage";
+    if (!engageTargetId) engageTargetId = nearestFightable.id;
   }
 
   // Encurralado (colado na borda, ameaça dentro do raio): fugir só esfrega na parede —

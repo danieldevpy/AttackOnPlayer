@@ -184,12 +184,16 @@ async function runBot(i: number) {
       if (id === room.sessionId || pl.hp <= 0) return;
       enemiesRaw.push({ id, x: pl.x, z: pl.z, hp: pl.hp, maxHp: pl.maxHp, level: pl.level });
     });
-    const collectiblesRaw: Array<{ id: string; x: number; z: number }> = [];
-    state.collectibles?.forEach?.((c: any, id: string) => collectiblesRaw.push({ id, x: c.x, z: c.z }));
+    // T-037: carrega o `kind` do coletável (state expõe c.kind: xp_orb | hp_orb | box | ...)
+    // — a decisão usa hp_orb/box como "rota de cura" que habilita a fuga.
+    const collectiblesRaw: Array<{ id: string; x: number; z: number; kind: string }> = [];
+    state.collectibles?.forEach?.((c: any, id: string) => collectiblesRaw.push({ id, x: c.x, z: c.z, kind: c.kind }));
 
     // T-021: bandeira é objetivo de mapa — visível inteira quando a room liga o toggle.
+    // SPEC-0011 (T-042): bandeira em cooldown está fora do jogo — o bot a trata como
+    // inexistente (flag: undefined), quebrando o loop "todo mundo só joga pega-bandeira".
     const flagRaw =
-      state.flagEnabled && state.flag
+      state.flagEnabled && state.flag && state.flag.state !== "cooldown"
         ? {
             x: state.flag.x,
             z: state.flag.z,

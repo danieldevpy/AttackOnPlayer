@@ -1,4 +1,37 @@
+import { POWER_BAND_HIGH, POWER_BAND_MID } from "@aop/shared";
 import type { Personality } from "./types";
+
+// T-037 (SPEC-0011): "aura" = banda de poder por nível (POWER_BAND_MID/HIGH do shared — a
+// mesma fonte do aro visual da T-018). Alvo forte é FAMA: percebido de mais longe e recebe
+// mais peso de engage — mas com TETO explícito, pra nunca virar "todos contra um" (o
+// targetBias determinístico + confiança por distância seguem espalhando os alvos). Estas
+// constantes de calibração vivem no pacote bots (não no shared) — só ajustam comportamento.
+//
+// Multiplicadores de RAIO de percepção por banda do alvo (aura visível de longe):
+export const AURA_PERCEPTION_MULT_MID = 1.6; // banda mid (nível >= 4)
+export const AURA_PERCEPTION_MULT_HIGH = 2.5; // banda high (nível >= 8)
+// Multiplicadores de PESO de engage por banda do alvo (teto — nunca cresce além disto):
+export const AURA_ENGAGE_MULT_MID = 1.25; // banda mid
+export const AURA_ENGAGE_MULT_HIGH = 1.5; // banda high
+
+/** Banda de poder do alvo por nível — mid/high alimentam raio e peso de aura (T-037). */
+export function powerBand(level: number): "none" | "mid" | "high" {
+  if (level >= POWER_BAND_HIGH) return "high";
+  if (level >= POWER_BAND_MID) return "mid";
+  return "none";
+}
+
+/** Multiplicador de RAIO de percepção pela aura do alvo (T-037). */
+export function auraPerceptionMult(level: number): number {
+  const band = powerBand(level);
+  return band === "high" ? AURA_PERCEPTION_MULT_HIGH : band === "mid" ? AURA_PERCEPTION_MULT_MID : 1;
+}
+
+/** Multiplicador de PESO de engage pela aura do alvo (T-037) — com teto por banda. */
+export function auraEngageMult(level: number): number {
+  const band = powerBand(level);
+  return band === "high" ? AURA_ENGAGE_MULT_HIGH : band === "mid" ? AURA_ENGAGE_MULT_MID : 1;
+}
 
 // T-008b (SPEC-0004 addendum): presets NOMEADOS — troca a ponte temporária da T-020
 // (PERSONALITY_BY_SKILL, 3 níveis de skill) por perfis de bot de verdade, sorteados por

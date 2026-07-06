@@ -26,6 +26,11 @@ const collGeo = {
   chestBody: new THREE.BoxGeometry(0.46, 0.26, 0.34), // baú: corpo
   chestLid: new THREE.BoxGeometry(0.48, 0.16, 0.36), // baú: tampa
   latch: new THREE.BoxGeometry(0.1, 0.14, 0.06), // baú: fecho dourado
+  // T-039 (SPEC-0011): arma coletável — "arma no pedestal". Cano + coronha sobre um aro,
+  // distinguível por tipo (pesada = cano grosso, rápida = cano fino duplo).
+  weaponBarrelHeavy: new THREE.CylinderGeometry(0.09, 0.11, 0.5, 10), // pesado: cano grosso
+  weaponBarrelRapid: new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8), // rápido: cano fino
+  weaponStock: new THREE.BoxGeometry(0.16, 0.14, 0.14), // coronha/corpo
 };
 const collMat = {
   xp: new THREE.MeshLambertMaterial({ color: 0xffd54f, emissive: 0x8a6300 }),
@@ -36,6 +41,10 @@ const collMat = {
   farm: new THREE.MeshLambertMaterial({ color: 0x66bb6a, emissive: 0x1b5e20 }),
   box: new THREE.MeshLambertMaterial({ color: 0x8e24aa, emissive: 0x3a0d47 }),
   gold: new THREE.MeshLambertMaterial({ color: 0xffca28, emissive: 0x6d4c00 }),
+  // T-039: cor por tipo de arma (bate com o projétil em main.ts: pesado laranja, rápido ciano).
+  weaponHeavy: new THREE.MeshLambertMaterial({ color: 0xff6d00, emissive: 0x7a2e00 }),
+  weaponRapid: new THREE.MeshLambertMaterial({ color: 0x40c4ff, emissive: 0x0d3b5c }),
+  weaponRing: new THREE.MeshLambertMaterial({ color: 0xffab00, emissive: 0x6d4c00 }), // aro âmbar "item raro"
 };
 
 interface CollPart {
@@ -47,8 +56,20 @@ interface CollPart {
 }
 
 /** Peças de cada coletável (F2). Composição legível com poucas partes por tipo. */
-function collectibleParts(kind: string): CollPart[] {
+function collectibleParts(kind: string, weaponId?: string): CollPart[] {
   switch (kind) {
+    case "weapon": {
+      // T-039 (SPEC-0011): arma sobre um aro âmbar (leitura "item raro/único"). O cano
+      // distingue o tipo: pesado = grosso laranja, rápido = fino ciano.
+      const heavy = weaponId === "heavy_shot";
+      const barrel = heavy ? collGeo.weaponBarrelHeavy : collGeo.weaponBarrelRapid;
+      const mat = heavy ? collMat.weaponHeavy : collMat.weaponRapid;
+      return [
+        { geometry: barrel, material: mat, pos: [0.02, 0.06, 0], rot: [0, 0, Math.PI / 2] }, // cano deitado
+        { geometry: collGeo.weaponStock, material: mat, pos: [-0.22, 0.06, 0] }, // coronha
+        { geometry: collGeo.ringBase, material: collMat.weaponRing, pos: [0, -0.16, 0], rot: [Math.PI / 2, 0, 0] },
+      ];
+    }
     case "hp_orb": // cruz de vida vermelha
       return [
         { geometry: collGeo.crossV, material: collMat.hp },
@@ -201,6 +222,48 @@ export function updateFlagGlow(group: THREE.Group, carrying: boolean, t: number)
 }
 
 /**
+ * SPEC-0011 (T-041): estado visual da bandeira NO MAPA (o objeto único, não o portador).
+ * - livre e ativa (`state==="active"`, sem portador): ACESA — pano emissivo pulsante + a
+ *   PointLight ancorada nela (lê-se de longe que está disponível). É a MESMA orçamento de
+ *   1 luz: quando livre a luz é da bandeira; quando carregada, a luz vai pro portador (glow).
+ * - carregada: mesh apagado/cinza (quem brilha é o portador), luz da bandeira desligada.
+ * - cooldown: mesh some (visible=false), fora do jogo.
+ * `group.userData.pano` é o material DEDICADO do pano (clonado no main.ts) e
+ * `group.userData.groundLight` a PointLight da bandeira livre — ambos mutados por frame,
+ * sem alocar nada nem trocar material (só propriedades).
+ */
+export function updateFlagGround(group: THREE.Group, state: string, carried: boolean, t: number) {
+  const inCooldown = state === "cooldown";
+  group.visible = !inCooldown;
+
+  const pano = group.userData.pano as THREE.MeshLambertMaterial | undefined;
+  let light = group.userData.groundLight as THREE.PointLight | undefined;
+  if (!light) {
+    light = new THREE.PointLight(0xffd54f, 0, 12, 1.5);
+    light.position.y = 1.15;
+    group.add(light);
+    group.userData.groundLight = light;
+  }
+
+  const free = !inCooldown && !carried; // livre no chão e disputável
+  light.visible = free;
+  if (free) {
+    // pulso por seno — só muda intensidade/emissive, sem alocar
+    light.intensity = 1.4 + Math.sin(t * 4) * 0.6;
+    if (pano) {
+      pano.color.setHex(0xef5350);
+      pano.emissive.setHex(0xff7043);
+      pano.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.35;
+    }
+  } else if (pano) {
+    // carregada: pano apagado/cinza (o brilho é do portador)
+    pano.color.setHex(0x6b6b6b);
+    pano.emissive.setHex(0x000000);
+    pano.emissiveIntensity = 0;
+  }
+}
+
+/**
  * T-022 (SPEC-0006, backlog `buff_cooldown_ring`): anel esvaziando ao redor do boneco
  * enquanto um buff temporário (velocidade/xp/impulso) está ativo. main.ts sabe o instante
  * exato de cada aplicação (evento `pickup`/`impulso`) e a duração vem das mesmas constantes
@@ -299,10 +362,11 @@ export function updateNameplate(
   tex.needsUpdate = true;
 }
 
-/** F2: coletável = grupo de primitivas com forma reconhecível (ver `collectibleParts`). */
-export function createCollectibleVisual(kind: string): THREE.Group {
+/** F2: coletável = grupo de primitivas com forma reconhecível (ver `collectibleParts`).
+ * T-039: `weaponId` (opcional) distingue o visual da arma coletável por tipo. */
+export function createCollectibleVisual(kind: string, weaponId?: string): THREE.Group {
   const group = new THREE.Group();
-  for (const part of collectibleParts(kind)) {
+  for (const part of collectibleParts(kind, weaponId)) {
     const mesh = new THREE.Mesh(part.geometry, part.material);
     if (part.pos) mesh.position.set(part.pos[0], part.pos[1], part.pos[2]);
     if (part.rot) mesh.rotation.set(part.rot[0], part.rot[1], part.rot[2]);

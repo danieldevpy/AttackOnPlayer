@@ -1,7 +1,7 @@
 // HUD do jogo (T-016) — extraído de main.ts (dívida registrada em LEAD_DESIGNER_NOTES).
 // Regra: HUD só EXIBE estado sincronizado; nunca calcula atributo (ADR-009) e nunca
 // decide nada — escolha de card é enviada ao servidor, que valida tudo.
-import { xpToNext, UpgradeCard } from "@aop/shared";
+import { xpToNext, UpgradeCard, LAUNCHERS, DEFAULT_LAUNCHER } from "@aop/shared";
 import type { Room } from "colyseus.js";
 
 export interface HudCtx {
@@ -254,6 +254,12 @@ export function updateHud(now: number) {
   if (fx.includes("speed_up")) chips.push(`<span class="chip speed">⚡ x${me.speed?.toFixed(1)}</span>`);
   if (fx.includes("xp_boost")) chips.push(`<span class="chip xp">2×XP</span>`);
   if (fx.includes("damage_reduction")) chips.push(`<span class="chip shield">🛡 escudo</span>`);
+  // T-039 (SPEC-0011): arma atual quando ≠ basic — leitura de "estou com uma arma boa".
+  const launcherId: string = me?.launcher ?? DEFAULT_LAUNCHER;
+  if (launcherId !== DEFAULT_LAUNCHER) {
+    const wname = LAUNCHERS[launcherId]?.name ?? launcherId;
+    chips.push(`<span class="chip weapon">🔫 ${wname}</span>`);
+  }
   if (carryingFlag) chips.push(`<span class="chip flag">🚩 bandeira 2×XP</span>`);
   if ((me?.pendingUpgrades ?? 0) > 1) chips.push(`<span class="chip queue">＋${me.pendingUpgrades - 1} level-up</span>`);
   const chipsKey = chips.join("|");

@@ -1,3 +1,4 @@
+import { auraPerceptionMult } from "./personality";
 import type { Perception, Zone } from "./types";
 
 export interface RawSelf {
@@ -15,6 +16,9 @@ export interface RawEntity {
   hp?: number;
   maxHp?: number;
   level?: number;
+  /** T-037: kind do coletável (xp_orb | hp_orb | box | ...) — usado só para coletáveis,
+   * habilita a "rota de cura" da fuga (fugir exige coletável de cura percebido). */
+  kind?: string;
 }
 
 /** Só o que a percepção precisa do mapa — mantém esta camada desacoplada do formato
@@ -66,11 +70,13 @@ export function buildPerception(
         zone: zoneOf(e.x, e.z),
       };
     })
-    .filter((e) => e.dist <= perceptionRadius)
+    // T-037: aura é fama — inimigo em banda de poder mid/high é percebido além do raio
+    // normal (raio efetivo = base × mult da banda), como o aro visual visível de longe.
+    .filter((e) => e.dist <= perceptionRadius * auraPerceptionMult(e.level))
     .sort((a, b) => a.dist - b.dist);
 
   const perceivedCollectibles = collectibles
-    .map((c) => ({ id: c.id, x: c.x, z: c.z, dist: Math.hypot(c.x - self.x, c.z - self.z) }))
+    .map((c) => ({ id: c.id, x: c.x, z: c.z, kind: c.kind, dist: Math.hypot(c.x - self.x, c.z - self.z) }))
     .sort((a, b) => a.dist - b.dist);
 
   const nearestBorderDist = Math.min(self.x, map.w - self.x, self.z, map.h - self.z);

@@ -14,8 +14,9 @@ import {
   GameMap,
   MapFileV1,
   mapFileToGameMap,
+  LAUNCHERS,
 } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateBuffCooldownRing, updateNameplate } from "./visuals";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate } from "./visuals";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
 import { createVfxSystem } from "./vfx";
 import { ProfileManager, ProfileId } from "./input/manager";
@@ -186,6 +187,36 @@ const collectibleMeshes = new Map<string, THREE.Group>(); // F2: cada coletável
 const projectileMeshes = new Map<string, THREE.Mesh>();
 let flagVisual: THREE.Group | undefined; // T-021: bandeira "rei do mapa" — objeto único, não um MapSchema
 
+// T-039 (SPEC-0011): visual do projétil POR lançador. Basic = discreto (esfera laranja
+// pequena, como antes). Vantajosos = maiores e mais vistosos + muzzle mais rico (regra de
+// intensidade da T-022: automático é leve, arma "boa" chama atenção). Geo/mat são singletons
+// de módulo — N projéteis do mesmo lançador reusam os mesmos objetos ("leve sempre" §5).
+interface ProjStyle {
+  geo: THREE.SphereGeometry;
+  mat: THREE.MeshBasicMaterial;
+  muzzle: string; // entrada em VFX_DEFS disparada no nascimento do projétil
+}
+const projStyles: Record<string, ProjStyle> = {
+  basic_shot: {
+    geo: new THREE.SphereGeometry(0.22), // acompanha o sceneryRadius fino da T-038
+    mat: new THREE.MeshBasicMaterial({ color: 0xffaa00 }),
+    muzzle: "muzzle_flash",
+  },
+  heavy_shot: {
+    geo: new THREE.SphereGeometry(0.34), // bala pesada, bem visível
+    mat: new THREE.MeshBasicMaterial({ color: 0xff6d00 }),
+    muzzle: "muzzle_heavy",
+  },
+  rapid_shot: {
+    geo: new THREE.SphereGeometry(0.2), // pequena e ágil
+    mat: new THREE.MeshBasicMaterial({ color: 0x40c4ff }),
+    muzzle: "muzzle_rapid",
+  },
+};
+function projStyleFor(launcherId: string): ProjStyle {
+  return projStyles[launcherId] ?? projStyles.basic_shot;
+}
+
 // T-022: instante exato de aplicação de cada buff temporário (evento já emitido pelo
 // servidor — pickup/impulso), pareado com a MESMA duração do EffectSystem (@aop/shared),
 // pra desenhar o anel esvaziando sem "chutar" o tempo restante nem duplicar a constante.
@@ -199,6 +230,39 @@ const buffApplied = new Map<string, { kind: string; expiresAt: number }>();
 const wasShielded = new Map<string, boolean>(); // detecta a transição p/ disparar shield_pop
 const lastTrailSpawn = new Map<string, number>();
 let lastFlagAuraAt = 0;
+
+// T-045 (SPEC-0011): transição de nascimento — materialização scale-in + fade-in.
+// Sinal escolhido: mudança de `spawnProtectedUntil` para um valor FUTURO novo.
+// É o sinal mais confiável: autoritativo, sempre setado no respawn (ArenaRoom.ts),
+// não depende de posição (que o lerp da câmera poderia suavizar de qualquer jeito).
+// `lastSpawnProtection[id]` = último valor observado; quando muda para futuro > now → spawn.
+const lastSpawnProtection = new Map<string, number>();
+// Animação de materialização em andamento por player.
+const spawnAnim = new Map<string, { startedAt: number; durationMs: number }>();
+const SPAWN_ANIM_MS = 400; // duração da materialização (scale-in + fade-in)
+
+// T-045: overlay DOM de fade de tela — só para o PRÓPRIO jogador ao renascer.
+// Implementação mais simples que mata a sensação de "teletransporte" sem câmera cortada.
+let spawnFadeEl: HTMLDivElement | null = null;
+function getSpawnFadeEl(): HTMLDivElement {
+  if (!spawnFadeEl) {
+    spawnFadeEl = document.createElement("div");
+    spawnFadeEl.style.cssText =
+      "position:fixed;inset:0;background:#000;pointer-events:none;z-index:50;opacity:0;transition:none";
+    document.body.appendChild(spawnFadeEl);
+  }
+  return spawnFadeEl;
+}
+/** T-045: fade de tela no próprio jogador — out→in em ~200 ms cada sentido, sem tween lib. */
+function triggerSpawnFade() {
+  const el = getSpawnFadeEl();
+  el.style.transition = "opacity 0.2s linear";
+  el.style.opacity = "1";
+  setTimeout(() => {
+    el.style.transition = "opacity 0.2s linear";
+    el.style.opacity = "0";
+  }, 250); // 200ms fade-out + 50ms pausa = 250ms antes do fade-in
+}
 
 // ---------- Rede ----------
 const url =
@@ -295,22 +359,77 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
       vfx.spawnAt("heal_pop", vis.position.x, vis.position.z);
     } else if (vis && ev.payload.kind === "shield_temp") {
       vfx.spawnAt("shield_gain", vis.position.x, vis.position.z);
+    } else if (ev.payload.kind === "weapon") {
+      // T-039: pegar a arma — VFX forte + toast só pro próprio jogador (não poluir com os inimigos).
+      if (vis) vfx.spawnAt("weapon_pickup", vis.position.x, vis.position.z);
+      if (ev.payload.playerId === mySessionId) {
+        const name = LAUNCHERS[ev.payload.weaponId as string]?.name ?? "Arma";
+        pushToast(`🔫 ${name} coletado!`);
+      }
+    }
+    // T-044 (SPEC-0011): popup discreto de coleta — informativo para quem está atento.
+    // hp_orb/shield_temp têm feedback dedicado da T-036; weapon tem toast. Os demais recebem
+    // um texto flutuante pequeno (opacidade reduzida, fade rápido) no ponto da coleta.
+    if (vis) {
+      const px = vis.position.x, pz = vis.position.z;
+      switch (ev.payload.kind) {
+        case "xp_orb":
+          spawnCollectPopup(px, pz, "+8 XP", "#ffd54f");
+          break;
+        case "speed_up":
+          spawnCollectPopup(px, pz, "⚡ velocidade", "#26c6da");
+          break;
+        case "coin_buff":
+          spawnCollectPopup(px, pz, "+10 moedas", "#ffc107");
+          break;
+        case "farm_event":
+          spawnCollectPopup(px, pz, "2×XP!", "#66bb6a");
+          break;
+        case "box":
+          spawnCollectPopup(px, pz, "atrib++", "#ce93d8");
+          break;
+      }
+    }
+  } else if (ev.type === "xp_combo") {
+    // T-044 (SPEC-0011): combo de XP boosted — exibe "combo ×N" discreto no player.
+    // Só aparece quando boosted=true para não poluir a tela a cada coleta comum.
+    if (ev.payload.boosted) {
+      const vis = playerVisuals.get(ev.payload.playerId);
+      if (vis) spawnCollectPopup(vis.position.x, vis.position.z, `combo ×${ev.payload.count}`, "#ffb300");
     }
   } else if (ev.type === "impulso") {
     buffApplied.set(ev.payload.playerId, { kind: "kill_rush", expiresAt: performance.now() + BUFF_DURATION_MS.kill_rush });
   } else if (ev.type === "upgrade") {
     const vis = playerVisuals.get(ev.payload.playerId);
     if (vis) vfx.spawnAt(ev.payload.auto ? "level_up_auto" : "upgrade_chosen_aura", vis.position.x, vis.position.z);
+  } else if (ev.type === "flag_cooldown_start") {
+    // T-042 (SPEC-0011): a bandeira saiu do jogo por um tempo (cooldown) — toast de leitura.
+    pushToast("🏳️ Bandeira em cooldown");
+  } else if (ev.type === "flag_respawn") {
+    // T-042: renasceu no centro, acesa e disputável de novo.
+    pushToast("🚩 Bandeira renasceu no centro!");
   }
 }
 
-// ---------- Números de dano flutuantes (T-018) ----------
+// ---------- Números de dano flutuantes (T-018) + popups de coleta (T-044) ----------
 // Sprite com CanvasTexture; orçamento fixo (máx. 24 vivos) — sem custo quando não há combate.
-const damagePopups: Array<{ sprite: THREE.Sprite; born: number }> = [];
+// T-044: cada entrada carrega seu próprio lifeMs e baseOpacity (coleta usa valores menores).
+const damagePopups: Array<{ sprite: THREE.Sprite; born: number; lifeMs: number; baseOpacity: number }> = [];
 const POPUP_LIFE_MS = 900;
 
-/** Núcleo do popup flutuante (dano/cura): texto colorido em sprite, orçamento compartilhado. */
-function pushPopup(x: number, z: number, text: string, color: string, fontSize: number) {
+/**
+ * Núcleo do popup flutuante (dano/cura/coleta): texto colorido em sprite, orçamento compartilhado.
+ * T-044: `opts.opacity` (padrão 1.0) e `opts.scale` (padrão 1.0) permitem popups discretos de
+ * coleta — opacidade reduzida (~0.6) + escala menor que os de dano, sem poluir a tela.
+ */
+function pushPopup(
+  x: number,
+  z: number,
+  text: string,
+  color: string,
+  fontSize: number,
+  opts?: { opacity?: number; scale?: number; lifeMs?: number }
+) {
   if (damagePopups.length >= 24) return;
   const canvas = document.createElement("canvas");
   canvas.width = 128;
@@ -324,13 +443,23 @@ function pushPopup(x: number, z: number, text: string, color: string, fontSize: 
   g.fillStyle = color;
   g.strokeText(text, 64, 34);
   g.fillText(text, 64, 34);
+  const baseOpacity = opts?.opacity ?? 1.0;
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false })
+    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false, opacity: baseOpacity })
   );
-  sprite.scale.set(1.7, 0.85, 1);
+  const s = opts?.scale ?? 1.0;
+  sprite.scale.set(1.7 * s, 0.85 * s, 1);
   sprite.position.set(x, 1.35, z);
   scene.add(sprite);
-  damagePopups.push({ sprite, born: performance.now() });
+  damagePopups.push({ sprite, born: performance.now(), lifeMs: opts?.lifeMs ?? POPUP_LIFE_MS, baseOpacity });
+}
+
+/**
+ * T-044 (SPEC-0011): popup discreto de coleta — informativo, não polui.
+ * Texto curto, opacidade reduzida (~0.6), escala menor, fade mais rápido.
+ */
+function spawnCollectPopup(x: number, z: number, text: string, color: string) {
+  pushPopup(x, z, text, color, 14, { opacity: 0.62, scale: 0.78, lifeMs: 600 });
 }
 
 function spawnDamagePopup(x: number, z: number, damage: number, kill: boolean) {
@@ -348,7 +477,7 @@ function spawnHealPopup(x: number, z: number, amount: number) {
 function updateDamagePopups(now: number) {
   for (let i = damagePopups.length - 1; i >= 0; i--) {
     const p = damagePopups[i];
-    const age = (now - p.born) / POPUP_LIFE_MS;
+    const age = (now - p.born) / p.lifeMs; // T-044: lifeMs individual por popup
     if (age >= 1) {
       scene.remove(p.sprite);
       p.sprite.material.map?.dispose();
@@ -357,7 +486,8 @@ function updateDamagePopups(now: number) {
       continue;
     }
     p.sprite.position.y = 1.35 + age * 0.8; // sobe
-    p.sprite.material.opacity = 1 - age * age; // some no fim
+    // T-044: baseOpacity individual — popups de coleta já começam opacos reduzidos
+    p.sprite.material.opacity = p.baseOpacity * (1 - age * age);
   }
 }
 
@@ -532,6 +662,44 @@ function syncWorld() {
     // dir do servidor segue a convenção atan2(z,x); rotation.y = -dir alinha o
     // "nariz" (local +X) com essa direção no mundo (ver visuals.ts).
     vis.rotation.y += shortestAngleDiff(vis.rotation.y, -(p.dir ?? 0)) * 0.25;
+
+    // T-045 (SPEC-0011): detecta (re)nascimento pelo salto de spawnProtectedUntil para
+    // um valor FUTURO novo. Esse campo é setado autoritativamente no servidor a cada spawn
+    // (onJoin + respawn); a mudança é o sinal mais confiável sem depender de posição.
+    {
+      const nowMs = Date.now();
+      const prevProtection = lastSpawnProtection.get(id) ?? 0;
+      const curProtection: number = p.spawnProtectedUntil ?? 0;
+      if (curProtection > nowMs && curProtection !== prevProtection) {
+        // É um spawn/respawn novo — inicia animação de materialização.
+        spawnAnim.set(id, { startedAt: performance.now(), durationMs: SPAWN_ANIM_MS });
+        vfx.spawnAt("spawn_materialize", vis.position.x, vis.position.z, 0.5);
+        // Para o próprio jogador: overlay de tela para eliminar o corte seco de câmera.
+        if (id === mySessionId) triggerSpawnFade();
+      }
+      lastSpawnProtection.set(id, curProtection);
+    }
+
+    // Aplica a animação de materialização se ainda estiver em andamento (scale-in + fade-in).
+    // Dirigida por timestamp — zero alocação por frame, sem tween lib.
+    {
+      const anim = spawnAnim.get(id);
+      if (anim) {
+        const age = performance.now() - anim.startedAt;
+        const frac = Math.min(1, age / anim.durationMs);
+        // scale-in: nasce pequeno (0.05) e cresce para 1.0 com ease-out quadrático.
+        const easedScale = 1 - (1 - frac) * (1 - frac);
+        vis.scale.setScalar(Math.max(0.05, easedScale));
+        if (frac >= 1) {
+          vis.scale.setScalar(1);
+          spawnAnim.delete(id);
+        }
+      } else {
+        // Garante que o scale fique em 1 quando não há animação ativa.
+        if (vis.scale.x !== 1) vis.scale.setScalar(1);
+      }
+    }
+
     updatePowerVisual(vis, p.level ?? 1, t); // T-018: aro de poder por faixa de nível
     const shielded = (p.spawnProtectedUntil ?? 0) > Date.now();
     updateShieldVisual(vis, shielded, t); // SPEC-0005: bolha de invuln
@@ -590,6 +758,8 @@ function syncWorld() {
       buffApplied.delete(id);
       wasShielded.delete(id);
       lastTrailSpawn.delete(id);
+      lastSpawnProtection.delete(id); // T-045
+      spawnAnim.delete(id); // T-045
     }
   });
 
@@ -597,15 +767,23 @@ function syncWorld() {
   if (st.flagEnabled && st.flag) {
     if (!flagVisual) {
       flagVisual = new THREE.Group();
+      // SPEC-0011 (T-041): o pano da bandeira-objetivo ganha material DEDICADO (clone) —
+      // assim o pulso emissivo/apagado não afeta as bandeiras decorativas das zonas de guerra.
       propParts("bandeira").forEach((part) => {
-        const mesh = new THREE.Mesh(part.geometry, part.material);
+        const mat = (part.material as THREE.MeshLambertMaterial).clone();
+        const mesh = new THREE.Mesh(part.geometry, mat);
         mesh.position.copy(part.offset);
+        // o segundo part é o pano (ver propParts) — guarda o material pra pulsar por frame
+        if (part.offset.y > 1) flagVisual!.userData.pano = mat;
         flagVisual!.add(mesh);
       });
       scene.add(flagVisual);
     }
     flagVisual.position.x += (st.flag.x - flagVisual.position.x) * 0.25;
     flagVisual.position.z += (st.flag.z - flagVisual.position.z) * 0.25;
+    // T-041: acesa (livre) / apagada (carregada) / some (cooldown).
+    const carried = !!st.flag.carrierId;
+    updateFlagGround(flagVisual, st.flag.state ?? "active", carried, t);
   } else if (flagVisual) {
     scene.remove(flagVisual);
     flagVisual = undefined;
@@ -615,7 +793,7 @@ function syncWorld() {
   st.collectibles?.forEach((c: any, id: string) => {
     seenC.add(id);
     if (!collectibleMeshes.has(id)) {
-      const mesh = createCollectibleVisual(c.kind);
+      const mesh = createCollectibleVisual(c.kind, c.weaponId); // T-039: weaponId distingue a arma
       mesh.position.set(c.x, 0.4, c.z);
       scene.add(mesh);
       collectibleMeshes.set(id, mesh);
@@ -633,14 +811,13 @@ function syncWorld() {
     seenProj.add(id);
     let mesh = projectileMeshes.get(id);
     if (!mesh) {
-      mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.3),
-        new THREE.MeshBasicMaterial({ color: 0xffaa00 })
-      );
+      // T-039: cor/tamanho e muzzle por lançador (proj.launcherId vem do servidor).
+      const style = projStyleFor(proj.launcherId);
+      mesh = new THREE.Mesh(style.geo, style.mat);
       mesh.position.set(proj.x, 0.5, proj.z);
       scene.add(mesh);
       projectileMeshes.set(id, mesh);
-      vfx.spawnAt("muzzle_flash", proj.x, proj.z); // T-022: projétil nasce no cano — mesma posição inicial
+      vfx.spawnAt(style.muzzle, proj.x, proj.z); // T-022/T-039: muzzle no cano (leve p/ basic, rico p/ vantajosos)
     }
     mesh.position.x += (proj.x - mesh.position.x) * 0.5;
     mesh.position.z += (proj.z - mesh.position.z) * 0.5;
