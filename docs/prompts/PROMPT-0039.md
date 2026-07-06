@@ -32,6 +32,33 @@ O limite de sessão do plano cortou os 2 agentes da Etapa 2 durante a verificaç
 - **Agentes paralelos em arquivos compartilhados:** seções próprias no FIM de `constants.ts` + fronteiras de região explícitas + "se o Edit falhar, releia e refaça" — padrão validado, zero colisões.
 
 ## Pendências para o próximo prompt
-- **T-046** (smoke de integração da SPEC-0011) e **T-047** (doc de mecânica da bandeira) — escopos fechados no BACKLOG, paralelizáveis, dimensionados para Sonnet.
 - Vereditos de sensação do CD (dials por task na seção F2.6 do BACKLOG): multiplicadores de aura, números dos lançadores/janela de respawn da arma, tempos da bandeira, booster do combo.
 - T-025 (CLI de mapas) segue como próxima da fila V1 original.
+
+## Resultado T-046 (smoke de integração, 2026-07-06)
+Servidor isolado (`PORT=2601`, fora das portas 2567/5173 ocupadas pela sessão `aci`) + 10 bots
+headless, duas rodadas (200 s e 240 s). Em vez de só ler o log verboso dos bots (que não imprime
+todo `debug_event`), foi feito polling do ring buffer via `GET /debug/rooms` a cada 16 s durante a
+rodada de 240 s, deduplicado por `(time, type, payload)` — **1262 eventos únicos** cobrindo os
+265 s reais da sessão (o buffer sozinho só retém ~200 eventos ≈ 30 s em sessão de 10 bots; polling
+periódico é necessário pra observar ciclos longos como o cooldown da bandeira).
+
+- **Arma (T-039):** 9 ciclos spawn→pickup observados, sempre **1 arma por vez** (nunca um spawn
+  antes do pickup anterior); intervalos spawn-a-spawn de 19–30 s, dentro da janela
+  `WEAPON_RESPAWN_MIN/MAX_MS` (15–30 s). `heavy_shot`/`rapid_shot` alternando, spawns em `field`
+  e `war`.
+- **Bandeira (T-040/041/042):** ciclo completo observado — `flag_cooldown_start` em `t=179988` →
+  `flag_respawn` em `t=240016`, diferença **60028 ms**, batendo com `FLAG_COOLDOWN_MS=60000`.
+  Um segundo `flag_cooldown_start` ocorreu perto do fim da rodada (respawn correspondente ficou
+  fora da janela de observação). 8 pickups/8 drops no total, todos por morte do portador
+  (`reason: "death"`).
+- **Combo de XP (T-043):** 104 eventos `xp_combo`, 23 com `boosted: true` — todos com `count ≥ 3`
+  e `limit` sorteado observado em {3, 4} (dentro de `[XP_COMBO_LIMIT_MIN=3, MAX=5]`).
+- **Convergência de combate (T-037):** `kill_heal` (14 ocorrências — abate com ≥1 ameaça por
+  perto) coexistindo com `kill_duel_bonus` (38 — duelo 1×1), indicando mistura real de
+  brigas em grupo e duelos, não monopólio de alvo único.
+- Sem crashes, sem exceptions no log do servidor nas duas rodadas.
+
+**Gates ao final:** shared 25/25 · server 49/49 · bots 35/35 · `tsc --noEmit` limpo em
+server/client/bots. Nenhuma mudança de código de jogo — só execução/observação, conforme escopo
+da task.
