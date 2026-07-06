@@ -1,0 +1,9 @@
+# T-027 (SPEC-0008 / ADR-016): backend de plataforma — pins de produção.
+# Python 3.11+. Instalar com: python -m venv .venv && . .venv/bin/activate && pip install -r requirements-dev.txt
+Django==5.1.5
+djangorestframework==3.15.2
+psycopg[binary]==3.2.3
+PyJWT[crypto]==2.10.1
+django-environ==0.11.2
+django-cors-headers==4.6.0
+gunicorn==23.0.0

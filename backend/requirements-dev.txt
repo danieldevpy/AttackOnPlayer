@@ -1,0 +1,7 @@
+# Dev/test/lint — inclui os pins de produção.
+-r requirements.txt
+pytest==8.3.4
+pytest-django==4.9.0
+factory-boy==3.3.1
+ruff==0.9.2
+coverage==7.6.10
