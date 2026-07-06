@@ -17,9 +17,14 @@ import {
   AttrKey,
   KILL_RUSH_MULT,
   KILL_RUSH_MS,
+  SHIELD_TEMP_MS,
+  SHIELD_TEMP_DAMAGE_MULT,
 } from "@aop/shared";
 
-export type EffectKind = "speed_up" | "xp_boost" | "launcher_slow" | "kill_rush";
+// SPEC-0010 (T-035): `damage_reduction` = escudo temporário do mapa. Reduz o dano recebido
+// (via player.damageTakenMult no recompute) por SHIELD_TEMP_MS — não bloqueia, ao contrário
+// da invulnerabilidade de nascimento (spawnProtectedUntil, tratada no ProjectileSystem).
+export type EffectKind = "speed_up" | "xp_boost" | "launcher_slow" | "kill_rush" | "damage_reduction";
 
 interface ActiveEffect {
   kind: EffectKind;
@@ -39,6 +44,7 @@ const DURATION: Record<EffectKind, number> = {
   xp_boost: XP_BOOST_MS, // farm_event (T-004)
   launcher_slow: 0, // não usado — duração vem do LauncherDef via applySlow()
   kill_rush: KILL_RUSH_MS, // T-017: skill impulso — boost curto ao matar
+  damage_reduction: SHIELD_TEMP_MS, // SPEC-0010 (T-035): escudo temporário do mapa
 };
 
 function zeroAttr(): AttrPoints {
@@ -167,6 +173,8 @@ export class EffectSystem {
     player.reach = attrMult("alcance", s.attr.alcance); // >1 = projétil vai mais longe (T-015)
     player.maxHp = Math.round(PLAYER_BASE_HP * player.vitality);
     player.hp = Math.min(player.hp, player.maxHp);
+    // SPEC-0010 (T-035): escudo temporário reduz o dano recebido enquanto ativo.
+    player.damageTakenMult = s.active.some((e) => e.kind === "damage_reduction") ? SHIELD_TEMP_DAMAGE_MULT : 1;
     player.xpMult = s.active.some((e) => e.kind === "xp_boost") ? XP_BOOST_MULT : 1;
     player.effects = new ArraySchema<string>(...s.active.map((e) => e.kind));
   }

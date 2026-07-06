@@ -30,14 +30,14 @@ describe("ATTR_DEFS / attrMult (T-015)", () => {
     expect(attrMult("forca", 0)).toBe(1); // sem pontos = neutro
   });
 
-  it("guarda da spec: full-Força nível 8 (21 pts) mata equilibrado nível 8 em 3 tiros", () => {
-    // atacante: 7 level-ups × 3 pts concentrados em força (cards, T-016)
-    const dmg = LAUNCHERS.basic_shot.damage * attrMult("forca", 21);
-    // defensor: preset equilibrado nível 8 (7 pts em vitalidade)
-    const hp = Math.round(100 * attrMult("vitalidade", 7));
+  it("guarda da spec: full-Força nível 8 (42 pts) mata equilibrado nível 8 em 3 tiros", () => {
+    // atacante: 7 level-ups × 6 pts concentrados em força (cards, T-016/addendum)
+    const dmg = LAUNCHERS.basic_shot.damage * attrMult("forca", 42);
+    // defensor: preset equilibrado nível 8 (14 pts em vitalidade — ATTR_POINTS_PER_LEVEL_EACH=2)
+    const hp = Math.round(100 * attrMult("vitalidade", 14));
     expect(Math.ceil(hp / dmg)).toBe(3);
     // e o equilibrado vs equilibrado continua 5 tiros (TTK alvo)
-    const dmgEq = LAUNCHERS.basic_shot.damage * attrMult("forca", 7);
+    const dmgEq = LAUNCHERS.basic_shot.damage * attrMult("forca", 14);
     expect(Math.ceil(hp / dmgEq)).toBe(5);
   });
 });
@@ -68,16 +68,31 @@ describe("EffectSystem — recompute com 5 atributos (T-015)", () => {
     }
   });
 
+  it("escudo temporário (damage_reduction) ativa/expira o damageTakenMult (SPEC-0010/T-035)", () => {
+    const effects = new EffectSystem();
+    const state = new ArenaState();
+    const p = new Player();
+    state.players.set("A", p);
+    expect(p.damageTakenMult).toBe(1); // default = sem redução
+
+    effects.apply("A", p, "damage_reduction", 0);
+    expect(p.damageTakenMult).toBe(0.5); // SHIELD_TEMP_DAMAGE_MULT
+
+    // passa da duração (SHIELD_TEMP_MS=3000) → expira sozinho no tick e volta a 1
+    effects.tick(state.players, 3001);
+    expect(p.damageTakenMult).toBe(1);
+  });
+
   it("resetAttrToLevel volta ao preset equilibrado — cadência/alcance zeram (morte apaga build)", () => {
     const effects = new EffectSystem();
     const p = new Player();
     effects.addAttrPoints("A", p, { cadencia: 10, alcance: 10, forca: 2 });
-    effects.resetAttrToLevel("A", p, 5); // nível 5 → 4 pts em cada atributo-base
+    effects.resetAttrToLevel("A", p, 5); // nível 5 → 8 pts em cada atributo-base (ATTR_POINTS_PER_LEVEL_EACH=2)
     expect(p.attackSpeed).toBe(1);
     expect(p.reach).toBe(1);
-    expect(p.strength).toBeCloseTo(1.24, 5);
-    expect(p.vitality).toBeCloseTo(1.16, 5);
-    expect(p.speed).toBeCloseTo(1.12, 5);
+    expect(p.strength).toBeCloseTo(1.48, 5);
+    expect(p.vitality).toBeCloseTo(1.32, 5);
+    expect(p.speed).toBeCloseTo(1.24, 5);
   });
 });
 

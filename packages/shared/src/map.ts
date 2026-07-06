@@ -49,6 +49,12 @@ const PROP_TYPES: PropType[] = ["pedra", "arvore", "caixa", "muro"];
  * aplicada por player, não por região. O primitivo `kind: "safe"` continua existindo em
  * `zoneAt`/tipos (testes de combate ainda o exercem), só não é mais gerado no mapa.
  */
+/** Centro do mapa — usado pela zona de guerra principal e pela posição default da
+ * bandeira (T-021; T-024 vai poder sobrescrever via formato de mapa versionado). */
+export function mapCenter(w: number, h: number): { x: number; z: number } {
+  return { x: w / 2, z: h / 2 };
+}
+
 function buildZones(w: number, h: number, _spawns: Array<{ x: number; z: number }>): Zone[] {
   const zones: Zone[] = [];
   zones.push({ kind: "war", cx: w / 2, cz: h / 2, radius: WAR_ZONE_RADIUS });
@@ -114,6 +120,117 @@ export function buildMap(w: number, h: number, seed: number): GameMap {
   }
 
   return { w, h, seed, cells, props, zones };
+}
+
+/** T-024: flood-fill de sanidade — confirma que toda célula livre é alcançável a partir de
+ * qualquer outra (nenhuma região fechada). O gerador por seed já garante isso estruturalmente
+ * (`isIsolated`, props nunca se tocam); mapas curados (arquivo) precisam desta checagem
+ * explícita na validação, já que um humano/CLI pode editar o JSON livremente. */
+export function floodFillReachable(map: GameMap): boolean {
+  const total = map.w * map.h;
+  let start = -1;
+  let freeCount = 0;
+  for (let i = 0; i < total; i++) {
+    if (map.cells[i] !== TILE_FREE) continue;
+    freeCount++;
+    if (start === -1) start = i;
+  }
+  if (start === -1) return true; // sem células livres — nada a checar
+
+  const seen = new Uint8Array(total);
+  const stack = [start];
+  seen[start] = 1;
+  let reached = 1;
+  while (stack.length) {
+    const idx = stack.pop()!;
+    const x = idx % map.w;
+    const z = Math.floor(idx / map.w);
+    const neighbors: Array<[number, number]> = [
+      [x + 1, z],
+      [x - 1, z],
+      [x, z + 1],
+      [x, z - 1],
+    ];
+    for (const [nx, nz] of neighbors) {
+      if (nx < 0 || nz < 0 || nx >= map.w || nz >= map.h) continue;
+      const nIdx = nz * map.w + nx;
+      if (seen[nIdx] || map.cells[nIdx] !== TILE_FREE) continue;
+      seen[nIdx] = 1;
+      reached++;
+      stack.push(nIdx);
+    }
+  }
+  return reached === freeCount;
+}
+
+/**
+ * SPEC-0011 (T-039/T-040): conjunto de células livres ALCANÇÁVEIS a partir de um tile-semente
+ * (BFS 4-vizinhos sobre `cells`). Devolve um Uint8Array (1 = alcançável) indexado por z*w+x.
+ * Usado para spawns "totalmente aleatórios mas válidos": sorteia célula, confirma alcance.
+ * O semente deve ser uma célula livre (ex.: centro do mapa, spawn de player); tile de parede
+ * devolve tudo-zero. Barato o suficiente para chamar 1x e reusar por vários spawns.
+ */
+export function reachableCells(map: GameMap, seedTx: number, seedTz: number): Uint8Array {
+  const total = map.w * map.h;
+  const seen = new Uint8Array(total);
+  if (seedTx < 0 || seedTz < 0 || seedTx >= map.w || seedTz >= map.h) return seen;
+  const startIdx = seedTz * map.w + seedTx;
+  if (map.cells[startIdx] !== TILE_FREE) return seen;
+  const stack = [startIdx];
+  seen[startIdx] = 1;
+  while (stack.length) {
+    const idx = stack.pop()!;
+    const x = idx % map.w;
+    const z = Math.floor(idx / map.w);
+    const neighbors: Array<[number, number]> = [
+      [x + 1, z],
+      [x - 1, z],
+      [x, z + 1],
+      [x, z - 1],
+    ];
+    for (const [nx, nz] of neighbors) {
+      if (nx < 0 || nz < 0 || nx >= map.w || nz >= map.h) continue;
+      const nIdx = nz * map.w + nx;
+      if (seen[nIdx] || map.cells[nIdx] !== TILE_FREE) continue;
+      seen[nIdx] = 1;
+      stack.push(nIdx);
+    }
+  }
+  return seen;
+}
+
+/**
+ * SPEC-0011 (T-040): célula livre ALCANÇÁVEL mais próxima da posição pedida (x, z em
+ * coordenadas de mundo). Busca em anéis crescentes (Chebyshev) a partir do tile da posição;
+ * devolve o CENTRO do primeiro tile alcançável (`reachable[tz*w+tx] === 1`). Se a própria
+ * célula já é válida, devolve-a sem mover. Usado para toda posição em que a bandeira assenta
+ * (nascimento, volta ao centro, drop por morte/desconexão) — nunca dentro de prop nem em
+ * bolsão fechado. `reachable` é o Uint8Array pré-computado por `reachableCells`.
+ */
+export function nearestReachableCell(
+  map: GameMap,
+  x: number,
+  z: number,
+  reachable: Uint8Array
+): { x: number; z: number } {
+  const clampTx = Math.max(0, Math.min(map.w - 1, Math.floor(x)));
+  const clampTz = Math.max(0, Math.min(map.h - 1, Math.floor(z)));
+  const ok = (tx: number, tz: number) =>
+    tx >= 0 && tz >= 0 && tx < map.w && tz < map.h && reachable[tz * map.w + tx] === 1;
+  if (ok(clampTx, clampTz)) return { x: clampTx + 0.5, z: clampTz + 0.5 };
+  const maxR = map.w + map.h;
+  for (let r = 1; r <= maxR; r++) {
+    // só a casca do anel de raio Chebyshev r ao redor do tile pedido
+    for (let dz = -r; dz <= r; dz++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+        const tx = clampTx + dx;
+        const tz = clampTz + dz;
+        if (ok(tx, tz)) return { x: tx + 0.5, z: tz + 0.5 };
+      }
+    }
+  }
+  return { x: clampTx + 0.5, z: clampTz + 0.5 }; // fallback teórico (mapa sem célula alcançável)
 }
 
 /** Zona no ponto dado (centro de tile ou posição contínua). Safe tem prioridade sobre guerra. */

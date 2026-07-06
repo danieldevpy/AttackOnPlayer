@@ -1,0 +1,22 @@
+# T-027 (SPEC-0008): SÓ o Postgres de dev/test. O stack completo (nginx, TLS, backend, node)
+# é a T-030. Django/pytest rodam no host (venv) apontando DATABASE_URL para este db.
+#   docker compose -f backend/docker-compose.yml up -d db
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aop
+      POSTGRES_PASSWORD: aop
+      POSTGRES_DB: aop_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - aop_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aop -d aop_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  aop_pgdata:

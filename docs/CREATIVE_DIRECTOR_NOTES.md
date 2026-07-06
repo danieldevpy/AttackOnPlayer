@@ -26,3 +26,37 @@ Voz do Daniel. A IA registra aqui, mas o conteúdo é decisão dele.
 **Perda de nível na morte:** nível baixo perde pouco atributo ao morrer; nível muito avançado tem perda muito maior (escala com o nível, não é fixo). Quer também o conceito de "crítico" e camadas de defesa — vida/atributo primeiro (simples), depois armadura, depois aura determinando chance de sobreviver — mantendo o jogo dinâmico. Reset total deve existir, mas como **opção ativável** (por room e/ou modo global), não comportamento único.
 
 **Registrado por:** IA, ver interpretação técnica e limites de escopo em `docs/LEAD_DESIGNER_NOTES.md` (mesma data) e ADR-012.
+
+## 2026-07-05 — Primeiro teste manual da V1 (perfis de controle + bots + bandeira)
+
+**Perfil keyboard:** movimentação absoluta (WASD estilo strafe) com setas girando ficou complicada — quer **tank controls**: W/S andam/recuam baseado na rotação do jogador.
+
+**Bots devem simular players:** *"ataca, vai pra cima, às vezes corre, às vezes volta a atacar; quando se sentir encurralado, para de correr e volta a atacar"*. Rejeitado: fuga infinita com vida baixa, esfregar na borda do mapa sem atirar, todos com o mesmo comportamento. Quer **comportamentos específicos por bot** + uma **dosagem** dessas características para cada bot iniciado.
+
+**Bandeira:** não quer todos os bots focando o portador — quer **conflitos entre si**, com o portador como um alvo possível; os bots devem "**compartilhar**" os alvos para dividir bem a jogatina. Disputar tem que incluir atirar (perseguição sem tiro rejeitada). Regra de retorno: caída e não disputada em **5 segundos**, volta ao centro.
+
+**Sessões de teste:** precisa conseguir iniciar ~10 bots juntos na mesma partida (`npm run bots`), cada um com perfil sorteado diferente.
+
+**Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0032.md`; veredito final: aprovado ("está melhor agora").
+
+## 2026-07-05 — Feedback de jogo: progressão de skill/atributo + menu travando na morte
+
+**Skill demorando demais:** *"conforme a pessoa vai ganhando nível é muito difícil aparecer uma escolha de skill, às vezes demora até o nível 11"*. Quer que em alguns momentos apareça **2 opções de atributo e 1 opção de skill** (inverso do que existia).
+
+**Atributo fraco por escolha:** quer aumento maior nos cards de atributo — *"em vez de por ex +3 já dá +6"*.
+
+**Bug reportado depois:** o menu de escolha de level-up fica aberto na tela mesmo depois do jogador morrer, mesmo não servindo mais pra nada — quer que feche.
+
+**Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0033.md`.
+
+## 2026-07-06 — Três correções antes de continuar o backlog
+
+**Bandeira parada no mapa:** deve ter estado de enable/disable conforme alguém pegar, estar em cooldown, ou estar "pegável". *(Já implementado desde T-041/T-042 — livre = acesa pulsante, carregada = apagada, cooldown = some do mapa. IA confirmou por código + eventos de servidor (T-046) e adicionou linha de estado no F3 pra dar veredito textual; verificação visual em pixel segue bloqueada — ambiente de preview sem GPU para WebGL, mesmo risco já registrado em `LEAD_DESIGNER_NOTES.md` 2026-07-05.)*
+
+**Verificar se a SPEC-0010 está funcional:** pediu checagem + teste. *(Confirmado funcional: smoke ao vivo com 8 bots — `kill_heal`/`kill_duel_bonus` com a matemática exata da spec, `hp_orb`/`shield_temp` respeitando teto e janela de respawn; redução de dano do escudo já coberta por teste unitário dedicado.)*
+
+**Cards de level-up repetitivos:** quer mais variações de atributo e sorteio, "para não ficar sempre repetitivo". *(Reverte a decisão de T-016/SPEC-0004 — "determinístico, nunca sorteio" — registrada como pilar habilidade>sorte. IA implementou o pedido (pool de 6→12 cards, oferta sorteada a cada level-up) e registrou a tensão com a decisão anterior em `LEAD_DESIGNER_NOTES.md`, mas seguiu a instrução explícita do CD.)*
+
+**Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0041.md`.
+
+**Veredito (mesmo dia, via chat):** "estou de acordo com tudo" — aprovado sem ressalvas, inclusive os 2 pontos que ficaram pendentes de teste em browser (bandeira visual, sensação dos cards sorteados). Não foi um teste jogado no browser (ambiente sem isso ainda) — é aprovação pela implementação/explicação descrita. Libera a esteira para prosseguir ao F4.

@@ -2,9 +2,16 @@
 
 O jogo evolui visualmente em 4 fases. Nunca pule fases: cada uma valida algo antes de investir na próxima. O ponto de troca é ÚNICO no código: `packages/client/src/visuals.ts` (constante `VISUAL_PHASE` + fábricas `createPlayerVisual` / `createCollectibleVisual`). Trocar de fase = editar um arquivo.
 
-## F1 — Primitivas (ATUAL)
-Cápsula = player, esfera/octaedro = coletável, cubo = parede.
+## F1 — Primitivas (ATUAL para personagens)
+Cápsula = player, cubo = parede.
 **Valida:** mecânica, legibilidade, performance base.
+
+> **Nota (T-036, passe visual 2026-07-05):** cenário e coletáveis já usam **F2 (composição)**
+> mesmo com os personagens ainda em F1 — props compostos desde a T-002 (árvore = tronco+copa,
+> bandeira = haste+pano) e **coletáveis compostos** desde a T-036 (cruz=vida, domo=escudo,
+> seta=velocidade, moeda em pé, baú=box, gema=xp — `collectibleParts` em `visuals.ts`). Isso
+> não fere a "regra de ouro": a mistura proibida é personagem GLTF (F4) com cenário cubo — não
+> composição de primitivas coerente entre si. Personagens sobem para F2/F3 quando o CD pedir.
 
 ## F2 — Composição de primitivas
 Ainda sem assets: personagem = cápsula (corpo) + esfera (cabeça) + cubos (mãos), agrupados num `THREE.Group`. Dá silhueta e direção (saber para onde o boneco olha) sem custo de arte.

@@ -5,3 +5,14 @@ packages/server/logs/
 *.log
 .env
 .DS_Store
+
+# backend/ Django (T-027)
+backend/.venv/
+backend/.env
+backend/secrets/
+*.pem
+__pycache__/
+*.pyc
+backend/staticfiles/
+backend/.pytest_cache/
+.ruff_cache/

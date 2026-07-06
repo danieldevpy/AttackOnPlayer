@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "arena-teste",
+  "name": "Arena de teste (T-024)",
+  "author": "CD",
+  "w": 15,
+  "h": 13,
+  "instances": [
+    { "objectId": "pedra", "x": 3, "z": 3 },
+    { "objectId": "pedra", "x": 11, "z": 3 },
+    { "objectId": "arvore", "x": 3, "z": 9 },
+    { "objectId": "arvore", "x": 11, "z": 9 },
+    { "objectId": "caixa", "x": 7, "z": 3 },
+    { "objectId": "caixa", "x": 7, "z": 9 },
+    { "objectId": "muro", "x": 2, "z": 6 },
+    { "objectId": "muro", "x": 11, "z": 6 }
+  ],
+  "zones": [
+    { "kind": "war", "cx": 7.5, "cz": 6.5, "radius": 4 }
+  ],
+  "spawns": [
+    { "x": 1.5, "z": 1.5 },
+    { "x": 13.5, "z": 1.5 },
+    { "x": 1.5, "z": 11.5 },
+    { "x": 13.5, "z": 11.5 }
+  ],
+  "flag": { "x": 7.5, "z": 6.5 }
+}

@@ -1,0 +1,976 @@
+{
+  "version": 1,
+  "id": "arena-live-capture",
+  "name": "Capturado da sala 71XizA8wq",
+  "w": 75,
+  "h": 65,
+  "seed": 901725933,
+  "instances": [
+    {
+      "objectId": "caixa",
+      "x": 59,
+      "z": 42
+    },
+    {
+      "objectId": "caixa",
+      "x": 46,
+      "z": 16
+    },
+    {
+      "objectId": "pedra",
+      "x": 9,
+      "z": 58
+    },
+    {
+      "objectId": "muro",
+      "x": 68,
+      "z": 27
+    },
+    {
+      "objectId": "pedra",
+      "x": 58,
+      "z": 18
+    },
+    {
+      "objectId": "muro",
+      "x": 20,
+      "z": 60
+    },
+    {
+      "objectId": "caixa",
+      "x": 63,
+      "z": 3
+    },
+    {
+      "objectId": "muro",
+      "x": 16,
+      "z": 11
+    },
+    {
+      "objectId": "caixa",
+      "x": 46,
+      "z": 10
+    },
+    {
+      "objectId": "muro",
+      "x": 55,
+      "z": 50
+    },
+    {
+      "objectId": "muro",
+      "x": 61,
+      "z": 38
+    },
+    {
+      "objectId": "arvore",
+      "x": 22,
+      "z": 56
+    },
+    {
+      "objectId": "arvore",
+      "x": 41,
+      "z": 20
+    },
+    {
+      "objectId": "muro",
+      "x": 67,
+      "z": 58
+    },
+    {
+      "objectId": "muro",
+      "x": 47,
+      "z": 53
+    },
+    {
+      "objectId": "arvore",
+      "x": 55,
+      "z": 53
+    },
+    {
+      "objectId": "pedra",
+      "x": 40,
+      "z": 51
+    },
+    {
+      "objectId": "caixa",
+      "x": 21,
+      "z": 24
+    },
+    {
+      "objectId": "caixa",
+      "x": 61,
+      "z": 54
+    },
+    {
+      "objectId": "caixa",
+      "x": 7,
+      "z": 6
+    },
+    {
+      "objectId": "pedra",
+      "x": 54,
+      "z": 21
+    },
+    {
+      "objectId": "pedra",
+      "x": 72,
+      "z": 25
+    },
+    {
+      "objectId": "pedra",
+      "x": 16,
+      "z": 8
+    },
+    {
+      "objectId": "caixa",
+      "x": 57,
+      "z": 28
+    },
+    {
+      "objectId": "muro",
+      "x": 10,
+      "z": 35
+    },
+    {
+      "objectId": "muro",
+      "x": 59,
+      "z": 32
+    },
+    {
+      "objectId": "muro",
+      "x": 15,
+      "z": 29
+    },
+    {
+      "objectId": "pedra",
+      "x": 61,
+      "z": 7
+    },
+    {
+      "objectId": "arvore",
+      "x": 10,
+      "z": 20
+    },
+    {
+      "objectId": "arvore",
+      "x": 18,
+      "z": 37
+    },
+    {
+      "objectId": "caixa",
+      "x": 64,
+      "z": 26
+    },
+    {
+      "objectId": "caixa",
+      "x": 7,
+      "z": 41
+    },
+    {
+      "objectId": "arvore",
+      "x": 60,
+      "z": 62
+    },
+    {
+      "objectId": "muro",
+      "x": 58,
+      "z": 21
+    },
+    {
+      "objectId": "caixa",
+      "x": 12,
+      "z": 40
+    },
+    {
+      "objectId": "muro",
+      "x": 11,
+      "z": 9
+    },
+    {
+      "objectId": "arvore",
+      "x": 23,
+      "z": 52
+    },
+    {
+      "objectId": "muro",
+      "x": 18,
+      "z": 5
+    },
+    {
+      "objectId": "caixa",
+      "x": 48,
+      "z": 29
+    },
+    {
+      "objectId": "caixa",
+      "x": 60,
+      "z": 28
+    },
+    {
+      "objectId": "arvore",
+      "x": 35,
+      "z": 54
+    },
+    {
+      "objectId": "muro",
+      "x": 39,
+      "z": 29
+    },
+    {
+      "objectId": "pedra",
+      "x": 54,
+      "z": 62
+    },
+    {
+      "objectId": "muro",
+      "x": 67,
+      "z": 45
+    },
+    {
+      "objectId": "arvore",
+      "x": 31,
+      "z": 49
+    },
+    {
+      "objectId": "caixa",
+      "x": 25,
+      "z": 60
+    },
+    {
+      "objectId": "pedra",
+      "x": 14,
+      "z": 44
+    },
+    {
+      "objectId": "pedra",
+      "x": 13,
+      "z": 20
+    },
+    {
+      "objectId": "muro",
+      "x": 5,
+      "z": 48
+    },
+    {
+      "objectId": "pedra",
+      "x": 24,
+      "z": 42
+    },
+    {
+      "objectId": "caixa",
+      "x": 55,
+      "z": 7
+    },
+    {
+      "objectId": "caixa",
+      "x": 64,
+      "z": 48
+    },
+    {
+      "objectId": "caixa",
+      "x": 40,
+      "z": 43
+    },
+    {
+      "objectId": "caixa",
+      "x": 14,
+      "z": 10
+    },
+    {
+      "objectId": "muro",
+      "x": 18,
+      "z": 29
+    },
+    {
+      "objectId": "caixa",
+      "x": 31,
+      "z": 35
+    },
+    {
+      "objectId": "muro",
+      "x": 62,
+      "z": 44
+    },
+    {
+      "objectId": "arvore",
+      "x": 66,
+      "z": 34
+    },
+    {
+      "objectId": "pedra",
+      "x": 35,
+      "z": 57
+    },
+    {
+      "objectId": "caixa",
+      "x": 53,
+      "z": 37
+    },
+    {
+      "objectId": "caixa",
+      "x": 33,
+      "z": 25
+    },
+    {
+      "objectId": "caixa",
+      "x": 10,
+      "z": 50
+    },
+    {
+      "objectId": "arvore",
+      "x": 37,
+      "z": 19
+    },
+    {
+      "objectId": "muro",
+      "x": 16,
+      "z": 61
+    },
+    {
+      "objectId": "pedra",
+      "x": 45,
+      "z": 38
+    },
+    {
+      "objectId": "pedra",
+      "x": 9,
+      "z": 5
+    },
+    {
+      "objectId": "caixa",
+      "x": 61,
+      "z": 7
+    },
+    {
+      "objectId": "arvore",
+      "x": 27,
+      "z": 56
+    },
+    {
+      "objectId": "pedra",
+      "x": 71,
+      "z": 23
+    },
+    {
+      "objectId": "pedra",
+      "x": 67,
+      "z": 12
+    },
+    {
+      "objectId": "muro",
+      "x": 6,
+      "z": 50
+    },
+    {
+      "objectId": "muro",
+      "x": 71,
+      "z": 11
+    },
+    {
+      "objectId": "muro",
+      "x": 58,
+      "z": 45
+    },
+    {
+      "objectId": "muro",
+      "x": 71,
+      "z": 6
+    },
+    {
+      "objectId": "caixa",
+      "x": 42,
+      "z": 24
+    },
+    {
+      "objectId": "arvore",
+      "x": 60,
+      "z": 50
+    },
+    {
+      "objectId": "muro",
+      "x": 34,
+      "z": 48
+    },
+    {
+      "objectId": "caixa",
+      "x": 33,
+      "z": 57
+    },
+    {
+      "objectId": "pedra",
+      "x": 13,
+      "z": 18
+    },
+    {
+      "objectId": "caixa",
+      "x": 67,
+      "z": 2
+    },
+    {
+      "objectId": "arvore",
+      "x": 71,
+      "z": 39
+    },
+    {
+      "objectId": "pedra",
+      "x": 26,
+      "z": 24
+    },
+    {
+      "objectId": "muro",
+      "x": 35,
+      "z": 45
+    },
+    {
+      "objectId": "arvore",
+      "x": 16,
+      "z": 3
+    },
+    {
+      "objectId": "caixa",
+      "x": 15,
+      "z": 19
+    },
+    {
+      "objectId": "muro",
+      "x": 49,
+      "z": 4
+    },
+    {
+      "objectId": "caixa",
+      "x": 10,
+      "z": 23
+    },
+    {
+      "objectId": "arvore",
+      "x": 29,
+      "z": 25
+    },
+    {
+      "objectId": "caixa",
+      "x": 41,
+      "z": 39
+    },
+    {
+      "objectId": "muro",
+      "x": 34,
+      "z": 21
+    },
+    {
+      "objectId": "caixa",
+      "x": 21,
+      "z": 48
+    },
+    {
+      "objectId": "arvore",
+      "x": 54,
+      "z": 11
+    },
+    {
+      "objectId": "muro",
+      "x": 24,
+      "z": 31
+    },
+    {
+      "objectId": "muro",
+      "x": 5,
+      "z": 52
+    },
+    {
+      "objectId": "pedra",
+      "x": 56,
+      "z": 57
+    },
+    {
+      "objectId": "pedra",
+      "x": 57,
+      "z": 40
+    },
+    {
+      "objectId": "pedra",
+      "x": 13,
+      "z": 42
+    },
+    {
+      "objectId": "muro",
+      "x": 39,
+      "z": 15
+    },
+    {
+      "objectId": "pedra",
+      "x": 42,
+      "z": 6
+    },
+    {
+      "objectId": "pedra",
+      "x": 42,
+      "z": 45
+    },
+    {
+      "objectId": "arvore",
+      "x": 40,
+      "z": 47
+    },
+    {
+      "objectId": "pedra",
+      "x": 56,
+      "z": 60
+    },
+    {
+      "objectId": "muro",
+      "x": 60,
+      "z": 59
+    },
+    {
+      "objectId": "caixa",
+      "x": 64,
+      "z": 13
+    },
+    {
+      "objectId": "caixa",
+      "x": 68,
+      "z": 51
+    },
+    {
+      "objectId": "caixa",
+      "x": 7,
+      "z": 62
+    },
+    {
+      "objectId": "arvore",
+      "x": 42,
+      "z": 58
+    },
+    {
+      "objectId": "muro",
+      "x": 7,
+      "z": 60
+    },
+    {
+      "objectId": "muro",
+      "x": 29,
+      "z": 52
+    },
+    {
+      "objectId": "caixa",
+      "x": 62,
+      "z": 32
+    },
+    {
+      "objectId": "arvore",
+      "x": 72,
+      "z": 51
+    },
+    {
+      "objectId": "arvore",
+      "x": 9,
+      "z": 11
+    },
+    {
+      "objectId": "caixa",
+      "x": 9,
+      "z": 41
+    },
+    {
+      "objectId": "arvore",
+      "x": 22,
+      "z": 7
+    },
+    {
+      "objectId": "arvore",
+      "x": 50,
+      "z": 23
+    },
+    {
+      "objectId": "caixa",
+      "x": 3,
+      "z": 41
+    },
+    {
+      "objectId": "arvore",
+      "x": 3,
+      "z": 45
+    },
+    {
+      "objectId": "arvore",
+      "x": 56,
+      "z": 47
+    },
+    {
+      "objectId": "muro",
+      "x": 29,
+      "z": 40
+    },
+    {
+      "objectId": "caixa",
+      "x": 53,
+      "z": 7
+    },
+    {
+      "objectId": "muro",
+      "x": 65,
+      "z": 9
+    },
+    {
+      "objectId": "arvore",
+      "x": 61,
+      "z": 22
+    },
+    {
+      "objectId": "muro",
+      "x": 23,
+      "z": 21
+    },
+    {
+      "objectId": "pedra",
+      "x": 43,
+      "z": 50
+    },
+    {
+      "objectId": "arvore",
+      "x": 24,
+      "z": 16
+    },
+    {
+      "objectId": "muro",
+      "x": 50,
+      "z": 2
+    },
+    {
+      "objectId": "caixa",
+      "x": 30,
+      "z": 6
+    },
+    {
+      "objectId": "muro",
+      "x": 31,
+      "z": 44
+    },
+    {
+      "objectId": "arvore",
+      "x": 63,
+      "z": 17
+    },
+    {
+      "objectId": "arvore",
+      "x": 65,
+      "z": 15
+    },
+    {
+      "objectId": "caixa",
+      "x": 2,
+      "z": 43
+    },
+    {
+      "objectId": "muro",
+      "x": 28,
+      "z": 12
+    },
+    {
+      "objectId": "arvore",
+      "x": 14,
+      "z": 15
+    },
+    {
+      "objectId": "arvore",
+      "x": 16,
+      "z": 16
+    },
+    {
+      "objectId": "caixa",
+      "x": 18,
+      "z": 37
+    },
+    {
+      "objectId": "muro",
+      "x": 23,
+      "z": 16
+    },
+    {
+      "objectId": "arvore",
+      "x": 10,
+      "z": 62
+    },
+    {
+      "objectId": "caixa",
+      "x": 34,
+      "z": 32
+    },
+    {
+      "objectId": "muro",
+      "x": 2,
+      "z": 11
+    },
+    {
+      "objectId": "muro",
+      "x": 39,
+      "z": 11
+    },
+    {
+      "objectId": "arvore",
+      "x": 50,
+      "z": 18
+    },
+    {
+      "objectId": "caixa",
+      "x": 2,
+      "z": 8
+    },
+    {
+      "objectId": "arvore",
+      "x": 28,
+      "z": 33
+    },
+    {
+      "objectId": "muro",
+      "x": 53,
+      "z": 45
+    },
+    {
+      "objectId": "caixa",
+      "x": 16,
+      "z": 6
+    },
+    {
+      "objectId": "arvore",
+      "x": 7,
+      "z": 30
+    },
+    {
+      "objectId": "caixa",
+      "x": 31,
+      "z": 14
+    },
+    {
+      "objectId": "caixa",
+      "x": 54,
+      "z": 11
+    },
+    {
+      "objectId": "caixa",
+      "x": 53,
+      "z": 34
+    },
+    {
+      "objectId": "pedra",
+      "x": 2,
+      "z": 18
+    },
+    {
+      "objectId": "caixa",
+      "x": 32,
+      "z": 31
+    },
+    {
+      "objectId": "muro",
+      "x": 70,
+      "z": 59
+    },
+    {
+      "objectId": "pedra",
+      "x": 32,
+      "z": 29
+    },
+    {
+      "objectId": "muro",
+      "x": 44,
+      "z": 54
+    },
+    {
+      "objectId": "pedra",
+      "x": 30,
+      "z": 2
+    },
+    {
+      "objectId": "caixa",
+      "x": 14,
+      "z": 26
+    },
+    {
+      "objectId": "arvore",
+      "x": 12,
+      "z": 40
+    },
+    {
+      "objectId": "caixa",
+      "x": 8,
+      "z": 25
+    },
+    {
+      "objectId": "arvore",
+      "x": 32,
+      "z": 54
+    },
+    {
+      "objectId": "muro",
+      "x": 11,
+      "z": 15
+    },
+    {
+      "objectId": "arvore",
+      "x": 10,
+      "z": 53
+    },
+    {
+      "objectId": "caixa",
+      "x": 56,
+      "z": 34
+    },
+    {
+      "objectId": "pedra",
+      "x": 52,
+      "z": 59
+    },
+    {
+      "objectId": "pedra",
+      "x": 21,
+      "z": 27
+    },
+    {
+      "objectId": "arvore",
+      "x": 34,
+      "z": 28
+    },
+    {
+      "objectId": "pedra",
+      "x": 3,
+      "z": 35
+    },
+    {
+      "objectId": "pedra",
+      "x": 3,
+      "z": 6
+    },
+    {
+      "objectId": "muro",
+      "x": 18,
+      "z": 43
+    },
+    {
+      "objectId": "arvore",
+      "x": 14,
+      "z": 39
+    },
+    {
+      "objectId": "arvore",
+      "x": 64,
+      "z": 48
+    },
+    {
+      "objectId": "caixa",
+      "x": 46,
+      "z": 59
+    },
+    {
+      "objectId": "arvore",
+      "x": 9,
+      "z": 3
+    },
+    {
+      "objectId": "muro",
+      "x": 44,
+      "z": 28
+    },
+    {
+      "objectId": "pedra",
+      "x": 44,
+      "z": 60
+    },
+    {
+      "objectId": "pedra",
+      "x": 43,
+      "z": 2
+    },
+    {
+      "objectId": "arvore",
+      "x": 29,
+      "z": 25
+    },
+    {
+      "objectId": "caixa",
+      "x": 9,
+      "z": 5
+    },
+    {
+      "objectId": "arvore",
+      "x": 14,
+      "z": 6
+    },
+    {
+      "objectId": "arvore",
+      "x": 28,
+      "z": 61
+    },
+    {
+      "objectId": "muro",
+      "x": 11,
+      "z": 26
+    },
+    {
+      "objectId": "pedra",
+      "x": 40,
+      "z": 23
+    },
+    {
+      "objectId": "muro",
+      "x": 63,
+      "z": 52
+    },
+    {
+      "objectId": "muro",
+      "x": 19,
+      "z": 40
+    },
+    {
+      "objectId": "muro",
+      "x": 17,
+      "z": 34
+    }
+  ],
+  "zones": [
+    {
+      "kind": "war",
+      "cx": 37.5,
+      "cz": 32.5,
+      "radius": 10
+    }
+  ],
+  "spawns": [
+    {
+      "x": 1.5,
+      "z": 1.5
+    },
+    {
+      "x": 73.5,
+      "z": 1.5
+    },
+    {
+      "x": 1.5,
+      "z": 63.5
+    },
+    {
+      "x": 73.5,
+      "z": 63.5
+    },
+    {
+      "x": 37.5,
+      "z": 1.5
+    },
+    {
+      "x": 37.5,
+      "z": 63.5
+    },
+    {
+      "x": 1.5,
+      "z": 31.5
+    },
+    {
+      "x": 73.5,
+      "z": 31.5
+    }
+  ],
+  "flag": {
+    "x": 37.5,
+    "z": 32.5
+  }
+}

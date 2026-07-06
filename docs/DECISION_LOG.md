@@ -2,6 +2,39 @@
 
 Formato: contexto → decisão → consequência. Decisões são reversíveis via novo ADR.
 
+## ADR-020 — Auth email+senha na V1; Google OAuth adiado (T-028)
+**Data:** 2026-07-06 · **Status:** Aprovado (CD) — implementado T-028a..c
+SPEC-0008 previa "anônimo default + Google + registre-se" na T-028. A pedido direto do CD,
+Google OAuth foi separado como opcional/futuro — a T-028 entregou só a fatia email+senha:
+`POST /auth/register` e `/auth/login` (Django, reaproveitando `Account.objects.create_user`
+e a assinatura JWT já existente da T-027c); verificação do JWT no join do Colyseus
+(`authVerifier.ts`, lib `jose` + `createRemoteJWKSet` contra o JWKS do Django — cache
+interno, sem round-trip por join); e uma janela discreta de conta no client (`auth.ts`) —
+pill no canto, nunca modal, guest continua o default de 1 clique. O campo `google_sub` no
+model `Account` (T-027b) permanece reservado sem uso; retomar Google é só plugar um provider
+novo nesse mesmo endpoint de emissão de JWT, sem migração de schema.
+**Consequência:** guest local se registra no Django em best-effort (`ensureGuestRegistered`,
+silencioso se o Django estiver fora do ar); login/registro chamam `/auth/link` pra herdar
+`PlayerStats` do guest (aceite #5 da SPEC-0008) — hoje isso ainda migra só o scaffold vazio,
+já que a progressão real só passa a alimentar `PlayerStats` na T-029. `CORS_ALLOWED_ORIGINS`
+ganhou a porta do client-verify (5299) além do dev padrão (5173). Login/logout nunca derruba
+a partida em andamento (verificado no preview: HUD seguiu subindo de nível o tempo todo).
+
+## ADR-019 — Backend Django (T-027): stack concreto da plataforma (SPEC-0008/ADR-016)
+**Data:** 2026-07-06 · **Status:** Aprovado (CD) — implementado T-027a..g
+ADR-016 definiu a fronteira (tempo real no Node, plataforma no Django); faltava fixar o stack concreto. Decisões: **pip + venv** (sem uv/poetry — simplicidade na VPS); **Postgres em dev/test/prod via Docker** desde o início (paridade total — pytest roda contra Postgres real, não sqlite); **auth JWT RS256** (PyJWT) com JWKS público (`/api/v1/auth/jwks.json`) para o Colyseus verificar localmente sem round-trip por join; **guest como default** (1 clique, `AbstractBaseUser` custom com PK uuid) com vínculo guest→conta via `GuestLink` (`player_token` → `Account`), preservando `PlayerStats` no `link`; **fronteira Node↔Django por `service token`** compartilhado (header `ServiceToken`/`X-Service-Token`), nunca uma conta de usuário. `packages/server` ganhou um cliente fino (`platformClient.ts`) que cacheia `gameops/config` (TTL) e envia telemetria em batch, tudo atrás de `PLATFORM_ENABLED` (default off) — Django cair nunca derruba uma partida em andamento nem impede novas rooms (cache/defaults).
+**Consequência:** backend novo e isolado em `backend/` (não é workspace npm); 4 apps (`accounts`/`maps`/`gameops`/`telemetry`) + `common` (service token, `/healthz`); 71 testes pytest + 8 vitest novos no cliente da plataforma. Provider Google/registro email-senha e a janela de login no client ficam para a T-028 (a fundação de auth já está pronta: emissão/validação JWT, guest, JWKS, link). Validação de `MapFileV1` é duplicada TS↔Python de propósito (fronteira), mitigada testando os mesmos arquivos de `maps/` nos dois lados.
+
+## ADR-017 — Sobrevivência por habilidade: recompensa de kill contextual + recursos de vida escassos (SPEC-0010)
+**Data:** 2026-07-05 · **Status:** Aprovado (CD, "implemente esse plano") — implementado PROMPT-0037
+Antes da V1, único jeito de recuperar HP era morrer (que zera o nível, ADR-014) — punia quem jogava bem. Novo eixo "jogar bem = viver mais", três peças: (1) **recompensa de kill contextual** — no abate, conta inimigos vivos no raio `COMBAT_THREAT_RADIUS` do matador; duelo isolado (0) → bônus de XP, briga (≥1) → cura % da vida **FALTANTE** escalando com nº de inimigos, com teto; (2) **`hp_orb`** — coletável de +5 HP com passe de spawn próprio, escasso e muito espaçado; (3) **`shield_temp`** — coletável (máx. 2) que aplica `damage_reduction` (recebe 50% do dano por 3s, via EffectSystem → `Player.damageTakenMult`).
+**Consequência:** cura só existe onde há risco real e sempre da vida faltante — o loop "mato→curo→mato" contra alvos isolados nunca abre (duelo dá XP, não vida), preservando o pilar anti-snowball. Nada de arquitetura nova: reusa EffectSystem, o spawner e o bloco de kill existentes; recursos de vida têm passe de spawn dedicado (fora do orçamento/pesos do coletável comum). Escudo **reduz** dano (distinto da invulnerabilidade de nascimento da ADR-014, que **bloqueia**). Os 4 tunables de sensação ficam pendentes de veredito do CD jogando. Não toca aura (Pós-V1) nem persistência entre rounds.
+
+## ADR-018 — ACI: infraestrutura de contexto para agentes (packages/aci)
+**Data:** 2026-07-05 · **Status:** Aprovado (CD) — PROPOSAL-0003 (renumerado de ADR-017 para ADR-018 na integração à `evolução`, que já tinha um ADR-017 próprio — SPEC-0010)
+Agentes gastavam tokens relendo AGENTS.md/DOC_MAP + abrindo arquivos inteiros para achar símbolos, decisões e specs; o roteamento "papel→arquivos" era manual e envelhecia. Decisão: criar um **módulo isolado** `packages/aci` que indexa código (tree-sitter), documentação/corpus (specs, ADRs, prompts, roadmap, backlog) e um grafo de relações doc↔código↔spec↔ADR, expondo busca e "contexto por feature" via **MCP** (padrão universal — serve Claude, Codex, Gemini, Cursor). **Sem embeddings/banco vetorial na V1** (corpus pequeno; janelas grandes tornam RAG vetorial custo>benefício) — núcleo estrutural + lexical + resumos com *progressive disclosure*; embeddings ficam como plugin da Fase 5+. Estende a ADR-004 (processo leve in-repo), não a contradiz.
+**Consequência:** nenhum outro pacote importa `@aop/aci` — o jogo roda idêntico com ou sem ele (remoção trivial). Construído em branch dedicada `aci` (F0-F3), depois integrado direto na `evolução`. Índice com cache incremental por hash/mtime. Fica fora dos gates do jogo (gate próprio). Métricas próprias validam a economia estimada (~70–90% conforme a consulta).
+
 ## ADR-014 — Presença viva, morte dura, invuln temporal, facing por movimento (SPEC-0005)
 **Data:** 2026-07-04 · **Status:** Aprovado (CD) — pós-teste com bots, spec SPEC-0005
 Seis ajustes de ritmo/controle pedidos pelo CD após jogar com bots: (1) **XP passivo** — todo player vivo ganha +1 XP/s (`XP_PER_SECOND`), o mapa nunca "esfria"; (2) **morte zera o nível** (volta a 1) — aposenta a perda parcial `lossFraction` do loop, risco real máximo; (3) **reroll (R) também dá XP** (+20, `REROLL_XP_REWARD`) — a tecla vira progressão ativa; (4) **zonas safe removidas** do mapa (cantos intocáveis travavam o combate) — o primitivo `zone.kind === "safe"` fica só nos testes; (5) **invulnerabilidade de nascimento** de 3s por player (`SPAWN_PROTECTION_MS`) substitui a safe zone, e **cai ao atirar** (anti "torre invulnerável"); (6) **facing pelo movimento** — a direção/visão do player deriva do movimento (WASD), calculada no servidor a partir de `inputX/inputZ`; o mouse **não** controla o facing (correção 2026-07-05: a primeira versão pôs sob o mouse; o CD pediu o oposto — mais eficiente, sem raycast por tick nem `aim` na rede; `aimX/aimZ` fica só para os bots).

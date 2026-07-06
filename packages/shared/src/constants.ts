@@ -11,10 +11,20 @@ export const PLAYER_SPEED = 4; // unidades/s (base — ver mechanics/skills.md)
 export const PLAYER_RADIUS = 0.35;
 export const PLAYER_BASE_HP = 100;
 
-export const MAX_PLAYERS = 8;
+// 16 acomoda sessões de teste com ~10 bots + humanos (era 8; bots excedentes caíam
+// silenciosamente em outra sala via joinOrCreate — QA do teste manual da T-021).
+export const MAX_PLAYERS = 16;
 
 // Coletáveis (ADR-006: nascem longe de jogadores)
-export type CollectibleKind = "xp_orb" | "speed_up" | "coin_buff" | "farm_event" | "box";
+export type CollectibleKind =
+  | "xp_orb"
+  | "speed_up"
+  | "coin_buff"
+  | "farm_event"
+  | "box"
+  | "hp_orb" // SPEC-0010: orbe de vida escasso
+  | "shield_temp" // SPEC-0010: escudo temporário
+  | "weapon"; // SPEC-0011 (T-039): arma coletável única — troca o lançador do jogador
 export const COLLECT_DIST = 0.6;
 export const SPAWN_MIN_PLAYER_DIST = 4; // tiles (Manhattan)
 export const RESPAWN_DELAY_MIN_MS = 2000;
@@ -52,7 +62,7 @@ export const WAR_WEIGHTS: Array<[CollectibleKind, number]> = [
 export const COIN_BUFF_AMOUNT = 10;
 export const XP_BOOST_MULT = 2; // farm_event: XP em dobro
 export const XP_BOOST_MS = 20000;
-export const BOX_ATTR_BONUS_EACH = 3; // box: bônus forte no round (vs. 1 do level-up normal)
+export const BOX_ATTR_BONUS_EACH = 3; // box: bônus forte no round (vs. 2 do level-up normal)
 
 /** Sorteio ponderado — usado para escolher o kind do coletável dentro da zona. */
 export function pickWeighted<T extends string>(rnd: () => number, weights: Array<[T, number]>): T {
@@ -69,7 +79,7 @@ export function pickWeighted<T extends string>(rnd: () => number, weights: Array
 export const XP_BASE = 20;
 export const XP_EXP = 1.35; // as 2 constantes controlam todo o pacing (balance por dados, T-009)
 export const XP_PICKUP_AMOUNT = 8; // XP de um coletável comum (xp_orb)
-export const ATTR_POINTS_PER_LEVEL_EACH = 1; // preset equilibrado: 1 pt em cada atributo-base por nível
+export const ATTR_POINTS_PER_LEVEL_EACH = 2; // preset equilibrado: 2 pts em cada atributo-base por nível (T-016 addendum: progressão mais sentida)
 export const COIN_REROLL_COST = 15; // T-004: coins compram reroll do preset de atributo do último nível
 // SPEC-0005: presença viva. Todo player conectado ganha XP por segundo só por estar na sala —
 // o mapa nunca "esfria" e quem foi zerado na morte volta a subir sem depender de drop.
@@ -104,32 +114,56 @@ export function attrMult(key: AttrKey, points: number): number {
 }
 
 // Cards de level-up (T-016, SPEC-0004) — escolha do jogador a cada nível.
-// DETERMINÍSTICOS por nível (nunca sorteio): quem conhece a tabela planeja a build
-// (pilar habilidade > sorte). Todo card vale UPGRADE_CARD_POINTS pontos.
+// SORTEADOS por nível (feedback do CD, 2026-07-06: pool antigo de 6 cards com janela
+// determinística ficava repetitivo — sempre os mesmos 3 no mesmo nível mod 6). Todo card
+// vale UPGRADE_CARD_POINTS pontos. A oferta é aleatória a cada level-up, mas a escolha DENTRO
+// da oferta continua 100% do jogador (habilidade > sorte na hora de decidir, não na oferta).
 export interface UpgradeCard {
   id: string;
   label: string;
   points: Partial<Record<AttrKey, number>>;
   skill?: string; // T-017: card de marco — concede uma skill (SKILLS) em vez de pontos
 }
-export const UPGRADE_CARD_POINTS = 3; // mesma soma do preset antigo (1 pt × 3 atributos-base)
+export const UPGRADE_CARD_POINTS = 6; // dobro do valor original (feedback CD: progressão pouco sentida entre marcos de skill)
 export const UPGRADE_CHOICE_TIMEOUT_MS = 5000; // sem escolha → auto-pick; o jogo NUNCA pausa
 export const UPGRADE_CARD_POOL: UpgradeCard[] = [
-  { id: "forca_bruta", label: "+3 Força", points: { forca: 3 } },
-  { id: "casca_grossa", label: "+3 Vitalidade", points: { vitalidade: 3 } },
-  { id: "pes_ligeiros", label: "+3 Agilidade", points: { agilidade: 3 } },
-  { id: "gatilho_rapido", label: "+2 Cadência  +1 Alcance", points: { cadencia: 2, alcance: 1 } },
-  { id: "olhar_de_aguia", label: "+2 Alcance  +1 Cadência", points: { alcance: 2, cadencia: 1 } },
-  { id: "equilibrado", label: "+1 Força  +1 Vitalidade  +1 Agilidade", points: { forca: 1, vitalidade: 1, agilidade: 1 } },
+  // puros — 1 por atributo, pra quem quer build concentrada
+  { id: "forca_bruta", label: "+6 Força", points: { forca: 6 } },
+  { id: "casca_grossa", label: "+6 Vitalidade", points: { vitalidade: 6 } },
+  { id: "pes_ligeiros", label: "+6 Agilidade", points: { agilidade: 6 } },
+  { id: "rajada", label: "+6 Cadência", points: { cadencia: 6 } },
+  { id: "mira_longa", label: "+6 Alcance", points: { alcance: 6 } },
+  // combos — pares que fecham um estilo de jogo
+  { id: "gatilho_rapido", label: "+4 Cadência  +2 Alcance", points: { cadencia: 4, alcance: 2 } },
+  { id: "olhar_de_aguia", label: "+4 Alcance  +2 Cadência", points: { alcance: 4, cadencia: 2 } },
+  { id: "fera", label: "+4 Força  +2 Agilidade", points: { forca: 4, agilidade: 2 } },
+  { id: "muralha", label: "+4 Vitalidade  +2 Força", points: { vitalidade: 4, forca: 2 } },
+  { id: "cacador_furtivo", label: "+4 Agilidade  +2 Alcance", points: { agilidade: 4, alcance: 2 } },
+  { id: "sobrevivente", label: "+4 Vitalidade  +2 Cadência", points: { vitalidade: 4, cadencia: 2 } },
+  // espalhado — auto-pick de sempre
+  { id: "equilibrado", label: "+2 Força  +2 Vitalidade  +2 Agilidade", points: { forca: 2, vitalidade: 2, agilidade: 2 } },
 ];
-/** Timeout/AFK e bots sem política: o preset equilibrado de sempre. */
-export const UPGRADE_AUTO_PICK: UpgradeCard = UPGRADE_CARD_POOL[5];
-/** 3 cards da oferta do nível — janela determinística sobre o pool (offsets 0/2/4 são sempre distintos mod 6). */
-export function upgradeCardsForLevel(level: number): UpgradeCard[] {
-  const n = UPGRADE_CARD_POOL.length;
-  const base = ((level % n) + n) % n;
-  return [UPGRADE_CARD_POOL[base], UPGRADE_CARD_POOL[(base + 2) % n], UPGRADE_CARD_POOL[(base + 4) % n]];
+/** Timeout/AFK e bots sem política: o preset equilibrado de sempre (procurado por id — a
+ * posição no pool não é mais estável agora que o pool cresce). */
+export const UPGRADE_AUTO_PICK: UpgradeCard = UPGRADE_CARD_POOL.find((c) => c.id === "equilibrado")!;
+/** 3 cards distintos sorteados do pool a cada level-up — `level` não influencia mais o sorteio
+ * (mantido no assinatura só pra não mexer nos chamadores); ver nota acima sobre o motivo da
+ * mudança. Sorteio server-side (ArenaRoom chama isto na hora do level-up), então nunca é
+ * previsível/reexecutável pelo cliente. */
+export function upgradeCardsForLevel(_level: number): UpgradeCard[] {
+  const pool = [...UPGRADE_CARD_POOL];
+  const picks: UpgradeCard[] = [];
+  for (let i = 0; i < 3 && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picks.push(pool.splice(idx, 1)[0]);
+  }
+  return picks;
 }
+
+// Boss de bot (T-008b, SPEC-0004 addendum): nasce alto e com build concentrada — o
+// servidor decide de verdade (autoridade), o bot só pede `boss: true` no join.
+export const BOSS_LEVEL_MIN = 6;
+export const BOSS_LEVEL_MAX = 8;
 
 /** XP necessário para sair de `level` e chegar ao próximo — curva de pacing (T-003). */
 export function xpToNext(level: number): number {
@@ -157,6 +191,43 @@ export function lossFraction(level: number): number {
 // cai no instante em que ele dispara — não dá para "camperar" atirando invulnerável.
 export const SPAWN_PROTECTION_MS = 3000;
 
+// SPEC-0010 (ADR-017): Sobrevivência por habilidade — recompensa de kill contextual +
+// recursos de vida escassos. Todos os números aqui são calibráveis (sensação, não lógica):
+// mover uma constante move o comportamento. Referência de balance: TTK 5 tiros × 20 dano
+// em 100 HP (T-014). Anti-snowball (pilar 4): cura só onde há risco, e da vida FALTANTE.
+
+// --- Recompensa de kill contextual (T-033) ---
+export const COMBAT_THREAT_RADIUS = 6; // unidades: inimigos vivos neste raio do matador = "a briga"
+export const KILL_HEAL_MISSING_FRAC_BASE = 0.25; // 1 ameaça por perto: cura 25% da vida FALTANTE
+export const KILL_HEAL_MISSING_FRAC_PER_EXTRA = 0.1; // +10% por ameaça adicional
+export const KILL_HEAL_MISSING_FRAC_MAX = 0.5; // teto anti-snowball: 50% da vida faltante
+export const KILL_DUEL_XP_BONUS_PER_LEVEL = 8; // duelo (0 ameaças): XP extra por nível da vítima
+
+/** Fração da vida FALTANTE curada ao matar em briga, dado o nº de inimigos por perto (≥1). */
+export function killHealFraction(threats: number): number {
+  if (threats < 1) return 0;
+  return Math.min(KILL_HEAL_MISSING_FRAC_MAX, KILL_HEAL_MISSING_FRAC_BASE + (threats - 1) * KILL_HEAL_MISSING_FRAC_PER_EXTRA);
+}
+
+// --- Orbe de vida escasso (T-034) ---
+export const HP_ORB_AMOUNT = 5; // +5 HP ao coletar (clampa em maxHp)
+export const HP_ORB_MAX = 3; // teto simultâneo no mapa
+export const HP_ORB_MIN_PLAYER_DIST = 7; // tiles Manhattan de qualquer player (mais rígido que o comum)
+export const HP_ORB_MIN_SELF_DIST = 9; // tiles de outro hp_orb — nunca "chove vida" num canto
+export const HP_ORB_RESPAWN_MS = 12000; // reposição lenta
+
+// --- Escudo temporário (T-035) ---
+export const SHIELD_TEMP_MAX = 2; // no máximo 2 no mapa ao mesmo tempo
+export const SHIELD_TEMP_MIN_PLAYER_DIST = 7;
+export const SHIELD_TEMP_MIN_SELF_DIST = 9;
+export const SHIELD_TEMP_RESPAWN_MS = 15000;
+export const SHIELD_TEMP_MS = 3000; // dura 3s ao coletar
+export const SHIELD_TEMP_DAMAGE_MULT = 0.5; // recebe 50% do dano enquanto ativo (reduz, não bloqueia)
+
+// T-023 (SPEC-0006): reveal-on-hit autoritativo — inimigo é só skin até trocar dano com ele
+// (vítima OU atirador); então nameplate+HP aparecem por este tempo, renovado a cada novo hit.
+export const REVEAL_ON_HIT_MS = 4000;
+
 // Faixas de poder (T-018, SPEC-0004): só FEEDBACK visual/leitura tática — nunca lógica de jogo.
 // nível 1–3: nada · 4–7: aro fraco · 8+: aro forte pulsante. Alimenta o "famar aura" do M2.
 export const POWER_BAND_MID = 4;
@@ -167,5 +238,80 @@ export const SPEED_BOOST_MULT = 1.5;
 export const SPEED_BOOST_MS = 8000;
 export const SPEED_MAX_MULT = 2; // teto anti-snowball
 
+// Bandeira "rei do mapa" (T-021, SPEC-0006): objetivo de mapa — default ON por room.
+// Nasce no centro (T-024/SPEC-0007 vai deixá-la ler a posição do formato de mapa versionado;
+// até lá o centro calculado em runtime é o default). Portador ganha XP passivo em dobro e
+// fica visível globalmente (glow); morre e derruba no local; sem dono por tempo demais, volta.
+export const FLAG_XP_MULT = 2;
+export const FLAG_PICKUP_DIST = COLLECT_DIST;
+export const FLAG_ABANDON_RETURN_MS = 5000; // caída e não disputada em 5s → volta ao centro (CD, teste manual T-021)
+
 export const ROOM_NAME = "arena";
 export const SERVER_PORT = 2567;
+
+// ===========================================================================
+// SPEC-0011 (T-038/T-039) — projétil menor + arsenal com arma coletável única
+// (Seção mantida no FIM do arquivo de propósito: outro agente pode editar este
+//  arquivo em paralelo; adições da SPEC-0011 ficam agrupadas aqui.)
+// ===========================================================================
+
+// --- T-039: arma coletável única (server autoritativo) ---
+/** Lançadores VANTAJOSOS que a arma do chão pode sortear (o basic_shot nunca cai — é o padrão). */
+export const WEAPON_PICKUP_LAUNCHERS = ["heavy_shot", "rapid_shot"] as const;
+/** Exatamente 1 arma no mapa por vez. Teto explícito (o passe de spawn respeita). */
+export const WEAPON_MAX = 1;
+/** Distância mínima (tiles Manhattan) de qualquer player — pequena, só pra não nascer em cima de alguém. */
+export const WEAPON_MIN_PLAYER_DIST = 2;
+/** Respawn sorteado APÓS a coleta — janela ampla pra não virar rotina de "camperar o ponto". */
+export const WEAPON_RESPAWN_MIN_MS = 15000;
+export const WEAPON_RESPAWN_MAX_MS = 30000;
+/** Lançador padrão — todos nascem com ele; a morte devolve este (T-039). */
+export const DEFAULT_LAUNCHER = "basic_shot";
+
+/** Sorteia o cooldown de respawn da arma dentro de [MIN, MAX] ms (T-039). */
+export function weaponRespawnDelay(rnd: () => number): number {
+  return WEAPON_RESPAWN_MIN_MS + rnd() * (WEAPON_RESPAWN_MAX_MS - WEAPON_RESPAWN_MIN_MS);
+}
+
+// ===========================================================================
+// SPEC-0011 (T-043..T-045) — Combo de XP + popups de coleta + transição nascimento
+// (Seção no fim do arquivo; outro agente pode editar regiões anteriores em paralelo.)
+// ===========================================================================
+
+// --- T-043: Combo de XP (server autoritativo) ---
+/** A partir da N-ésima coleta CONSECUTIVA de xp_orb sem tomar dano, cada orbe vale 2×. */
+export const XP_COMBO_START = 3;
+/** Multiplicador de XP quando o combo está ativo. */
+export const XP_COMBO_MULT = 2;
+/**
+ * Limite mínimo de coletas que um combo pode durar (sorteado ao iniciar).
+ * O limite é sorteado uma vez por início de combo e pode cair em [MIN, MAX].
+ */
+export const XP_COMBO_LIMIT_MIN = 3;
+/** Limite máximo de coletas que um combo pode durar. */
+export const XP_COMBO_LIMIT_MAX = 5;
+
+/**
+ * Sorteia o limite de duração de um combo de XP (T-043).
+ * Chamado na 1ª coleta de cada combo; o limite vale até o combo fechar e recomeçar.
+ */
+export function xpComboLimit(rnd: () => number): number {
+  return XP_COMBO_LIMIT_MIN + Math.floor(rnd() * (XP_COMBO_LIMIT_MAX - XP_COMBO_LIMIT_MIN + 1));
+}
+
+// ===========================================================================
+// SPEC-0011 (T-040..T-042) — bandeira nunca bloqueada + ciclo de cooldown
+// (Seção no fim do arquivo; outro agente pode editar regiões anteriores em paralelo.
+//  O helper puro `nearestReachableCell` da T-040 vive em map.ts, junto do resto da
+//  geometria de mapa — aqui ficam só as constantes/tipos da bandeira.)
+// ===========================================================================
+
+// --- T-042: cooldown da bandeira ---
+/**
+ * Estado da bandeira sincronizado com o cliente (schema `Flag.state`). "active" = no jogo
+ * (livre no chão ou carregada); "cooldown" = fora do jogo (invisível, sem pickup), renasce
+ * no centro ao fim de FLAG_COOLDOWN_MS.
+ */
+export type FlagState = "active" | "cooldown";
+/** Dropada e não disputada por FLAG_ABANDON_RETURN_MS entra em cooldown por este tempo. */
+export const FLAG_COOLDOWN_MS = 60000; // 60s fora do jogo antes de renascer no centro (acesa)

@@ -29,7 +29,9 @@ interface LauncherDef {
 ## Regras
 - Servidor simula tudo: spawn do projétil, integração por tick, colisão com props (some) e jogadores (dano).
 - Colisão com jogadores usa o segmento percorrido pelo projétil no tick, não só a posição final, para evitar tiro "atravessar" em baixa taxa de simulação.
-- Dano efetivo = `damage × força do atirador`; vida = `vitalidade` (ver growth.md).
+- Dano efetivo = `damage × força do atirador × damageTakenMult do alvo`; vida = `vitalidade` (ver growth.md).
+- **Escudo temporário (SPEC-0010, `shield_temp`):** coletável do mapa aplica o efeito `damage_reduction` (`EffectSystem`) → `Player.damageTakenMult = 0.5` por 3s. Ao contrário da invulnerabilidade de nascimento, **reduz** o dano em vez de bloquear: o hit acontece normalmente (evento `hit`, `blockedByShield=false`), só chega atenuado.
+- **Recompensa de kill contextual (SPEC-0010/T-033):** no abate, o servidor conta inimigos vivos no raio `COMBAT_THREAT_RADIUS` do matador. **Duelo** (0 por perto) → bônus de XP (`kill_duel_bonus`); **briga** (≥1) → cura `killHealFraction(threats)` da vida **faltante** do matador (`kill_heal`), com teto `KILL_HEAL_MISSING_FRAC_MAX` e sem overheal. Anti-snowball: cura só existe onde havia risco, e da faltante (quem está inteiro ganha pouco).
 - **Invulnerabilidade de nascimento (SPEC-0005):** se o tiro encostar num player com escudo ativo (3s ao nascer/renascer, `SPAWN_PROTECTION_MS`), o projétil é consumido e emite evento `shield_block` no debug — proteção, não falha de hitbox. O escudo cai no instante em que o próprio player dispara. (Substitui a antiga zona safe, removida do mapa — o código do `safe_block` permanece só para os testes.)
 - Escalabilidade: padrão de disparo novo = implementar 1 função `pattern` nova; arma nova = 1 entrada de dados. NUNCA lógica de arma no Room.
 
@@ -38,8 +40,8 @@ interface LauncherDef {
 - `fire` é só um booleano ("estou atirando?"); a **direção do tiro sempre sai do `Player.dir`** (facing, ver movement.md), nunca do input diretamente. Isso garante que espaço e clique produzam projéteis idênticos.
 - `ProjectileSystem` só olha `p.firing` + cooldown do lançador (a antiga trava `zoneAt === "safe"` nunca dispara agora — sem safe zones). Disparar zera `spawnProtectedUntil` (encerra a invulnerabilidade de nascimento — SPEC-0005).
 - Spawn do projétil = posição autoritativa do player no tick + offset de raio (`PLAYER_RADIUS`) na direção do facing — sem tiro "atrasado" atirando em movimento.
-- Cliente mapeia gatilhos num `Set` (`fireSources`): mousedown adiciona `"mouse"`, espaço adiciona `"space"`; `fire = fireSources.size > 0`. Gatilho novo (gamepad/touch) = uma entrada nesse set, sem mudar o protocolo.
-- **Facing pelo movimento (SPEC-0005):** o **cliente do player não envia `aim`** — o facing (`Player.dir`) é derivado pelo servidor do movimento (`inputX/inputZ`); parado, mantém o último `dir`. O campo `aimX/aimZ` do protocolo **continua existindo e é usado pelos bots** (que miram no alvo em combate), nunca pelo player humano.
+- **Gatilho por perfil (ADR-015/T-019):** cada `ControlProfile` do cliente (`packages/client/src/input/`) resolve seu próprio gatilho internamente (perfil `mouse`: mousedown/mouseup + espaço) e expõe só `fire: boolean` no `Intent` — perfil novo (gamepad/touch) é uma classe nova, sem mudar o protocolo.
+- **Facing por perfil de controle (ADR-015/T-019, revisa SPEC-0005):** o cliente pode enviar `aimX/aimZ` — o perfil `mouse` envia (raycast do cursor no chão, permite mira 360° mesmo parado); perfis sem mouse podem omitir e o facing (`Player.dir`) cai para o movimento (`inputX/inputZ`) no servidor. Bots usam o mesmo campo para mirar no alvo (T-013) — nenhuma distinção de servidor entre humano e bot, mira é sempre "mais um perfil" (ADR-015).
 
 ## Ganchos de mobilidade por lançador (T-012)
 - `LauncherDef.movement` é opcional e data-driven — aplicado pelo servidor via `EffectSystem` no momento do disparo (`ProjectileSystem`, não lógica solta no Room). Ausente/neutro = `basic_shot` não muda em nada.
@@ -64,8 +66,27 @@ Camada de modificadores **por player** sobre o lançador equipado — registro d
 - **Combinação sem explosão:** projéteis por tiro = MAX entre skills; fatores de dano/range/cooldown = PRODUTO; pierce = SOMA.
 - **Congelado no disparo:** dano/range/velocidade do projétil são fixados no spawn (`damageMult`/`maxRange`/`speedMult`) — build nunca muda projétil em voo.
 - **Cooldown efetivo** = `cooldownMs × attackSpeed (cadência) × cooldownMult (skills)`.
-- **Como ganhar:** marcos de nível 4/8/12 (card ★, escolher 1 de 2 — `SKILL_MILESTONE_CHOICES`) ou box (sorteia uma que falte). Morte apaga as skills (pilar risco real).
+- **Como ganhar:** marcos de nível 3/6/9/12/15 (`SKILL_MILESTONE_LEVELS`) — a oferta vira 2 cards de atributo + 1 card ★ de skill (`SKILL_MILESTONE_SKILL`, uma por marco); ou box (sorteia uma que falte). Morte apaga as skills (pilar risco real).
 - Decisão de design: skills são modificadores por player; `LauncherDef` fica reservado a **lançadores novos** (armas trocáveis) — os dois empilham.
+
+## Arsenal — 3 lançadores + arma coletável única (T-039, SPEC-0011)
+Combate deixa de ter um projétil só. Todos nascem com `basic_shot`; o mapa tem **1 arma no chão por vez** que troca o lançador ao coletar.
+
+| Lançador | Dano | Cooldown | Vel. projétil | DPS aprox. | Papel |
+|---|---|---|---|---|---|
+| `basic_shot` | 20 | 600ms | 12 | 33.3/s | padrão, discreto (sem VFX chamativo) |
+| `heavy_shot` | 28 (1.4×) | 780ms | 9 (lento) | ~35.9/s | pesado: bala forte e lenta, exige mira |
+| `rapid_shot` | 13 | 340ms | 13 | ~38.2/s | rápido: cadência alta, dano baixo por tiro |
+
+- **Vantagem clara mas não absurda** (anti-snowball, pilar 4): os vantajosos dão +8%/+15% de DPS sobre o basic, não um salto. `pattern` continua `"straight"` — números/visual mudam, não o padrão (novos padrões são das skills, T-017). `heavy_shot_dev` segue dev-only (ganchos de mobilidade), fora do arsenal jogável.
+- **Arma coletável (server autoritativo, T-039):** kind de coletável `weapon` com o lançador sorteado **no spawn** (`WEAPON_PICKUP_LAUNCHERS = [heavy_shot, rapid_shot]`), exposto no schema (`Collectible.weaponId`). Passe de spawn dedicado (molde do `hp_orb`): **exatamente 1** por vez (`WEAPON_MAX`), posição **totalmente aleatória** — célula walkable **e alcançável** (`reachableCells`, BFS do spawn), ignorando zonas/pesos, só afastando `WEAPON_MIN_PLAYER_DIST` (2 tiles) de qualquer player.
+- **Coleta:** `player.launcher` troca na hora, a arma some, respawn agendado com cooldown **sorteado ∈ [15s, 30s]** (`weaponRespawnDelay` / `WEAPON_RESPAWN_MIN_MS`/`MAX_MS`). Evento `pickup` leva `weaponId` (cliente → VFX `weapon_pickup` + toast + chip do HUD).
+- **Morte devolve `basic_shot`** (`DEFAULT_LAUNCHER`) — a arma não persiste (mesma regra da build; o ciclo de spawn repõe). Sem drop no chão ao morrer.
+
+## Projétil fino contra o cenário (T-038, SPEC-0011)
+Projétil menor para **atravessar o vão diagonal** entre dois props colidíveis adjacentes na diagonal (o raio cheio batia no canto e morria).
+- `LauncherDef.projectile.sceneryRadius` (< `radius`) é o raio usado **só contra o cenário** (props/paredes) no `ProjectileSystem`; o `radius` cheio continua valendo para o **hit em player** (TTK e sensação de acerto preservados — não se "erra tiro que parecia acertar"). Ausente = usa `radius` (retrocompat).
+- Valores: `basic_shot` cenário 0.22 (hit 0.4), `heavy_shot` 0.24 (hit 0.42), `rapid_shot` 0.20 (hit 0.38). O visual do projétil no cliente acompanha o tamanho fino.
 
 ## Evolução planejada
 Padrões novos (lob/homing/orbit), troca de lançador por drop (box), skills ativas por input, i-frames de esquiva (insumo da aura, ADR-005).

@@ -3,6 +3,8 @@
 **Status:** implementada (T-014..T-018 ✅, PROMPT-0020..0024) — pendente veredito do CD e T-008b · **Marco:** M1.5 · **Data:** 2026-07-04
 **Origem:** `docs/proposals/PROPOSAL-0001-skills-atributos-escala.md` (diagnóstico completo e matemática do TTK)
 
+**Addendum (2026-07-05, feedback CD):** progressão sentida fraca demais — `UPGRADE_CARD_POINTS` dobrou (3→6 pts por card; `ATTR_POINTS_PER_LEVEL_EACH` acompanhou, 1→2) e `SKILL_MILESTONE_LEVELS` foi de 3 marcos esparsos (4/8/12) para 5 marcos (3/6/9/12/15, um por skill existente); a oferta nesses marcos virou **2 cards de atributo + 1 de skill** (`SKILL_MILESTONE_SKILL`, skill fixa por marco), não mais 2 skills à escolha. Números abaixo (21 pts, 4/8/12, "3 cards de 3 pontos") são o registro histórico do design original — ver `docs/mechanics/combat.md` e `constants.ts`/`skills.ts` para os valores atuais.
+
 ## Problema / objetivo
 
 O TTK é matematicamente constante: força e vitalidade escalam na mesma taxa (+4%/pt, pontos iguais por nível), então matar alguém exige sempre 10 tiros — em qualquer nível. Evoluir não muda o resultado dos confrontos e o jogador não *sente* o próprio poder. Objetivo: TTK alvo explícito, atributos que criam **builds** (com escolha real no level-up), skills de projétil discretas e feedback visual de poder — sem quebrar EffectSystem (ADR-009), lançadores data-driven (ADR-011) nem os pilares da constituição.

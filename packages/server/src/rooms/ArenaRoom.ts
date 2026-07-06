@@ -3,6 +3,7 @@ import { ArenaState, Player, Collectible } from "../state/ArenaState";
 import { MetricsRecorder } from "../metrics/SessionMetrics";
 import { EffectSystem } from "../systems/effects";
 import { ProjectileSystem } from "../systems/projectiles";
+import { FlagSystem } from "../systems/flag";
 interface PersistentProgress {
   forca: number;
   agilidade: number; // T-015: renomeado de `velocidade` (scaffold ADR-012, dev-only — sem migração de dados: memória volátil)
@@ -42,6 +43,19 @@ import {
   XP_PER_SECOND,
   REROLL_XP_REWARD,
   SPAWN_PROTECTION_MS,
+  CollectibleKind,
+  COMBAT_THREAT_RADIUS,
+  KILL_DUEL_XP_BONUS_PER_LEVEL,
+  killHealFraction,
+  HP_ORB_AMOUNT,
+  HP_ORB_MAX,
+  HP_ORB_MIN_PLAYER_DIST,
+  HP_ORB_MIN_SELF_DIST,
+  HP_ORB_RESPAWN_MS,
+  SHIELD_TEMP_MAX,
+  SHIELD_TEMP_MIN_PLAYER_DIST,
+  SHIELD_TEMP_MIN_SELF_DIST,
+  SHIELD_TEMP_RESPAWN_MS,
   LAUNCHERS,
   UpgradeCard,
   UPGRADE_CHOICE_TIMEOUT_MS,
@@ -49,10 +63,39 @@ import {
   upgradeCardsForLevel,
   SKILLS,
   SKILL_MILESTONE_LEVELS,
-  SKILL_MILESTONE_CHOICES,
+  SKILL_MILESTONE_SKILL,
   combinedSkillMods,
+  UPGRADE_CARD_POOL,
+  BOSS_LEVEL_MIN,
+  BOSS_LEVEL_MAX,
+  mapCenter,
+  FLAG_XP_MULT,
+  FLAG_PICKUP_DIST,
+  REVEAL_ON_HIT_MS,
+  MapFileV1,
+  reachableCells,
+  nearestReachableCell,
+  WEAPON_PICKUP_LAUNCHERS,
+  WEAPON_MAX,
+  WEAPON_MIN_PLAYER_DIST,
+  weaponRespawnDelay,
+  DEFAULT_LAUNCHER,
+  XP_COMBO_START,
+  XP_COMBO_MULT,
+  xpComboLimit,
+  resolveClassSelection,
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
+import { loadMap } from "../mapLoader";
+import { TelemetryLog } from "../telemetry/log";
+import { TelemetryEvent, TELEMETRY_SCHEMA_VERSION } from "../telemetry/events";
+import { platformClient, EffectiveConfig } from "../platform/platformClient";
+import { verifyAccountToken } from "../platform/authVerifier";
+
+// T-026 (SPEC-0008): limiar do watchdog de tick — 2x o intervalo nominal (TICK_RATE=20 ⇒ 50ms).
+// É um número de observabilidade (detecta o servidor "engasgando" sob carga), não de gameplay —
+// por isso não vive em shared/constants.ts junto dos números que afetam sensação/balance.
+const TICK_WATCHDOG_MS = 100;
 
 export const activeRooms = new Map<string, ArenaRoom>();
 
@@ -63,8 +106,23 @@ export class ArenaRoom extends Room<ArenaState> {
   private metrics = new MetricsRecorder();
   private effects = new EffectSystem();
   private projectiles = new ProjectileSystem();
+  private flagSystem = new FlagSystem();
+  private flagCenter = { x: 0, z: 0 };
+  // T-024: presentes só quando a room nasce com `mapId` (mapa curado por arquivo).
+  private curatedMapFile?: MapFileV1;
+  private curatedSpawns?: Array<{ x: number; z: number }>;
   private collectibleSeq = 0;
   private nextSpawnAt = 0;
+  // SPEC-0010: recursos de vida escassos têm passe de spawn PRÓPRIO (fora do orçamento/pesos
+  // do coletável comum) — teto e espaçamento por kind, cadência lenta. Timers independentes.
+  private nextHpSpawnAt = 0;
+  private nextShieldSpawnAt = 0;
+  // SPEC-0011 (T-039): passe DEDICADO da arma coletável — exatamente 1 no mapa por vez.
+  // Timer independente; após a coleta é reagendado com cooldown sorteado [15s,30s].
+  private nextWeaponSpawnAt = 0;
+  // SPEC-0011: conjunto de células alcançáveis (BFS do centro do mapa), calculado 1x no
+  // onCreate. A arma nasce em célula walkable E alcançável (ignora zonas/pesos).
+  private reachable!: Uint8Array;
   public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
   // T-016: fila de ofertas de card por player — levels[0] é a oferta aberta; o resto aguarda.
   // T-017: `cards` guarda a oferta REAL enviada (marcos incluem skills e dependem do estado
@@ -74,19 +132,113 @@ export class ArenaRoom extends Room<ArenaState> {
   // `p.xp` em unidades INTEIRAS (1 por segundo), então o HUD nunca mostra "1.478/88".
   private xpAccum = new Map<string, number>();
 
-  onCreate(options?: { expectedPlayers?: number }) {
+  // T-043 (SPEC-0011): combo de XP — estado runtime puro (não sincronizado no schema).
+  // Só coletas de xp_orb contam/avançam o combo; outros kinds NÃO zeram (só dano zera).
+  // `xpComboCount`: coletas consecutivas de xp_orb desde o último reset.
+  // `xpComboLimit`: limite sorteado ao iniciar o combo (1ª coleta); -1 = ainda não sorteado.
+  private xpComboCount = new Map<string, number>();
+  private xpComboLimitMap = new Map<string, number>();
+
+  // T-026 (SPEC-0008): telemetria por evento (kill/upgrade/bandeira/quit/erro), 1 arquivo NDJSON
+  // por partida — complementa (não substitui) o `metrics` por-jogador acima.
+  private telemetry!: TelemetryLog;
+  private tickCount = 0;
+  private matchStartedAt = 0;
+  private totalJoins = 0;
+  private joinedAtMap = new Map<string, number>();
+
+  // T-027g (SPEC-0008): multiplicadores da config de plataforma — 1 (neutro) enquanto
+  // `PLATFORM_ENABLED` está off, então o comportamento de sempre não muda.
+  private xpMultiplier = 1;
+  private coinMultiplier = 1;
+
+  private telemetryBase() {
+    return {
+      v: TELEMETRY_SCHEMA_VERSION as typeof TELEMETRY_SCHEMA_VERSION,
+      ts: Date.now(),
+      tick: this.tickCount,
+      matchId: this.roomId,
+      mapId: this.state.mapId || undefined,
+    };
+  }
+
+  /** Grava o evento local (NDJSON, sempre) e, se a plataforma estiver ligada, enfileira para
+   * batch (T-027g) — a fonte local nunca depende do Django estar no ar. */
+  private emitTelemetry(event: TelemetryEvent) {
+    this.telemetry.write(event);
+    if (process.env.PLATFORM_ENABLED === "1") platformClient.queueTelemetry(event);
+  }
+
+  async onCreate(options?: { expectedPlayers?: number; flagEnabled?: boolean; mapId?: string }) {
     this.setState(new ArenaState());
 
-    // ADR-007: tamanho decidido AQUI e nunca mais (mínimo 5x o base)
-    const size = mapSizeFor(Number(options?.expectedPlayers) || 4);
-    const seed = (Date.now() % 2147483647) | 0;
-    this.map = buildMap(size.w, size.h, seed);
-    this.state.mapW = size.w;
-    this.state.mapH = size.h;
-    this.state.mapSeed = seed;
-    this.budget = collectibleBudget(size.w, size.h);
+    // T-027g (SPEC-0008): config da plataforma só entra em jogo atrás da flag — off por
+    // default, então nenhum teste/smoke atual muda de comportamento. platformClient já
+    // degrada sozinho (cache/defaults) se o Django estiver fora do ar (aceite #3).
+    let platformConfig: EffectiveConfig | null = null;
+    if (process.env.PLATFORM_ENABLED === "1") {
+      platformConfig = await platformClient.getConfig();
+      this.xpMultiplier = platformConfig.xpMultiplier;
+      this.coinMultiplier = platformConfig.coinMultiplier;
+    }
+    const rotation = platformConfig?.mapRotation ?? [];
+    const resolvedMapId =
+      options?.mapId ?? (rotation.length > 0 ? rotation[Math.floor(Math.random() * rotation.length)] : undefined);
+
+    // T-024 (SPEC-0007): mapId presente (explícito ou sorteado da rotação da plataforma) =
+    // mapa curado (arquivo versionado); ausente = o caminho original por seed (ADR-007),
+    // preservado tal e qual para não quebrar nada que já dependa dele (bots de teste, gates).
+    if (resolvedMapId) {
+      const { file, map } = loadMap(resolvedMapId);
+      this.map = map;
+      this.curatedMapFile = file;
+      this.curatedSpawns = file.spawns;
+      this.state.mapW = file.w;
+      this.state.mapH = file.h;
+      this.state.mapSeed = file.seed ?? 0;
+      this.state.mapId = file.id;
+      this.budget = collectibleBudget(file.w, file.h);
+      this.flagCenter = file.flag;
+    } else {
+      // ADR-007: tamanho decidido AQUI e nunca mais (mínimo 5x o base)
+      const size = mapSizeFor(Number(options?.expectedPlayers ?? platformConfig?.expectedPlayers) || 4);
+      const seed = (Date.now() % 2147483647) | 0;
+      this.map = buildMap(size.w, size.h, seed);
+      this.state.mapW = size.w;
+      this.state.mapH = size.h;
+      this.state.mapSeed = seed;
+      this.state.mapId = "";
+      this.budget = collectibleBudget(size.w, size.h);
+      this.flagCenter = mapCenter(size.w, size.h);
+    }
+
+    // SPEC-0011 (T-039): células alcançáveis a partir de um spawn de player (célula livre
+    // garantida). Base para o spawn "totalmente aleatório mas válido" da arma coletável.
+    const reachSeed = this.curatedSpawns?.[0] ?? spawnPoints(this.map.w, this.map.h)[0];
+    this.reachable = reachableCells(this.map, Math.floor(reachSeed.x), Math.floor(reachSeed.z));
+
+    // T-021: toggle por room (default ON) — bandeira nasce no centro do mapa (seed) ou
+    // na posição curada pelo arquivo (mapId).
+    // SPEC-0011 (T-040): toda posição em que a bandeira assenta (init/volta ao centro/drop)
+    // é ajustada para a célula walkable ALCANÇÁVEL mais próxima — reusa o `reachable` já
+    // pré-computado acima (BFS de um spawn de player).
+    this.flagSystem.setSettle((x, z) => nearestReachableCell(this.map, x, z, this.reachable));
+    this.state.flagEnabled = options?.flagEnabled ?? platformConfig?.flagEnabled ?? true;
+    this.flagSystem.initAt(this.state.flag, this.flagCenter.x, this.flagCenter.z);
 
     activeRooms.set(this.roomId, this);
+
+    // T-026: telemetria por partida — 1 arquivo NDJSON por roomId.
+    this.telemetry = new TelemetryLog(this.roomId);
+    this.matchStartedAt = Date.now();
+    this.emitTelemetry({
+      ...this.telemetryBase(),
+      type: "match_start",
+      mapW: this.state.mapW,
+      mapH: this.state.mapH,
+      mapSeed: this.state.mapSeed,
+      expectedPlayers: options?.expectedPlayers,
+    });
 
     // pré-popula metade do orçamento (ninguém entra num mapa vazio)
     for (let i = 0; i < Math.floor(this.budget / 2); i++) this.spawnCollectible();
@@ -147,23 +299,77 @@ export class ArenaRoom extends Room<ArenaState> {
 
     this.setSimulationInterval((dt) => this.update(dt / 1000), 1000 / TICK_RATE);
     console.log(
-      `[arena] sala ${this.roomId}: mapa ${size.w}x${size.h} seed ${seed}, orçamento ${this.budget} coletáveis`
+      `[arena] sala ${this.roomId}: mapa ${this.state.mapW}x${this.state.mapH}` +
+        (this.state.mapId ? ` (curado: ${this.state.mapId})` : ` seed ${this.state.mapSeed}`) +
+        `, orçamento ${this.budget} coletáveis`
     );
   }
 
-  onJoin(client: Client, options: { name?: string; bot?: boolean; token?: string }) {
+  async onJoin(
+    client: Client,
+    options: {
+      name?: string;
+      bot?: boolean;
+      token?: string;
+      boss?: boolean;
+      authToken?: string;
+      classId?: string;
+      skinId?: string;
+    }
+  ) {
     const p = new Player();
     p.name = String(options?.name ?? "player").slice(0, 16);
     p.isBot = Boolean(options?.bot);
     p.playerToken = options?.token || `bot_${client.sessionId}`;
-    const spawns = spawnPoints(this.map.w, this.map.h);
+    // T-052 (SPEC-0014): classId/skinId inválidos ou ausentes caem pro default — join
+    // nunca rejeita por causa de seleção de personagem ruim (mesma regra do authToken).
+    const { classId, skinId } = resolveClassSelection(options?.classId, options?.skinId);
+    p.classId = classId;
+    p.skinId = skinId;
+
+    // T-028b (SPEC-0008): authToken é opcional — ausente/inválido/expirado cai para guest sem
+    // rejeitar o join (join nunca falha por causa de auth). Atrás de PLATFORM_ENABLED, como o
+    // resto da integração com a plataforma (T-027g) — off por default, zero mudança de
+    // comportamento nos testes/smoke atuais.
+    if (process.env.PLATFORM_ENABLED === "1" && options?.authToken) {
+      const claims = await verifyAccountToken(options.authToken);
+      if (claims && !claims.isGuest) {
+        p.accountId = claims.sub;
+        p.name = claims.displayName.slice(0, 16);
+      }
+    }
+    // T-024: mapa curado traz seus próprios spawns; sem mapId, mantém os 8 cantos/meios-de-borda de sempre.
+    const spawns = this.curatedSpawns ?? spawnPoints(this.map.w, this.map.h);
     const spawn = spawns[this.state.players.size % spawns.length];
     p.x = spawn.x;
     p.z = spawn.z;
     p.spawnProtectedUntil = Date.now() + SPAWN_PROTECTION_MS; // SPEC-0005: imune ao nascer
+    if (options?.boss) this.initBoss(client.sessionId, p);
     this.state.players.set(client.sessionId, p);
     this.metrics.start(client.sessionId, p.name, p.isBot, this.roomId, p.level);
-    console.log(`[arena] + ${p.name} (${client.sessionId})${p.isBot ? " [bot]" : ""}`);
+    this.totalJoins += 1;
+    this.joinedAtMap.set(client.sessionId, Date.now());
+    // T-024: mapa curado não dá pra reconstruir por seed no cliente/bots — o JSON completo
+    // viaja uma vez no join (mapas pequenos, sem custo de tráfego contínuo).
+    if (this.curatedMapFile) client.send("map_data", this.curatedMapFile);
+    console.log(`[arena] + ${p.name} (${client.sessionId})${p.isBot ? " [bot]" : ""}${options?.boss ? " [BOSS]" : ""}`);
+  }
+
+  /**
+   * T-008b: boss de bot nasce nível 6–8 já com build CONCENTRADA (1 card não-equilibrado
+   * repetido — nunca o preset espalhado) + 1 skill de marco (nível 4, que o boss já passou
+   * ao nascer alto). Autoridade 100% no servidor: o bot só pede `boss: true` no join, os
+   * números concretos (nível, atributos, skill) são decididos e aplicados aqui.
+   */
+  private initBoss(id: string, p: Player) {
+    p.level = BOSS_LEVEL_MIN + Math.floor(Math.random() * (BOSS_LEVEL_MAX - BOSS_LEVEL_MIN + 1));
+
+    const concentrated = UPGRADE_CARD_POOL.filter((c) => c.id !== "equilibrado" && !c.skill);
+    const card = concentrated[Math.floor(Math.random() * concentrated.length)];
+    for (let lvl = 1; lvl < p.level; lvl++) this.effects.addAttrPoints(id, p, card.points);
+
+    const skillIds = Object.keys(SKILLS);
+    p.skills.push(skillIds[Math.floor(Math.random() * skillIds.length)]);
   }
 
   onLeave(client: Client) {
@@ -171,20 +377,64 @@ export class ArenaRoom extends Room<ArenaState> {
     if (p) {
       this.emitDebug("disconnect", { playerId: client.sessionId });
       this.metrics.end(client.sessionId, p.level);
+      const joinedAt = this.joinedAtMap.get(client.sessionId) ?? Date.now();
+      this.emitTelemetry({
+        ...this.telemetryBase(),
+        type: "quit",
+        playerToken: p.playerToken,
+        reason: "disconnect",
+        durationS: Math.round((Date.now() - joinedAt) / 100) / 10,
+        finalLevel: p.level,
+      });
       console.log(`[arena] - ${p.name} (nível ${p.level})`);
     }
     this.effects.clear(client.sessionId);
     this.pendingUpgrade.delete(client.sessionId); // T-016
     this.xpAccum.delete(client.sessionId); // SPEC-0005
+    this.xpComboCount.delete(client.sessionId); // T-043
+    this.xpComboLimitMap.delete(client.sessionId); // T-043
+    this.joinedAtMap.delete(client.sessionId); // T-026
     this.state.players.delete(client.sessionId);
   }
 
   onDispose() {
     activeRooms.delete(this.roomId);
+    this.emitTelemetry({
+      ...this.telemetryBase(),
+      type: "match_end",
+      durationS: Math.round((Date.now() - this.matchStartedAt) / 100) / 10,
+      playerCount: this.totalJoins,
+    });
     console.log(`[arena] Sala ${this.roomId} fechada.`);
   }
 
+  /**
+   * T-026: wrapper fino sobre `updateInner` — watchdog de tick (dt real acima do limiar vira
+   * evento, nunca trava o loop) + captura de erro (um tick ruim não derruba a sala inteira;
+   * fica registrado como evento `error` com contexto, em vez de crashar o processo).
+   */
   private update(dt: number) {
+    this.tickCount += 1;
+    const dtMs = dt * 1000;
+    if (dtMs > TICK_WATCHDOG_MS) {
+      this.emitTelemetry({ ...this.telemetryBase(), type: "tick_slow", dtMs, thresholdMs: TICK_WATCHDOG_MS });
+    }
+    try {
+      this.updateInner(dt);
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      console.error("[arena] erro no tick:", e);
+      this.emitTelemetry({
+        ...this.telemetryBase(),
+        type: "error",
+        context: "update",
+        message: e.message,
+        stack: e.stack,
+      });
+    }
+  }
+
+  private updateInner(dt: number) {
     const now = Date.now();
 
     // efeitos expiram antes do movimento (velocidade correta no tick)
@@ -218,6 +468,16 @@ export class ArenaRoom extends Room<ArenaState> {
       }
       const victim = this.state.players.get(hit.targetId);
       const killer = this.state.players.get(hit.killerId);
+      // T-023 (reveal-on-hit): dano de verdade (não bloqueado) revela os dois lados por um
+      // tempo, renovado a cada novo hit — "inimigo é só skin até trocar dano com ele".
+      if (victim) victim.revealedUntil = now + REVEAL_ON_HIT_MS;
+      if (killer) killer.revealedUntil = now + REVEAL_ON_HIT_MS;
+      // T-043 (SPEC-0011): dano REAL zera o combo de XP da vítima.
+      // "Dano real" = não bloqueado por safe zone e não bloqueado por escudo de nascimento.
+      if (victim) {
+        this.xpComboCount.set(hit.targetId, 0);
+        this.xpComboLimitMap.delete(hit.targetId);
+      }
       this.emitDebug("hit", {
         victimId: hit.targetId,
         shooterId: hit.killerId,
@@ -229,6 +489,32 @@ export class ArenaRoom extends Room<ArenaState> {
         killerByVictim.set(hit.targetId, hit.killerId);
         this.metrics.addKill(hit.killerId);
         this.grantXp(hit.killerId, killer, XP_PER_KILL_PER_LEVEL * victim.level);
+        // SPEC-0010 (T-033): recompensa de kill CONTEXTUAL. Conta inimigos vivos perto do
+        // matador no instante do abate = "temperatura da briga". Duelo isolado (0) → bônus
+        // de XP (progressão); briga (≥1) → cura % da vida FALTANTE, escalando com o nº de
+        // inimigos até um teto, sem overheal. Anti-snowball: cura só onde havia risco real.
+        const threats = this.countLivingEnemiesNear(hit.killerId, hit.targetId, killer.x, killer.z);
+        this.emitTelemetry({
+          ...this.telemetryBase(),
+          type: "kill",
+          killerToken: killer.playerToken,
+          killerPos: { x: killer.x, z: killer.z },
+          killerLevel: killer.level,
+          victimToken: victim.playerToken,
+          victimPos: { x: victim.x, z: victim.z },
+          victimLevel: victim.level,
+          threats,
+        });
+        if (threats === 0) {
+          this.grantXp(hit.killerId, killer, KILL_DUEL_XP_BONUS_PER_LEVEL * victim.level);
+          this.emitDebug("kill_duel_bonus", { playerId: hit.killerId, xp: KILL_DUEL_XP_BONUS_PER_LEVEL * victim.level });
+        } else {
+          const heal = Math.round((killer.maxHp - killer.hp) * killHealFraction(threats));
+          if (heal > 0) {
+            killer.hp = Math.min(killer.maxHp, killer.hp + heal);
+            this.emitDebug("kill_heal", { playerId: hit.killerId, heal, threats });
+          }
+        }
         // T-017 (skill impulso): kill reseta o cooldown e dá boost curto de velocidade
         if (combinedSkillMods(Array.from(killer.skills)).onKillImpulso) {
           killer.lastFireAt = 0;
@@ -242,18 +528,37 @@ export class ArenaRoom extends Room<ArenaState> {
       if (p.hp <= 0) {
         this.emitDebug("death", { playerId: id, levelBefore: p.level });
         this.metrics.addDeath(id);
-        
+
+        // T-021: morte do portador derruba a bandeira no local (antes do respawn mover p.x/p.z).
+        if (this.state.flagEnabled && this.state.flag.carrierId === id) {
+          this.flagSystem.drop(this.state.flag, p.x, p.z, now);
+          this.emitDebug("flag_drop", { playerId: id, reason: "death" });
+          this.emitTelemetry({
+            ...this.telemetryBase(),
+            type: "flag_possession",
+            playerToken: p.playerToken,
+            action: "drop",
+            pos: { x: p.x, z: p.z },
+          });
+        }
+
         // SPEC-0005: a morte ZERA o nível (volta ao 1) — antes perdia só uma fração
         // (lossFraction). Risco real ao máximo: morrer apaga toda a progressão do round.
         p.level = 1;
         p.xp = 0;
         this.effects.resetAttrToLevel(id, p, p.level);
         // T-016/T-017: morte apaga a build — ofertas pendentes e skills morrem junto
-        // (pilar risco real: especializar é apostar)
-        this.pendingUpgrade.delete(id);
+        // (pilar risco real: especializar é apostar). Avisa o cliente pra fechar o menu
+        // de card aberto — sem isso a janela ficava travada na tela após a morte.
+        if (this.pendingUpgrade.delete(id)) {
+          this.clients.find((c) => c.sessionId === id)?.send("upgrade_offer_closed");
+        }
         p.pendingUpgrades = 0;
         p.skills = new ArraySchema<string>();
-        
+        // SPEC-0011 (T-039): a morte devolve o lançador padrão — a arma coletada não persiste
+        // (pilar risco real, mesma regra da build). O ciclo de spawn repõe a arma no mapa.
+        p.launcher = DEFAULT_LAUNCHER;
+
         // Respawn em ponto safe escolhido por distância/risco, não sorte pura.
         const spawn = this.pickRespawnPoint(id);
         p.x = spawn.x;
@@ -284,7 +589,11 @@ export class ArenaRoom extends Room<ArenaState> {
       const acc = (this.xpAccum.get(id) ?? 0) + XP_PER_SECOND * dt;
       const whole = Math.floor(acc);
       this.xpAccum.set(id, acc - whole);
-      if (whole > 0) this.grantXp(id, p, whole);
+      if (whole > 0) {
+        // T-021: portador da bandeira ganha o XP passivo em dobro.
+        const flagMult = this.state.flagEnabled && this.state.flag.carrierId === id ? FLAG_XP_MULT : 1;
+        this.grantXp(id, p, whole * flagMult);
+      }
     });
 
     // movimento autoritativo (velocidade = base × multiplicador do EffectSystem)
@@ -297,21 +606,89 @@ export class ArenaRoom extends Room<ArenaState> {
       p.z = moved.z;
     });
 
+    // T-021: bandeira — segue o portador (ou conta o abandono), depois checa pickup por distância.
+    if (this.state.flagEnabled) {
+      // SPEC-0011 (T-042): o tick decide as transições de cooldown; devolve o evento pra o
+      // cliente/toast (flag_cooldown_start = saiu do jogo; flag_respawn = renasceu no centro).
+      const flagEvent = this.flagSystem.tick(this.state.flag, this.state.players, this.flagCenter, now);
+      if (flagEvent) this.emitDebug(flagEvent, { x: this.state.flag.x, z: this.state.flag.z });
+      // T-042: pickup só quando ATIVA (em cooldown a bandeira está fora do jogo).
+      if (this.state.flag.state === "active" && !this.state.flag.carrierId) {
+        this.state.players.forEach((p, id) => {
+          if (this.state.flag.carrierId || p.hp <= 0) return;
+          if (Math.hypot(p.x - this.state.flag.x, p.z - this.state.flag.z) < FLAG_PICKUP_DIST) {
+            this.flagSystem.pickup(this.state.flag, id);
+            this.emitDebug("flag_pickup", { playerId: id });
+            this.emitTelemetry({
+              ...this.telemetryBase(),
+              type: "flag_possession",
+              playerToken: p.playerToken,
+              action: "pickup",
+              pos: { x: p.x, z: p.z },
+            });
+          }
+        });
+      }
+    }
+
     // coleta
     this.state.collectibles.forEach((c, cid) => {
       this.state.players.forEach((p, pid) => {
         if (Math.hypot(p.x - c.x, p.z - c.z) >= COLLECT_DIST) return;
         this.state.collectibles.delete(cid);
-        this.emitDebug("pickup", { playerId: pid, kind: c.kind });
+        // SPEC-0011 (T-039): pickup da arma leva o weaponId no evento — o cliente usa pra
+        // VFX/toast ("pegou Tiro Pesado") e chip do HUD. Demais kinds mandam weaponId undefined.
+        this.emitDebug("pickup", { playerId: pid, kind: c.kind, weaponId: c.weaponId || undefined });
         switch (c.kind) {
           case "speed_up":
             this.effects.apply(pid, p, "speed_up", now);
             break;
           case "coin_buff":
-            p.coins += COIN_BUFF_AMOUNT;
+            p.coins += Math.round(COIN_BUFF_AMOUNT * this.coinMultiplier);
             break;
           case "farm_event":
             this.effects.apply(pid, p, "xp_boost", now);
+            break;
+          case "hp_orb":
+            // SPEC-0010 (T-034): +HP fixo pequeno, nunca acima do maxHp.
+            p.hp = Math.min(p.maxHp, p.hp + HP_ORB_AMOUNT);
+            break;
+          case "shield_temp":
+            // SPEC-0010 (T-035): escudo temporário — reduz dano recebido por SHIELD_TEMP_MS.
+            this.effects.apply(pid, p, "damage_reduction", now);
+            break;
+          case "weapon":
+            // SPEC-0011 (T-039): troca o lançador NA HORA pelo sorteado no spawn. A arma some
+            // (já deletada acima) e o respawn é agendado com cooldown sorteado [15s,30s] — enquanto
+            // isso, não há arma no chão (WEAPON_MAX = 1 garantido pelo timer + countKind).
+            if (c.weaponId && LAUNCHERS[c.weaponId]) p.launcher = c.weaponId;
+            this.nextWeaponSpawnAt = now + weaponRespawnDelay(Math.random);
+            break;
+          case "xp_orb":
+            // T-043 (SPEC-0011): combo de XP. Coletas consecutivas sem tomar dano formam combo.
+            // A partir da XP_COMBO_START-ésima coleta o orbe vale o dobro (XP_COMBO_MULT).
+            // O limite do combo é sorteado na 1ª coleta; ao atingir, a coleta ainda dá bônus
+            // e o combo reseta (novo sorteio no próximo início). Outros kinds NÃO zeram o combo.
+            {
+              const prevCount = this.xpComboCount.get(pid) ?? 0;
+              const newCount = prevCount + 1;
+              // Se ainda não há limite sorteado (início de sequência), sorteia agora.
+              if (!this.xpComboLimitMap.has(pid) || prevCount === 0) {
+                this.xpComboLimitMap.set(pid, xpComboLimit(Math.random));
+              }
+              const limit = this.xpComboLimitMap.get(pid)!;
+              const boosted = newCount >= XP_COMBO_START;
+              const xpAmount = boosted ? XP_PICKUP_AMOUNT * XP_COMBO_MULT : XP_PICKUP_AMOUNT;
+              this.grantXp(pid, p, xpAmount);
+              this.emitDebug("xp_combo", { playerId: pid, count: newCount, boosted, limit });
+              // Verifica se atingiu o limite: a coleta atual ainda deu bônus; agora reseta.
+              if (newCount >= limit) {
+                this.xpComboCount.set(pid, 0);
+                this.xpComboLimitMap.delete(pid);
+              } else {
+                this.xpComboCount.set(pid, newCount);
+              }
+            }
             break;
           case "box":
             // bônus forte no round (vs. 1 do level-up normal)
@@ -358,6 +735,109 @@ export class ArenaRoom extends Room<ArenaState> {
           : now + RESPAWN_DELAY_MIN_MS + Math.random() * (RESPAWN_DELAY_MAX_MS - RESPAWN_DELAY_MIN_MS);
       }
     }
+
+    // SPEC-0010: passe de recursos de vida — escasso e espaçado, separado do genérico.
+    // Cada kind tem teto próprio, distâncias mínimas próprias (player + mesmo-kind) e
+    // cadência lenta. Só tenta quando abaixo do teto e o timer venceu.
+    if (now >= this.nextHpSpawnAt && this.countKind("hp_orb") < HP_ORB_MAX) {
+      if (this.spawnSurvivalItem("hp_orb", HP_ORB_MIN_PLAYER_DIST, HP_ORB_MIN_SELF_DIST)) {
+        this.nextHpSpawnAt = now + HP_ORB_RESPAWN_MS;
+      }
+    }
+    if (now >= this.nextShieldSpawnAt && this.countKind("shield_temp") < SHIELD_TEMP_MAX) {
+      if (this.spawnSurvivalItem("shield_temp", SHIELD_TEMP_MIN_PLAYER_DIST, SHIELD_TEMP_MIN_SELF_DIST)) {
+        this.nextShieldSpawnAt = now + SHIELD_TEMP_RESPAWN_MS;
+      }
+    }
+
+    // SPEC-0011 (T-039): arma coletável — exatamente 1 no mapa por vez. Passe dedicado,
+    // posição TOTALMENTE aleatória (walkable + alcançável, ignora zonas/pesos), só afasta
+    // um pouco de qualquer player pra não nascer em cima de alguém. O timer só existe pra
+    // segurar o respawn pós-coleta ([15s,30s]); enquanto houver arma no chão, não tenta.
+    if (now >= this.nextWeaponSpawnAt && this.countKind("weapon") < WEAPON_MAX) {
+      if (this.spawnWeapon()) {
+        // nascida: sem próximo agendamento até ser coletada (respawn agendado na coleta).
+        this.nextWeaponSpawnAt = Infinity;
+      }
+    }
+  }
+
+  /** SPEC-0010: quantas instâncias de um kind existem hoje no mapa. */
+  private countKind(kind: CollectibleKind): number {
+    let n = 0;
+    this.state.collectibles.forEach((c) => {
+      if (c.kind === kind) n += 1;
+    });
+    return n;
+  }
+
+  /**
+   * SPEC-0010 (T-033): nº de inimigos VIVOS (fora matador e vítima) dentro do raio de combate
+   * do matador no instante do abate. Proxy barato de "briga generalizada".
+   */
+  private countLivingEnemiesNear(killerId: string, victimId: string, kx: number, kz: number): number {
+    let n = 0;
+    this.state.players.forEach((p, id) => {
+      if (id === killerId || id === victimId || p.hp <= 0) return;
+      if (Math.hypot(p.x - kx, p.z - kz) <= COMBAT_THREAT_RADIUS) n += 1;
+    });
+    return n;
+  }
+
+  /**
+   * SPEC-0010: coloca um recurso de vida respeitando distância mínima de QUALQUER player e
+   * de outra instância do MESMO kind. Amostragem aleatória (mapa grande). Falha silenciosa
+   * (sem drop este tick) se não achar célula boa — o timer não avança, tenta de novo.
+   */
+  private spawnSurvivalItem(kind: CollectibleKind, minPlayerDist: number, minSelfDist: number): boolean {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const tx = 1 + Math.floor(Math.random() * (this.map.w - 2));
+      const tz = 1 + Math.floor(Math.random() * (this.map.h - 2));
+      if (isWall(this.map, tx, tz)) continue;
+      const cx = tx + 0.5;
+      const cz = tz + 0.5;
+      if (zoneAt(this.map, cx, cz) === "safe") continue; // recurso de sobrevivência é de campo aberto
+      let blocked = false;
+      this.state.players.forEach((p) => {
+        if (Math.abs(p.x - cx) + Math.abs(p.z - cz) < minPlayerDist) blocked = true;
+      });
+      if (blocked) continue;
+      this.state.collectibles.forEach((c) => {
+        if (c.kind === kind && Math.abs(c.x - cx) + Math.abs(c.z - cz) < minSelfDist) blocked = true;
+      });
+      if (blocked) continue;
+      this.createCollectible(cx, cz, kind);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * SPEC-0011 (T-039): nasce a arma coletável em célula TOTALMENTE aleatória do mapa —
+   * walkable (não-parede) E alcançável (BFS pré-computado), ignorando zonas/pesos. Só exige
+   * distância mínima PEQUENA de qualquer player (WEAPON_MIN_PLAYER_DIST) pra não cair em cima
+   * de alguém. O lançador da arma é sorteado AQUI (no spawn) entre os vantajosos e gravado no
+   * schema (`weaponId`) — o cliente lê pra desenhar a arma certa. Falha silenciosa se não
+   * achar célula boa (timer não avança, tenta no próximo tick).
+   */
+  private spawnWeapon(): boolean {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const tx = 1 + Math.floor(Math.random() * (this.map.w - 2));
+      const tz = 1 + Math.floor(Math.random() * (this.map.h - 2));
+      if (isWall(this.map, tx, tz)) continue; // walkable
+      if (!this.reachable[tz * this.map.w + tx]) continue; // alcançável (nada de bolsão fechado)
+      const cx = tx + 0.5;
+      const cz = tz + 0.5;
+      let blocked = false;
+      this.state.players.forEach((p) => {
+        if (Math.abs(p.x - cx) + Math.abs(p.z - cz) < WEAPON_MIN_PLAYER_DIST) blocked = true;
+      });
+      if (blocked) continue;
+      const weaponId = WEAPON_PICKUP_LAUNCHERS[Math.floor(Math.random() * WEAPON_PICKUP_LAUNCHERS.length)];
+      this.createCollectible(cx, cz, "weapon", weaponId);
+      return true;
+    }
+    return false;
   }
 
   private pickRespawnPoint(deadPlayerId: string) {
@@ -393,7 +873,7 @@ export class ArenaRoom extends Room<ArenaState> {
 
   /** XP → nível → oferta de cards (T-003/T-016). Loop cobre XP suficiente p/ vários níveis de uma vez. */
   private grantXp(id: string, p: Player, amount: number) {
-    p.xp += amount * p.xpMult; // xp_boost (farm_event) dobra o ganho — T-004
+    p.xp += amount * p.xpMult * this.xpMultiplier; // xp_boost (farm_event) dobra o ganho — T-004
 
     while (p.xp >= xpToNext(p.level)) {
       p.xp -= xpToNext(p.level);
@@ -426,12 +906,20 @@ export class ArenaRoom extends Room<ArenaState> {
       cards: pending.cards,
       timeoutMs: UPGRADE_CHOICE_TIMEOUT_MS,
     });
+    this.emitTelemetry({
+      ...this.telemetryBase(),
+      type: "upgrade_offer",
+      playerToken: p.playerToken,
+      level,
+      offeredCardIds: pending.cards.map((c) => c.id),
+    });
   }
 
   /**
-   * T-017: nos marcos (`SKILL_MILESTONE_LEVELS`) a oferta vira [skill A, skill B, atributo]
-   * — escolher 1 de 2 skills ou abrir mão por pontos. Skill já possuída é substituída por
-   * outra que falte; sem skill faltando, a oferta volta a ser só de atributos.
+   * T-017/addendum: nos marcos (`SKILL_MILESTONE_LEVELS`, mais frequentes que o 4/8/12
+   * original) a oferta vira [skill, atributo, atributo] — a skill é uma opção a mais, não
+   * força escolher entre 2 skills. Skill do marco já possuída é substituída pela próxima
+   * que falte; sem skill faltando, a oferta volta a ser só de atributos.
    */
   private buildCards(p: Player, level: number): UpgradeCard[] {
     const attrCards = upgradeCardsForLevel(level);
@@ -441,17 +929,15 @@ export class ArenaRoom extends Room<ArenaState> {
     const missing = Object.keys(SKILLS).filter((s) => !owned.has(s));
     if (missing.length === 0) return attrCards;
 
-    const pair = (SKILL_MILESTONE_CHOICES[level] ?? []).filter((s) => !owned.has(s));
-    while (pair.length < 2 && missing.some((s) => !pair.includes(s))) {
-      pair.push(missing.find((s) => !pair.includes(s))!);
-    }
-    const skillCards: UpgradeCard[] = pair.slice(0, 2).map((s) => ({
-      id: `skill_${s}`,
-      label: `★ ${SKILLS[s].name} — ${SKILLS[s].desc}`,
+    const preferred = SKILL_MILESTONE_SKILL[level];
+    const skillId = preferred && !owned.has(preferred) ? preferred : missing[0];
+    const skillCard: UpgradeCard = {
+      id: `skill_${skillId}`,
+      label: `★ ${SKILLS[skillId].name} — ${SKILLS[skillId].desc}`,
       points: {},
-      skill: s,
-    }));
-    return [...skillCards, attrCards[0]];
+      skill: skillId,
+    };
+    return [skillCard, attrCards[0], attrCards[1]];
   }
 
   /**
@@ -483,6 +969,15 @@ export class ArenaRoom extends Room<ArenaState> {
       level,
       auto: cardId === null,
     });
+    this.emitTelemetry({
+      ...this.telemetryBase(),
+      type: "upgrade_choice",
+      playerToken: p.playerToken,
+      level,
+      chosenCardId: card.id,
+      declinedCardIds: pending.cards.filter((c) => c.id !== card.id).map((c) => c.id),
+      autoPick: cardId === null,
+    });
 
     if (pending.levels.length > 0) this.sendUpgradeOffer(id, p, pending);
     else this.pendingUpgrade.delete(id);
@@ -513,17 +1008,23 @@ export class ArenaRoom extends Room<ArenaState> {
     return false; // mapa lotado perto de todo mundo — sem drop (design!)
   }
 
-  private createCollectible(x: number, z: number) {
+  /**
+   * `forceKind` presente (SPEC-0010) = spawn direto desse kind (recursos de vida têm passe
+   * próprio, sem peso de zona). Ausente = caminho original: sorteia pelo peso da zona.
+   */
+  private createCollectible(x: number, z: number, forceKind?: CollectibleKind, weaponId?: string) {
     const zone = zoneAt(this.map, x, z);
     const weights = zone === "safe" ? SAFE_WEIGHTS : zone === "war" ? WAR_WEIGHTS : FIELD_WEIGHTS;
-    const kind = pickWeighted(Math.random, weights);
+    const kind = forceKind ?? pickWeighted(Math.random, weights);
     const c = new Collectible();
     c.x = x;
     c.z = z;
     c.kind = kind;
+    // SPEC-0011 (T-039): só a arma carrega qual lançador concede (sorteado no spawn).
+    if (kind === "weapon" && weaponId) c.weaponId = weaponId;
     const id = `c${this.collectibleSeq++}`;
     this.state.collectibles.set(id, c);
-    this.emitDebug("spawn", { id, x, z, kind, zone });
+    this.emitDebug("spawn", { id, x, z, kind, zone, weaponId: c.weaponId || undefined });
     if (kind === "farm_event") this.broadcast("announce", { kind: "farm_event", x, z });
   }
 

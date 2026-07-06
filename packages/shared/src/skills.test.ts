@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { combinedSkillMods, SKILLS, SKILL_MILESTONE_CHOICES, SKILL_MILESTONE_LEVELS } from "./skills";
+import { combinedSkillMods, SKILLS, SKILL_MILESTONE_SKILL, SKILL_MILESTONE_LEVELS } from "./skills";
 
 describe("combinedSkillMods (T-017)", () => {
   it("sem skills = totalmente neutro (basic_shot não muda em nada)", () => {
@@ -35,11 +35,11 @@ describe("combinedSkillMods (T-017)", () => {
     expect(combinedSkillMods(["nao_existe"])).toMatchObject({ projectilesPerShot: 1, damageFactor: 1 });
   });
 
-  it("todo marco aponta para skills que existem no registro", () => {
+  it("todo marco aponta para uma skill que existe no registro", () => {
     for (const level of SKILL_MILESTONE_LEVELS) {
-      const pair = SKILL_MILESTONE_CHOICES[level];
-      expect(pair).toBeDefined();
-      pair.forEach((s) => expect(SKILLS[s]).toBeDefined());
+      const skill = SKILL_MILESTONE_SKILL[level];
+      expect(skill).toBeDefined();
+      expect(SKILLS[skill]).toBeDefined();
     }
   });
 });

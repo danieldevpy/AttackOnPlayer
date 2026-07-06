@@ -1,8 +1,37 @@
 import * as THREE from "three";
 import { Client, Room } from "colyseus.js";
-import { buildMap, isWall, zoneAt, ROOM_NAME, SERVER_PORT } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual } from "./visuals";
-import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, chooseUpgradeByIndex, onCombatEvent } from "./hud";
+import {
+  buildMap,
+  isWall,
+  zoneAt,
+  ROOM_NAME,
+  SERVER_PORT,
+  SPEED_BOOST_MS,
+  XP_BOOST_MS,
+  KILL_RUSH_MS,
+  SHIELD_TEMP_MS,
+  HP_ORB_AMOUNT,
+  GameMap,
+  MapFileV1,
+  mapFileToGameMap,
+  LAUNCHERS,
+} from "@aop/shared";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate } from "./visuals";
+import { updateCharacterAnimation, triggerCharacterShoot, triggerCharacterHit, triggerCharacterDeath } from "./characters";
+import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
+import { createVfxSystem } from "./vfx";
+import { createAudioSystem } from "./audio";
+import { ProfileManager, ProfileId } from "./input/manager";
+import type { Intent } from "./input/types";
+import { initImmersion, setUnloadGuard } from "./immersion";
+import { initAuth, getAuthToken } from "./auth";
+
+// T-048 (SPEC-0012): blindagem contra ações do navegador (menu de contexto, zoom, seleção
+// de texto, etc.) — sempre ativa, independente de perfil de controle ou conexão.
+initImmersion();
+
+// T-023 (SPEC-0006): build prod não tem overlay de debug (F3/roster/feeds) — só dev.
+const IS_DEV = import.meta.env.DEV;
 
 const hud = document.getElementById("hud")!;
 const debugOverlay = document.getElementById("debug-overlay")!;
@@ -10,6 +39,11 @@ const debugEventsContainer = document.getElementById("debug-events")!;
 const debugStateEl = document.getElementById("debug-state")!;
 const debugCloseBtn = document.getElementById("debug-close")!;
 let debugOpen = false;
+
+if (!IS_DEV) {
+  debugOverlay.remove();
+  document.querySelector(".debug-f3-hint")?.remove();
+}
 
 debugCloseBtn.addEventListener("click", () => {
   debugOpen = false;
@@ -38,10 +72,21 @@ const sun = new THREE.DirectionalLight(0xffffff, 0.8);
 sun.position.set(5, 10, 3);
 scene.add(sun);
 
-// ---------- Mundo (construído após receber mapW/mapH/mapSeed do servidor) ----------
+// T-022 (SPEC-0006): registry de VFX nomeados — 1 pool de partículas para todo o jogo.
+const vfx = createVfxSystem();
+scene.add(vfx.points);
+
+// T-049 (SPEC-0013): registry de sons nomeados — mesmo AudioContext pra todo o jogo,
+// destravado no primeiro gesto do usuário (regra de autoplay dos browsers).
+const audio = createAudioSystem();
+
+// ---------- Mundo (construído após receber mapW/mapH/mapSeed OU "map_data" do servidor) ----------
 let worldBuilt = false;
-function buildWorld(w: number, h: number, seed: number) {
-  const map = buildMap(w, h, seed); // mesmo seed = mesmo mapa do servidor (ADR-007)
+// T-024 (SPEC-0007): mapa curado (mapId) não dá pra reconstruir por seed — o cliente recebe
+// o GameMap já pronto (via `map_data` + `mapFileToGameMap`). Mapa gerado (sem mapId) continua
+// reconstruindo localmente por `buildMap(w,h,seed)`, como sempre (ADR-007, zero tráfego extra).
+function buildWorld(map: GameMap) {
+  const { w, h, seed } = map;
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
@@ -150,14 +195,145 @@ function buildWorld(w: number, h: number, seed: number) {
 
 // ---------- Entidades dinâmicas ----------
 const playerVisuals = new Map<string, THREE.Group>();
-const collectibleMeshes = new Map<string, THREE.Mesh>();
-const projectileMeshes = new Map<string, THREE.Mesh>();
+const collectibleMeshes = new Map<string, THREE.Group>(); // F2: cada coletável é um grupo composto (visuals.ts)
+const projectileMeshes = new Map<string, THREE.Group>(); // T-055: flecha = grupo (haste+ponta)
+let flagVisual: THREE.Group | undefined; // T-021: bandeira "rei do mapa" — objeto único, não um MapSchema
+
+// T-055 (SPEC-0014): visual do projétil do arqueiro = flecha (haste + ponta), não mais a
+// esfera de placeholder da T-039. Geometria "deitada" ao longo do local +X (mesma convenção
+// de "nariz" dos personagens, ver syncWorld) — cada parte é rotacionada UMA vez na criação
+// da geometria singleton, então a montagem em grupo não precisa de rotação extra por parte.
+function arrowShaftGeo(len: number, radius: number): THREE.CylinderGeometry {
+  const g = new THREE.CylinderGeometry(radius, radius, len, 6);
+  g.rotateZ(-Math.PI / 2); // eixo Y (padrão do cilindro) -> eixo X local
+  return g;
+}
+function arrowHeadGeo(len: number, radius: number): THREE.ConeGeometry {
+  const g = new THREE.ConeGeometry(radius, len, 4); // 4 lados: mesmo padrão low-poly da T-053
+  g.rotateZ(-Math.PI / 2); // ápice (+Y) -> +X local, ponta aponta pra frente
+  return g;
+}
+
+// T-039/T-055: visual do projétil POR lançador. Basic = discreto (flecha pequena, como
+// antes era a esfera). Vantajosos = maiores e mais vistosos + muzzle mais rico (regra de
+// intensidade da T-022: automático é leve, arma "boa" chama atenção). Geo/mat são singletons
+// de módulo — N projéteis do mesmo lançador reusam os mesmos objetos ("leve sempre" §5).
+interface ProjStyle {
+  shaftGeo: THREE.CylinderGeometry;
+  headGeo: THREE.ConeGeometry;
+  mat: THREE.MeshBasicMaterial;
+  shaftLen: number;
+  headLen: number;
+  muzzle: string; // entrada em VFX_DEFS disparada no nascimento do projétil
+  sound: string; // T-050: entrada em AUDIO_REGISTRY — fire distinto por launcher
+  trail?: string; // T-055: entrada em VFX_DEFS pro rastro leve em voo (só heavy_shot)
+}
+const projStyles: Record<string, ProjStyle> = {
+  basic_shot: {
+    shaftGeo: arrowShaftGeo(0.32, 0.035),
+    headGeo: arrowHeadGeo(0.18, 0.09), // acompanha o sceneryRadius fino da T-038
+    mat: new THREE.MeshBasicMaterial({ color: 0xffaa00 }),
+    shaftLen: 0.32,
+    headLen: 0.18,
+    muzzle: "muzzle_flash",
+    sound: "fire_basic",
+  },
+  heavy_shot: {
+    shaftGeo: arrowShaftGeo(0.42, 0.05),
+    headGeo: arrowHeadGeo(0.24, 0.13), // flecha pesada, bem visível
+    mat: new THREE.MeshBasicMaterial({ color: 0xff6d00 }),
+    shaftLen: 0.42,
+    headLen: 0.24,
+    muzzle: "muzzle_heavy",
+    sound: "fire_heavy",
+    trail: "arrow_trail_heavy", // T-055: única com rastro — reforça a leitura de "arma pesada"
+  },
+  rapid_shot: {
+    shaftGeo: arrowShaftGeo(0.26, 0.03),
+    headGeo: arrowHeadGeo(0.14, 0.07), // pequena e ágil
+    mat: new THREE.MeshBasicMaterial({ color: 0x40c4ff }),
+    shaftLen: 0.26,
+    headLen: 0.14,
+    muzzle: "muzzle_rapid",
+    sound: "fire_rapid",
+  },
+};
+function projStyleFor(launcherId: string): ProjStyle {
+  return projStyles[launcherId] ?? projStyles.basic_shot;
+}
+/** T-055: monta o grupo haste+ponta de uma flecha a partir da geometria/material singleton do
+ * lançador — a ponta fica na frente (nariz local +X), a haste logo atrás. */
+function createArrowMesh(style: ProjStyle): THREE.Group {
+  const group = new THREE.Group();
+  const shaft = new THREE.Mesh(style.shaftGeo, style.mat);
+  const head = new THREE.Mesh(style.headGeo, style.mat);
+  head.position.x = style.shaftLen / 2 + style.headLen / 2;
+  group.add(shaft, head);
+  return group;
+}
+
+// T-022: instante exato de aplicação de cada buff temporário (evento já emitido pelo
+// servidor — pickup/impulso), pareado com a MESMA duração do EffectSystem (@aop/shared),
+// pra desenhar o anel esvaziando sem "chutar" o tempo restante nem duplicar a constante.
+const BUFF_DURATION_MS: Record<string, number> = {
+  speed_up: SPEED_BOOST_MS,
+  xp_boost: XP_BOOST_MS,
+  kill_rush: KILL_RUSH_MS,
+  damage_reduction: SHIELD_TEMP_MS, // SPEC-0010: escudo temporário
+};
+const buffApplied = new Map<string, { kind: string; expiresAt: number }>();
+const wasShielded = new Map<string, boolean>(); // detecta a transição p/ disparar shield_pop
+const lastTrailSpawn = new Map<string, number>();
+const lastArrowTrailAt = new Map<string, number>(); // T-055: rastro leve em voo, por projétil (só heavy_shot)
+let lastFlagAuraAt = 0;
+
+// T-045 (SPEC-0011): transição de nascimento — materialização scale-in + fade-in.
+// Sinal escolhido: mudança de `spawnProtectedUntil` para um valor FUTURO novo.
+// É o sinal mais confiável: autoritativo, sempre setado no respawn (ArenaRoom.ts),
+// não depende de posição (que o lerp da câmera poderia suavizar de qualquer jeito).
+// `lastSpawnProtection[id]` = último valor observado; quando muda para futuro > now → spawn.
+const lastSpawnProtection = new Map<string, number>();
+// Animação de materialização em andamento por player.
+const spawnAnim = new Map<string, { startedAt: number; durationMs: number }>();
+const SPAWN_ANIM_MS = 400; // duração da materialização (scale-in + fade-in)
+
+// T-045: overlay DOM de fade de tela — só para o PRÓPRIO jogador ao renascer.
+// Implementação mais simples que mata a sensação de "teletransporte" sem câmera cortada.
+let spawnFadeEl: HTMLDivElement | null = null;
+function getSpawnFadeEl(): HTMLDivElement {
+  if (!spawnFadeEl) {
+    spawnFadeEl = document.createElement("div");
+    spawnFadeEl.style.cssText =
+      "position:fixed;inset:0;background:#000;pointer-events:none;z-index:50;opacity:0;transition:none";
+    document.body.appendChild(spawnFadeEl);
+  }
+  return spawnFadeEl;
+}
+/** T-045: fade de tela no próprio jogador — out→in em ~200 ms cada sentido, sem tween lib. */
+function triggerSpawnFade() {
+  const el = getSpawnFadeEl();
+  el.style.transition = "opacity 0.2s linear";
+  el.style.opacity = "1";
+  setTimeout(() => {
+    el.style.transition = "opacity 0.2s linear";
+    el.style.opacity = "0";
+  }, 250); // 200ms fade-out + 50ms pausa = 250ms antes do fade-in
+}
 
 // ---------- Rede ----------
+// `?port=NNNN` só pra testar contra um servidor local em porta alternativa (ex.: quando a
+// porta padrão já está ocupada por outra sessão de dev) — nunca usado fora de localhost.
+const devPortOverride = new URLSearchParams(location.search).get("port");
+// `VITE_SERVER_URL` (build-time): deploy em VPS por IP público sem domínio/TLS — força
+// ws:// explícito pro host:porta do game server, pulando a heurística abaixo (que assume
+// wss:// atrás de proxy em qualquer host que não seja localhost/LAN). Ver plano de deploy
+// sem domínio. Não usado no fluxo com domínio+TLS (M5/SPEC-0009), que não seta essa env.
+const configuredUrl = import.meta.env.VITE_SERVER_URL as string | undefined;
 const url =
-  location.hostname === "localhost" || location.hostname.startsWith("192.")
-    ? `ws://${location.hostname}:${SERVER_PORT}`
-    : `wss://${location.host}`;
+  configuredUrl ||
+  (location.hostname === "localhost" || location.hostname.startsWith("192.")
+    ? `ws://${location.hostname}:${devPortOverride ?? SERVER_PORT}`
+    : `wss://${location.host}`);
 
 const client = new Client(url);
 let room: Room | undefined;
@@ -170,16 +346,28 @@ if (!playerToken) {
   localStorage.setItem("aop_token", playerToken);
 }
 
+// T-028c (SPEC-0008): janela discreta de login/registro — guest continua o default. Só
+// depois do token local existir, pra poder registrar o guest no Django (best-effort).
+initAuth();
+
 async function connect() {
   try {
     room = await client.joinOrCreate(ROOM_NAME, {
       name: `web-${Math.floor(Math.random() * 999)}`,
-      token: playerToken
+      token: playerToken,
+      authToken: getAuthToken() ?? undefined
     });
     mySessionId = room.sessionId;
+    // T-048 (SPEC-0012): partida em andamento pede confirmação antes de fechar/recarregar a aba.
+    setUnloadGuard(true);
+    room.onLeave(() => setUnloadGuard(false));
+    room.onError(() => setUnloadGuard(false));
     room.onMessage("pong", (t: number) => (ping = Math.round(performance.now() - t)));
     room.onMessage("announce", (msg: { kind: string }) => {
-      if (msg.kind === "farm_event") announceUntil = performance.now() + 6000;
+      if (msg.kind === "farm_event") {
+        pushToast("🔥 farm_event na zona de guerra!"); // T-023: toast, não mais texto cru
+        audio.play("farm_event_announce"); // T-050: broadcast de sala, sem posição própria
+      }
     });
     room.onMessage("debug_event", (ev: any) => {
       pushDebugEvent(ev);
@@ -187,6 +375,13 @@ async function connect() {
     // T-016: cards de level-up — servidor manda a oferta e confirma a escolha
     room.onMessage("upgrade_offer", (offer: any) => showUpgradeOffer(offer));
     room.onMessage("upgrade_applied", (msg: any) => onUpgradeApplied(msg));
+    room.onMessage("upgrade_offer_closed", () => closeUpgradeOffer());
+    // T-024: mapa curado (mapId) manda o JSON completo uma vez no join — reconstrução por
+    // seed não se aplica (mapFileToGameMap produz o mesmo GameMap que o servidor usa).
+    room.onMessage("map_data", (file: MapFileV1) => {
+      if (worldBuilt) return;
+      buildWorld(mapFileToGameMap(file));
+    });
     setInterval(() => room?.send("ping", performance.now()), 2000);
     setInterval(sendInput, 1000 / 20);
   } catch (e) {
@@ -207,45 +402,202 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
   onCombatEvent(ev, mySessionId);
   if (ev.type === "hit" && ev.payload?.damage > 0) {
     const vis = playerVisuals.get(ev.payload.victimId);
-    if (vis) spawnDamagePopup(vis.position.x, vis.position.z, ev.payload.damage, ev.payload.isKill === true);
+    if (vis) {
+      spawnDamagePopup(vis.position.x, vis.position.z, ev.payload.damage, ev.payload.isKill === true);
+      vfx.spawnAt("hit_spark", vis.position.x, vis.position.z);
+      vfx.spawnAt("blood_hit", vis.position.x, vis.position.z);
+      triggerCharacterHit(vis, performance.now()); // V2: recuo procedural de "levou dano"
+    }
+    // T-050: hit dado/recebido — pessoal (só o próprio jogador ouve, senão o combate dos
+    // bots ao redor vira ruído contínuo). "Recebido" pesa mais que "dado" (regra de risco real).
+    if (ev.payload.victimId === mySessionId) audio.play("hit_taken");
+    else if (ev.payload.shooterId === mySessionId) audio.play("hit_given");
+    if (ev.payload.isKill && ev.payload.shooterId === mySessionId) audio.play("kill");
+  }
+  // T-022: registry de VFX — cada efeito nasce de um evento que o servidor já emite.
+  if (ev.type === "death") {
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) {
+      vfx.spawnAt("death_burst", vis.position.x, vis.position.z);
+      triggerCharacterDeath(vis, performance.now()); // V2: queda cosmética (servidor respawna imediato)
+    }
+    // T-050: própria morte é dramática/pessoal; morte alheia é ambiente, posicional (T-051).
+    if (ev.payload.playerId === mySessionId) audio.play("death_self");
+    else if (vis) audio.play("death_other", vis.position.x, vis.position.z);
+  } else if (ev.type === "kill_heal") {
+    // SPEC-0010: cura por abate em briga — feedback verde ("+X") + partículas no matador.
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) {
+      spawnHealPopup(vis.position.x, vis.position.z, ev.payload.heal);
+      vfx.spawnAt("heal_pop", vis.position.x, vis.position.z);
+    }
+  } else if (ev.type === "pickup") {
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) vfx.spawnAt("pickup_glint", vis.position.x, vis.position.z);
+    // T-050: coleta por kind — pessoal (só o coletor ouve; farm de XP de vários bots ao
+    // mesmo tempo não pode virar ruído contínuo). weapon é "priority" (dedicado no registry).
+    if (ev.payload.playerId === mySessionId) {
+      const pickupSound: Record<string, string> = {
+        xp_orb: "pickup_xp",
+        coin_buff: "pickup_coin",
+        hp_orb: "pickup_hp",
+        shield_temp: "pickup_shield",
+        weapon: "pickup_weapon",
+        box: "pickup_box",
+        speed_up: "pickup_speed",
+        farm_event: "pickup_farm",
+      };
+      const soundName = pickupSound[ev.payload.kind];
+      if (soundName) audio.play(soundName);
+    }
+    // pickup é o instante exato em que os buffs temporários são (re)aplicados no servidor —
+    // reseta o anel de cooldown pra refletir a renovação, não só a 1ª aplicação.
+    const kind =
+      ev.payload.kind === "speed_up" ? "speed_up"
+      : ev.payload.kind === "farm_event" ? "xp_boost"
+      : ev.payload.kind === "shield_temp" ? "damage_reduction"
+      : null;
+    if (kind) buffApplied.set(ev.payload.playerId, { kind, expiresAt: performance.now() + BUFF_DURATION_MS[kind] });
+    // SPEC-0010: feedback dedicado dos recursos de vida.
+    if (vis && ev.payload.kind === "hp_orb") {
+      spawnHealPopup(vis.position.x, vis.position.z, HP_ORB_AMOUNT);
+      vfx.spawnAt("heal_pop", vis.position.x, vis.position.z);
+    } else if (vis && ev.payload.kind === "shield_temp") {
+      vfx.spawnAt("shield_gain", vis.position.x, vis.position.z);
+    } else if (ev.payload.kind === "weapon") {
+      // T-039: pegar a arma — VFX forte + toast só pro próprio jogador (não poluir com os inimigos).
+      if (vis) vfx.spawnAt("weapon_pickup", vis.position.x, vis.position.z);
+      if (ev.payload.playerId === mySessionId) {
+        const name = LAUNCHERS[ev.payload.weaponId as string]?.name ?? "Arma";
+        pushToast(`🔫 ${name} coletado!`);
+      }
+    }
+    // T-044 (SPEC-0011): popup discreto de coleta — informativo para quem está atento.
+    // hp_orb/shield_temp têm feedback dedicado da T-036; weapon tem toast. Os demais recebem
+    // um texto flutuante pequeno (opacidade reduzida, fade rápido) no ponto da coleta.
+    if (vis) {
+      const px = vis.position.x, pz = vis.position.z;
+      switch (ev.payload.kind) {
+        case "xp_orb":
+          spawnCollectPopup(px, pz, "+8 XP", "#ffd54f");
+          break;
+        case "speed_up":
+          spawnCollectPopup(px, pz, "⚡ velocidade", "#26c6da");
+          break;
+        case "coin_buff":
+          spawnCollectPopup(px, pz, "+10 moedas", "#ffc107");
+          break;
+        case "farm_event":
+          spawnCollectPopup(px, pz, "2×XP!", "#66bb6a");
+          break;
+        case "box":
+          spawnCollectPopup(px, pz, "atrib++", "#ce93d8");
+          break;
+      }
+    }
+  } else if (ev.type === "xp_combo") {
+    // T-044 (SPEC-0011): combo de XP boosted — exibe "combo ×N" discreto no player.
+    // Só aparece quando boosted=true para não poluir a tela a cada coleta comum.
+    if (ev.payload.boosted) {
+      const vis = playerVisuals.get(ev.payload.playerId);
+      if (vis) spawnCollectPopup(vis.position.x, vis.position.z, `combo ×${ev.payload.count}`, "#ffb300");
+      if (ev.payload.playerId === mySessionId) audio.play("xp_combo"); // T-050
+    }
+  } else if (ev.type === "impulso") {
+    buffApplied.set(ev.payload.playerId, { kind: "kill_rush", expiresAt: performance.now() + BUFF_DURATION_MS.kill_rush });
+  } else if (ev.type === "upgrade") {
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) vfx.spawnAt(ev.payload.auto ? "level_up_auto" : "upgrade_chosen_aura", vis.position.x, vis.position.z);
+    // T-050: level-up + card escolhido — pessoal (progressão de outro jogador não é minha leitura).
+    if (ev.payload.playerId === mySessionId) audio.play(ev.payload.auto ? "level_up_auto" : "card_chosen");
+  } else if (ev.type === "box_skill") {
+    // T-050: skill nova vinda de box na zona de guerra — pessoal, raro.
+    if (ev.payload.playerId === mySessionId) audio.play("skill_unlock");
+  } else if (ev.type === "flag_pickup") {
+    // T-050: bandeira — tático, todo mundo ouve (só existe 1 no mapa); posicional (T-051).
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) audio.play("flag_pickup", vis.position.x, vis.position.z);
+  } else if (ev.type === "flag_drop") {
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) audio.play("flag_drop", vis.position.x, vis.position.z);
+  } else if (ev.type === "flag_cooldown_start") {
+    // T-042 (SPEC-0011): a bandeira saiu do jogo por um tempo (cooldown) — toast de leitura.
+    pushToast("🏳️ Bandeira em cooldown");
+    audio.play("flag_cooldown", ev.payload.x, ev.payload.z); // T-050
+  } else if (ev.type === "flag_respawn") {
+    // T-042: renasceu no centro, acesa e disputável de novo.
+    pushToast("🚩 Bandeira renasceu no centro!");
+    audio.play("flag_respawn", ev.payload.x, ev.payload.z); // T-050
   }
 }
 
-// ---------- Números de dano flutuantes (T-018) ----------
+// ---------- Números de dano flutuantes (T-018) + popups de coleta (T-044) ----------
 // Sprite com CanvasTexture; orçamento fixo (máx. 24 vivos) — sem custo quando não há combate.
-const damagePopups: Array<{ sprite: THREE.Sprite; born: number }> = [];
+// T-044: cada entrada carrega seu próprio lifeMs e baseOpacity (coleta usa valores menores).
+const damagePopups: Array<{ sprite: THREE.Sprite; born: number; lifeMs: number; baseOpacity: number }> = [];
 const POPUP_LIFE_MS = 900;
 
-function spawnDamagePopup(x: number, z: number, damage: number, kill: boolean) {
+/**
+ * Núcleo do popup flutuante (dano/cura/coleta): texto colorido em sprite, orçamento compartilhado.
+ * T-044: `opts.opacity` (padrão 1.0) e `opts.scale` (padrão 1.0) permitem popups discretos de
+ * coleta — opacidade reduzida (~0.6) + escala menor que os de dano, sem poluir a tela.
+ */
+function pushPopup(
+  x: number,
+  z: number,
+  text: string,
+  color: string,
+  fontSize: number,
+  opts?: { opacity?: number; scale?: number; lifeMs?: number }
+) {
   if (damagePopups.length >= 24) return;
   const canvas = document.createElement("canvas");
   canvas.width = 128;
   canvas.height = 64;
   const g = canvas.getContext("2d")!;
-  // fonte cresce com o dano — golpe forte É visivelmente forte
-  const fontSize = Math.round(Math.min(46, 20 + damage * 0.6));
   g.font = `bold ${fontSize}px monospace`;
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.strokeStyle = "#000";
   g.lineWidth = 5;
-  g.fillStyle = kill ? "#ff5252" : damage >= 30 ? "#ffb300" : "#ffe082";
-  const text = kill ? `${Math.round(damage)} ☠` : `${Math.round(damage)}`;
+  g.fillStyle = color;
   g.strokeText(text, 64, 34);
   g.fillText(text, 64, 34);
+  const baseOpacity = opts?.opacity ?? 1.0;
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false })
+    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false, opacity: baseOpacity })
   );
-  sprite.scale.set(1.7, 0.85, 1);
+  const s = opts?.scale ?? 1.0;
+  sprite.scale.set(1.7 * s, 0.85 * s, 1);
   sprite.position.set(x, 1.35, z);
   scene.add(sprite);
-  damagePopups.push({ sprite, born: performance.now() });
+  damagePopups.push({ sprite, born: performance.now(), lifeMs: opts?.lifeMs ?? POPUP_LIFE_MS, baseOpacity });
+}
+
+/**
+ * T-044 (SPEC-0011): popup discreto de coleta — informativo, não polui.
+ * Texto curto, opacidade reduzida (~0.6), escala menor, fade mais rápido.
+ */
+function spawnCollectPopup(x: number, z: number, text: string, color: string) {
+  pushPopup(x, z, text, color, 14, { opacity: 0.62, scale: 0.78, lifeMs: 600 });
+}
+
+function spawnDamagePopup(x: number, z: number, damage: number, kill: boolean) {
+  // fonte cresce com o dano — golpe forte É visivelmente forte
+  const fontSize = Math.round(Math.min(46, 20 + damage * 0.6));
+  const color = kill ? "#ff5252" : damage >= 30 ? "#ffb300" : "#ffe082";
+  pushPopup(x, z, kill ? `${Math.round(damage)} ☠` : `${Math.round(damage)}`, color, fontSize);
+}
+
+/** SPEC-0010: "+X" verde de cura (kill em briga / hp_orb). */
+function spawnHealPopup(x: number, z: number, amount: number) {
+  pushPopup(x, z, `+${Math.round(amount)}`, "#66ff8a", Math.round(Math.min(40, 22 + amount * 0.4)));
 }
 
 function updateDamagePopups(now: number) {
   for (let i = damagePopups.length - 1; i >= 0; i--) {
     const p = damagePopups[i];
-    const age = (now - p.born) / POPUP_LIFE_MS;
+    const age = (now - p.born) / p.lifeMs; // T-044: lifeMs individual por popup
     if (age >= 1) {
       scene.remove(p.sprite);
       p.sprite.material.map?.dispose();
@@ -254,7 +606,8 @@ function updateDamagePopups(now: number) {
       continue;
     }
     p.sprite.position.y = 1.35 + age * 0.8; // sobe
-    p.sprite.material.opacity = 1 - age * age; // some no fim
+    // T-044: baseOpacity individual — popups de coleta já começam opacos reduzidos
+    p.sprite.material.opacity = p.baseOpacity * (1 - age * age);
   }
 }
 
@@ -280,11 +633,23 @@ function updateDebugState() {
 
   // Servidor
   rows.push(`<tr><td colspan="2" class="section">── SALA ──</td></tr>`);
-  rows.push(`<tr><td>mapa</td><td>${st?.mapW ?? "?"}×${st?.mapH ?? "?"} seed:${st?.mapSeed ?? "?"}</td></tr>`);
+  rows.push(
+    `<tr><td>mapa</td><td>${st?.mapW ?? "?"}×${st?.mapH ?? "?"} ${
+      st?.mapId ? `curado:${st.mapId}` : `seed:${st?.mapSeed ?? "?"}`
+    }</td></tr>`
+  );
   rows.push(`<tr><td>players</td><td>${st?.players?.size ?? 0}</td></tr>`);
   rows.push(`<tr><td>coletáveis</td><td>${st?.collectibles?.size ?? 0}</td></tr>`);
   rows.push(`<tr><td>projéteis</td><td>${st?.projectiles?.size ?? 0}</td></tr>`);
   rows.push(`<tr><td>ping</td><td>${ping < 0 ? "..." : ping + " ms"}</td></tr>`);
+  if (st?.flagEnabled && st?.flag) {
+    const flagLabel = st.flag.carrierId
+      ? `carregada por ${st.players?.get?.(st.flag.carrierId)?.name ?? st.flag.carrierId}`
+      : st.flag.state === "cooldown"
+      ? "cooldown (fora do mapa)"
+      : "livre (pegável)";
+    rows.push(`<tr><td>bandeira</td><td>${flagLabel}</td></tr>`);
+  }
 
   // Meu player
   if (me) {
@@ -292,7 +657,7 @@ function updateDebugState() {
     rows.push(`<tr><td>sessão</td><td>${mySessionId}</td></tr>`);
     rows.push(`<tr><td>pos</td><td>x:${me.x?.toFixed(2)} z:${me.z?.toFixed(2)}</td></tr>`);
     rows.push(`<tr><td>facing</td><td>${((me.dir ?? 0) * 180 / Math.PI).toFixed(0)}°</td></tr>`);
-    rows.push(`<tr><td>gatilho</td><td>${fireSources.size > 0 ? `ativo (${Array.from(fireSources).join(", ")})` : "inativo"}</td></tr>`);
+    rows.push(`<tr><td>gatilho</td><td>${lastIntent.fire ? `ativo (${profileManager.id})` : "inativo"}</td></tr>`);
     rows.push(`<tr><td>hp</td><td>${Math.ceil(me.hp)}/${me.maxHp} (vit:${me.vitality?.toFixed(2)})</td></tr>`);
     const shieldMs = Math.max(0, (me.spawnProtectedUntil ?? 0) - Date.now());
     rows.push(`<tr><td>escudo</td><td>${shieldMs > 0 ? `${(shieldMs / 1000).toFixed(1)}s` : "—"}</td></tr>`);
@@ -320,24 +685,42 @@ function updateDebugState() {
   debugStateEl.innerHTML = rows.join("");
 }
 
-// ---------- Input (teclado; touch no M1) ----------
-let announceUntil = 0;
-const keys = new Set<string>();
-// SPEC-0005 (correção): o facing NÃO é mais controlado pelo mouse. A direção/visão do player
-// deriva só do movimento (WASD) — o servidor calcula `dir` a partir de inputX/inputZ. Sem
-// mira do mouse, sem raycast por tick, sem `aim` na rede: mais simples e mais eficiente.
-// O mouse continua servindo só de gatilho (mousedown/up abaixo), não de direção.
+// ---------- Input por perfil de controle (ADR-015 / T-019 + T-019b) ----------
+// Todo perfil produz a MESMA intenção {move, aim, fire}; o servidor não muda (já aceita
+// aimX/aimZ opcional desde SPEC-0003). Mira/rotação é atributo do PERFIL, não uma regra
+// global — perfil novo é só uma classe nova em input/, zero mudança de rede.
+const crosshairEl = document.getElementById("crosshair")!;
+const profileButtons = document.querySelectorAll<HTMLButtonElement>("#profile-selector button");
 
-// T-010: gatilhos desacoplados da mira — cada fonte só liga/desliga um nome neste
-// set; "estou atirando" = algum gatilho ativo. Novo gatilho (gamepad/touch) = uma
-// entrada aqui, sem mudar o protocolo (`fire` continua sendo só um booleano).
-const fireSources = new Set<string>();
+const profileManager = new ProfileManager({
+  mouse: {
+    camera,
+    crosshairEl,
+    getPlayerPos: () => {
+      const st: any = room?.state;
+      const me = st?.players?.get?.(mySessionId);
+      return me ? { x: me.x, z: me.z } : null;
+    },
+  },
+  touch: {
+    moveBaseEl: document.getElementById("touch-move-base")!,
+    moveKnobEl: document.getElementById("touch-move-knob")!,
+    aimBaseEl: document.getElementById("touch-aim-base")!,
+    aimKnobEl: document.getElementById("touch-aim-knob")!,
+  },
+  onChange: (id) => {
+    profileButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.profile === id));
+  },
+});
+profileButtons.forEach((btn) => {
+  btn.addEventListener("click", () => profileManager.select(btn.dataset.profile as ProfileId));
+});
 
-addEventListener("mousedown", () => fireSources.add("mouse"));
-addEventListener("mouseup", () => fireSources.delete("mouse"));
-
+// Ações fora da intenção de jogo (debug, cards, reroll) continuam globais — não são
+// atributo de perfil de controle.
 addEventListener("keydown", (e) => {
   if (e.key === "F3") {
+    if (!IS_DEV) return; // T-023: overlay de debug não existe em build prod
     e.preventDefault();
     debugOpen = !debugOpen;
     debugOverlay.classList.toggle("active", debugOpen);
@@ -348,38 +731,30 @@ addEventListener("keydown", (e) => {
     }
     return;
   }
-  if (e.key === " ") {
-    e.preventDefault(); // espaço não deve rolar a página
-    fireSources.add("space");
-  }
   // T-016: 1/2/3 escolhem o card da oferta aberta (consome a tecla só se houver oferta)
   if (e.key === "1" || e.key === "2" || e.key === "3") {
     if (chooseUpgradeByIndex(Number(e.key) - 1)) return;
   }
-  keys.add(e.key.toLowerCase());
   if (e.key.toLowerCase() === "r") room?.send("reroll"); // T-004: coins compram reroll de atributo
-});
-addEventListener("keyup", (e) => {
-  keys.delete(e.key.toLowerCase());
-  if (e.key === " ") fireSources.delete("space");
+  if (e.key.toLowerCase() === "m") audio.toggleMuted(); // T-049: mute — UI dedicada vem no lobby (T-051/T-058)
 });
 
-let lastMoveFire = { x: 0, z: 0, fire: false };
+// Última intenção enviada; a câmera (followCamera) reusa o vetor de mira para o leve
+// offset (ADR-015) sem precisar chamar poll() de novo fora do tick de rede.
+let lastIntent: Intent = { moveX: 0, moveZ: 0, fire: false };
+
 function sendInput() {
-  const x = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
-  const z = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-  const fire = fireSources.size > 0;
-
-  // SPEC-0005 (correção): sem `aim` — o facing (Player.dir) é derivado pelo servidor a partir
-  // do movimento (inputX/inputZ). Parado, o servidor mantém o último dir (nunca zera). O tiro
-  // sai sempre na direção que o player está andando/olhando.
-  const moveFireChanged = x !== lastMoveFire.x || z !== lastMoveFire.z || fire !== lastMoveFire.fire;
-  const shouldSend = moveFireChanged || x !== 0 || z !== 0 || fire;
-  if (!shouldSend) return;
-
-  lastMoveFire = { x, z, fire };
-  const payload: { x: number; z: number; fire?: boolean } = { x, z };
-  if (fire) payload.fire = true;
+  const intent = profileManager.poll();
+  lastIntent = intent;
+  const payload: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean } = {
+    x: intent.moveX,
+    z: intent.moveZ,
+  };
+  if (typeof intent.aimX === "number" && typeof intent.aimZ === "number") {
+    payload.aimX = intent.aimX;
+    payload.aimZ = intent.aimZ;
+  }
+  if (intent.fire) payload.fire = true;
   room?.send("input", payload);
 }
 
@@ -395,7 +770,9 @@ function shortestAngleDiff(from: number, to: number): number {
 function syncWorld() {
   const st: any = room?.state;
   if (!st) return;
-  if (!worldBuilt && st.mapW > 0) buildWorld(st.mapW, st.mapH, st.mapSeed);
+  // T-024: mapa curado (st.mapId não-vazio) constrói só ao receber "map_data" (acima) —
+  // reconstruir aqui por seed daria um mapa ERRADO (mapFile não usa buildMap).
+  if (!worldBuilt && !st.mapId && st.mapW > 0) buildWorld(buildMap(st.mapW, st.mapH, st.mapSeed));
   if (!worldBuilt) return;
 
   const seenP = new Set<string>();
@@ -414,21 +791,163 @@ function syncWorld() {
     // dir do servidor segue a convenção atan2(z,x); rotation.y = -dir alinha o
     // "nariz" (local +X) com essa direção no mundo (ver visuals.ts).
     vis.rotation.y += shortestAngleDiff(vis.rotation.y, -(p.dir ?? 0)) * 0.25;
+
+    // T-045 (SPEC-0011): detecta (re)nascimento pelo salto de spawnProtectedUntil para
+    // um valor FUTURO novo. Esse campo é setado autoritativamente no servidor a cada spawn
+    // (onJoin + respawn); a mudança é o sinal mais confiável sem depender de posição.
+    {
+      const nowMs = Date.now();
+      const prevProtection = lastSpawnProtection.get(id) ?? 0;
+      const curProtection: number = p.spawnProtectedUntil ?? 0;
+      if (curProtection > nowMs && curProtection !== prevProtection) {
+        // É um spawn/respawn novo — inicia animação de materialização.
+        spawnAnim.set(id, { startedAt: performance.now(), durationMs: SPAWN_ANIM_MS });
+        vfx.spawnAt("spawn_materialize", vis.position.x, vis.position.z, 0.5);
+        // Para o próprio jogador: overlay de tela para eliminar o corte seco de câmera.
+        if (id === mySessionId) {
+          triggerSpawnFade();
+          audio.play("respawn_self"); // T-050: pessoal (join inicial ou respawn após morte)
+        }
+      }
+      lastSpawnProtection.set(id, curProtection);
+    }
+
+    // Aplica a animação de materialização se ainda estiver em andamento (scale-in + fade-in).
+    // Dirigida por timestamp — zero alocação por frame, sem tween lib.
+    {
+      const anim = spawnAnim.get(id);
+      if (anim) {
+        const age = performance.now() - anim.startedAt;
+        const frac = Math.min(1, age / anim.durationMs);
+        // scale-in: nasce pequeno (0.05) e cresce para 1.0 com ease-out quadrático.
+        const easedScale = 1 - (1 - frac) * (1 - frac);
+        vis.scale.setScalar(Math.max(0.05, easedScale));
+        if (frac >= 1) {
+          vis.scale.setScalar(1);
+          spawnAnim.delete(id);
+        }
+      } else {
+        // Garante que o scale fique em 1 quando não há animação ativa.
+        if (vis.scale.x !== 1) vis.scale.setScalar(1);
+      }
+    }
+
+    // T-054: animação procedural do boneco (idle/walk/shoot). A velocidade de passada vem do
+    // deslocamento RENDERIZADO do próprio grupo (posição da rede já suavizada no lerp acima) —
+    // não há campo de velocidade na rede. Durante a materialização (spawn/respawn) zera pra não
+    // brigar com o scale-in da T-045.
+    {
+      const av = vis.userData;
+      if (spawnAnim.has(id)) {
+        av.lastX = vis.position.x;
+        av.lastZ = vis.position.z;
+        av.moveSpeed = 0;
+      } else {
+        const lastX = av.lastX ?? vis.position.x;
+        const lastZ = av.lastZ ?? vis.position.z;
+        const step = Math.hypot(vis.position.x - lastX, vis.position.z - lastZ);
+        av.lastX = vis.position.x;
+        av.lastZ = vis.position.z;
+        const inst = Math.min(1, step / 0.09); // ~passada cheia perto do topo de velocidade
+        av.moveSpeed = (av.moveSpeed ?? 0) + (inst - (av.moveSpeed ?? 0)) * 0.25; // suaviza
+      }
+      updateCharacterAnimation(vis, t, av.moveSpeed ?? 0, performance.now());
+    }
+
     updatePowerVisual(vis, p.level ?? 1, t); // T-018: aro de poder por faixa de nível
-    updateShieldVisual(vis, (p.spawnProtectedUntil ?? 0) > Date.now(), t); // SPEC-0005: bolha de invuln
+    const shielded = (p.spawnProtectedUntil ?? 0) > Date.now();
+    updateShieldVisual(vis, shielded, t); // SPEC-0005: bolha de invuln
+    if (wasShielded.get(id) && !shielded) vfx.spawnAt("shield_pop", vis.position.x, vis.position.z); // T-022
+    wasShielded.set(id, shielded);
+    const carryingFlag = st.flagEnabled && st.flag?.carrierId === id;
+    updateFlagGlow(vis, carryingFlag, t); // T-021: glow do portador
+
+    // T-023: reveal-on-hit — inimigo é só skin até trocar dano (revealedUntil autoritativo).
+    if (id !== mySessionId) {
+      const revealed = (p.revealedUntil ?? 0) > Date.now();
+      updateNameplate(vis, revealed, p.name, p.level ?? 1, p.hp, p.maxHp);
+    }
+
+    // T-022: anel de buff esvaziando — 1 por vez (o mais recente aplicado).
+    const buff = buffApplied.get(id);
+    if (buff) {
+      const now = performance.now();
+      if (now >= buff.expiresAt) {
+        buffApplied.delete(id);
+        updateBuffCooldownRing(vis, null);
+      } else {
+        const total = BUFF_DURATION_MS[buff.kind] ?? 1;
+        updateBuffCooldownRing(vis, { kind: buff.kind, frac: (buff.expiresAt - now) / total });
+      }
+    } else {
+      updateBuffCooldownRing(vis, null);
+    }
+
+    // T-022 (backlog `speed_up_trail`): rastro periódico enquanto o buff está ativo —
+    // reusa o mesmo pool de partículas, sem mesh dedicado por jogador.
+    const fx: string[] = p.effects ? Array.from(p.effects) : [];
+    if (fx.includes("speed_up")) {
+      const last = lastTrailSpawn.get(id) ?? 0;
+      const now = performance.now();
+      if (now - last > 120) {
+        vfx.spawnAt("speed_up_trail", vis.position.x, vis.position.z, 0.15);
+        lastTrailSpawn.set(id, now);
+      }
+    }
+
+    // T-022 (backlog `flag_aura`): sparkle periódico no portador — glow (T-021) já cobre
+    // a leitura tática de longe, isto é só o "juice" de perto.
+    if (carryingFlag) {
+      const now = performance.now();
+      if (now - lastFlagAuraAt > 350) {
+        vfx.spawnAt("flag_aura", vis.position.x, vis.position.z, 1.4);
+        lastFlagAuraAt = now;
+      }
+    }
   });
   playerVisuals.forEach((vis, id) => {
     if (!seenP.has(id)) {
       scene.remove(vis);
       playerVisuals.delete(id);
+      buffApplied.delete(id);
+      wasShielded.delete(id);
+      lastTrailSpawn.delete(id);
+      lastSpawnProtection.delete(id); // T-045
+      spawnAnim.delete(id); // T-045
     }
   });
+
+  // T-021: bandeira — objeto único (não um MapSchema); toggle por room esconde/mostra.
+  if (st.flagEnabled && st.flag) {
+    if (!flagVisual) {
+      flagVisual = new THREE.Group();
+      // SPEC-0011 (T-041): o pano da bandeira-objetivo ganha material DEDICADO (clone) —
+      // assim o pulso emissivo/apagado não afeta as bandeiras decorativas das zonas de guerra.
+      propParts("bandeira").forEach((part) => {
+        const mat = (part.material as THREE.MeshLambertMaterial).clone();
+        const mesh = new THREE.Mesh(part.geometry, mat);
+        mesh.position.copy(part.offset);
+        // o segundo part é o pano (ver propParts) — guarda o material pra pulsar por frame
+        if (part.offset.y > 1) flagVisual!.userData.pano = mat;
+        flagVisual!.add(mesh);
+      });
+      scene.add(flagVisual);
+    }
+    flagVisual.position.x += (st.flag.x - flagVisual.position.x) * 0.25;
+    flagVisual.position.z += (st.flag.z - flagVisual.position.z) * 0.25;
+    // T-041: acesa (livre) / apagada (carregada) / some (cooldown).
+    const carried = !!st.flag.carrierId;
+    updateFlagGround(flagVisual, st.flag.state ?? "active", carried, t);
+  } else if (flagVisual) {
+    scene.remove(flagVisual);
+    flagVisual = undefined;
+  }
 
   const seenC = new Set<string>();
   st.collectibles?.forEach((c: any, id: string) => {
     seenC.add(id);
     if (!collectibleMeshes.has(id)) {
-      const mesh = createCollectibleVisual(c.kind);
+      const mesh = createCollectibleVisual(c.kind, c.weaponId); // T-039: weaponId distingue a arma
       mesh.position.set(c.x, 0.4, c.z);
       scene.add(mesh);
       collectibleMeshes.set(id, mesh);
@@ -446,31 +965,75 @@ function syncWorld() {
     seenProj.add(id);
     let mesh = projectileMeshes.get(id);
     if (!mesh) {
-      mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.3),
-        new THREE.MeshBasicMaterial({ color: 0xffaa00 })
-      );
+      // T-039/T-055: forma+cor+tamanho e muzzle por lançador (proj.launcherId vem do servidor).
+      const style = projStyleFor(proj.launcherId);
+      mesh = createArrowMesh(style);
       mesh.position.set(proj.x, 0.5, proj.z);
+      // T-054/T-055: o projétil nasce na posição do atirador (ownerId não é sincronizado) —
+      // atribui o disparo ao player mais próximo do ponto de spawn (heurística cosmética,
+      // tolerante a erro se dois players estiverem colados). O `dir` desse player É a direção
+      // real do disparo (servidor: dirX/dirZ = cos/sin(dir) no instante do tiro, ver
+      // projectiles.ts) — como o padrão de disparo é sempre "straight", orientar a flecha UMA
+      // vez na criação basta, sem recalcular por frame.
+      let shooterId: string | undefined;
+      let bestD = 1.6 * 1.6;
+      st.players.forEach((pl: any, pid: string) => {
+        const dx = pl.x - proj.x;
+        const dz = pl.z - proj.z;
+        const d = dx * dx + dz * dz;
+        if (d < bestD) {
+          bestD = d;
+          shooterId = pid;
+        }
+      });
+      const shooterDir = shooterId ? st.players.get(shooterId)?.dir ?? 0 : 0;
+      mesh.rotation.y = -shooterDir; // mesma convenção de facing dos personagens (syncWorld)
       scene.add(mesh);
       projectileMeshes.set(id, mesh);
+      vfx.spawnAt(style.muzzle, proj.x, proj.z); // T-022/T-039: muzzle no cano (leve p/ basic, rico p/ vantajosos)
+      audio.play(style.sound, proj.x, proj.z); // T-050: fire distinto por launcher, posicional (T-051)
+      const shooterVis = shooterId ? playerVisuals.get(shooterId) : undefined;
+      if (shooterVis) triggerCharacterShoot(shooterVis, performance.now());
     }
     mesh.position.x += (proj.x - mesh.position.x) * 0.5;
     mesh.position.z += (proj.z - mesh.position.z) * 0.5;
+    // T-055: rastro leve em voo — só o lançador que define `style.trail` (hoje, só heavy_shot).
+    const style = projStyleFor(proj.launcherId);
+    if (style.trail) {
+      const last = lastArrowTrailAt.get(id) ?? 0;
+      const now = performance.now();
+      if (now - last > 90) {
+        vfx.spawnAt(style.trail, mesh.position.x, mesh.position.z, 0.5);
+        lastArrowTrailAt.set(id, now);
+      }
+    }
   });
   projectileMeshes.forEach((mesh, id) => {
     if (!seenProj.has(id)) {
       scene.remove(mesh);
       projectileMeshes.delete(id);
+      lastArrowTrailAt.delete(id);
     }
   });
 }
 
 // câmera segue o jogador suavemente
+const CAMERA_AIM_OFFSET = 2.5; // ADR-015: leve deslocamento do alvo na direção da mira, sem girar a câmera
 function followCamera() {
   const me = playerVisuals.get(mySessionId);
   if (!me) return;
-  const tx = me.position.x;
-  const tz = me.position.z;
+  let offsetX = 0;
+  let offsetZ = 0;
+  const { aimX, aimZ } = lastIntent;
+  if (typeof aimX === "number" && typeof aimZ === "number") {
+    const len = Math.hypot(aimX, aimZ);
+    if (len > 1e-3) {
+      offsetX = (aimX / len) * CAMERA_AIM_OFFSET;
+      offsetZ = (aimZ / len) * CAMERA_AIM_OFFSET;
+    }
+  }
+  const tx = me.position.x + offsetX;
+  const tz = me.position.z + offsetZ;
   camera.position.x += (tx - camera.position.x) * 0.06;
   camera.position.z += (tz + 8 - camera.position.z) * 0.06;
   camera.position.y += (15 - camera.position.y) * 0.06;
@@ -482,7 +1045,8 @@ initHud({
   getRoom: () => room,
   getSessionId: () => mySessionId,
   getPing: () => ping,
-  getAnnounceUntil: () => announceUntil,
+  getProfileId: () => profileManager.id,
+  playSound: (name) => audio.play(name),
 });
 
 // ---------- Loop ----------
@@ -493,11 +1057,13 @@ function animate() {
   t += 0.05;
   syncWorld();
   followCamera();
+  audio.setListenerPosition(camera.position.x, camera.position.z); // T-051: câmera nunca gira, pan = X do mundo
   collectibleMeshes.forEach((mesh) => {
     mesh.position.y = 0.4 + Math.sin(t) * 0.08;
     mesh.rotation.y += 0.02;
   });
   updateDamagePopups(performance.now()); // T-018
+  vfx.update(performance.now()); // T-022
   updateHud(performance.now());
   // Atualiza painel de debug a ~10fps para não sobrecarregar DOM
   if (debugOpen && ++debugTick % 2 === 0) updateDebugState();
