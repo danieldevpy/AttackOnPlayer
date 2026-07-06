@@ -87,7 +87,8 @@ import {
 import { ArraySchema } from "@colyseus/schema";
 import { loadMap } from "../mapLoader";
 import { TelemetryLog } from "../telemetry/log";
-import { TELEMETRY_SCHEMA_VERSION } from "../telemetry/events";
+import { TelemetryEvent, TELEMETRY_SCHEMA_VERSION } from "../telemetry/events";
+import { platformClient, EffectiveConfig } from "../platform/platformClient";
 
 // T-026 (SPEC-0008): limiar do watchdog de tick — 2x o intervalo nominal (TICK_RATE=20 ⇒ 50ms).
 // É um número de observabilidade (detecta o servidor "engasgando" sob carga), não de gameplay —
@@ -144,6 +145,11 @@ export class ArenaRoom extends Room<ArenaState> {
   private totalJoins = 0;
   private joinedAtMap = new Map<string, number>();
 
+  // T-027g (SPEC-0008): multiplicadores da config de plataforma — 1 (neutro) enquanto
+  // `PLATFORM_ENABLED` está off, então o comportamento de sempre não muda.
+  private xpMultiplier = 1;
+  private coinMultiplier = 1;
+
   private telemetryBase() {
     return {
       v: TELEMETRY_SCHEMA_VERSION as typeof TELEMETRY_SCHEMA_VERSION,
@@ -154,14 +160,34 @@ export class ArenaRoom extends Room<ArenaState> {
     };
   }
 
-  onCreate(options?: { expectedPlayers?: number; flagEnabled?: boolean; mapId?: string }) {
+  /** Grava o evento local (NDJSON, sempre) e, se a plataforma estiver ligada, enfileira para
+   * batch (T-027g) — a fonte local nunca depende do Django estar no ar. */
+  private emitTelemetry(event: TelemetryEvent) {
+    this.telemetry.write(event);
+    if (process.env.PLATFORM_ENABLED === "1") platformClient.queueTelemetry(event);
+  }
+
+  async onCreate(options?: { expectedPlayers?: number; flagEnabled?: boolean; mapId?: string }) {
     this.setState(new ArenaState());
 
-    // T-024 (SPEC-0007): mapId presente = mapa curado (arquivo versionado); ausente = o
-    // caminho original por seed (ADR-007), preservado tal e qual para não quebrar nada
-    // que já dependa dele (bots de teste, gates automáticos).
-    if (options?.mapId) {
-      const { file, map } = loadMap(options.mapId);
+    // T-027g (SPEC-0008): config da plataforma só entra em jogo atrás da flag — off por
+    // default, então nenhum teste/smoke atual muda de comportamento. platformClient já
+    // degrada sozinho (cache/defaults) se o Django estiver fora do ar (aceite #3).
+    let platformConfig: EffectiveConfig | null = null;
+    if (process.env.PLATFORM_ENABLED === "1") {
+      platformConfig = await platformClient.getConfig();
+      this.xpMultiplier = platformConfig.xpMultiplier;
+      this.coinMultiplier = platformConfig.coinMultiplier;
+    }
+    const rotation = platformConfig?.mapRotation ?? [];
+    const resolvedMapId =
+      options?.mapId ?? (rotation.length > 0 ? rotation[Math.floor(Math.random() * rotation.length)] : undefined);
+
+    // T-024 (SPEC-0007): mapId presente (explícito ou sorteado da rotação da plataforma) =
+    // mapa curado (arquivo versionado); ausente = o caminho original por seed (ADR-007),
+    // preservado tal e qual para não quebrar nada que já dependa dele (bots de teste, gates).
+    if (resolvedMapId) {
+      const { file, map } = loadMap(resolvedMapId);
       this.map = map;
       this.curatedMapFile = file;
       this.curatedSpawns = file.spawns;
@@ -173,7 +199,7 @@ export class ArenaRoom extends Room<ArenaState> {
       this.flagCenter = file.flag;
     } else {
       // ADR-007: tamanho decidido AQUI e nunca mais (mínimo 5x o base)
-      const size = mapSizeFor(Number(options?.expectedPlayers) || 4);
+      const size = mapSizeFor(Number(options?.expectedPlayers ?? platformConfig?.expectedPlayers) || 4);
       const seed = (Date.now() % 2147483647) | 0;
       this.map = buildMap(size.w, size.h, seed);
       this.state.mapW = size.w;
@@ -195,7 +221,7 @@ export class ArenaRoom extends Room<ArenaState> {
     // é ajustada para a célula walkable ALCANÇÁVEL mais próxima — reusa o `reachable` já
     // pré-computado acima (BFS de um spawn de player).
     this.flagSystem.setSettle((x, z) => nearestReachableCell(this.map, x, z, this.reachable));
-    this.state.flagEnabled = options?.flagEnabled ?? true;
+    this.state.flagEnabled = options?.flagEnabled ?? platformConfig?.flagEnabled ?? true;
     this.flagSystem.initAt(this.state.flag, this.flagCenter.x, this.flagCenter.z);
 
     activeRooms.set(this.roomId, this);
@@ -203,7 +229,7 @@ export class ArenaRoom extends Room<ArenaState> {
     // T-026: telemetria por partida — 1 arquivo NDJSON por roomId.
     this.telemetry = new TelemetryLog(this.roomId);
     this.matchStartedAt = Date.now();
-    this.telemetry.write({
+    this.emitTelemetry({
       ...this.telemetryBase(),
       type: "match_start",
       mapW: this.state.mapW,
@@ -322,7 +348,7 @@ export class ArenaRoom extends Room<ArenaState> {
       this.emitDebug("disconnect", { playerId: client.sessionId });
       this.metrics.end(client.sessionId, p.level);
       const joinedAt = this.joinedAtMap.get(client.sessionId) ?? Date.now();
-      this.telemetry.write({
+      this.emitTelemetry({
         ...this.telemetryBase(),
         type: "quit",
         playerToken: p.playerToken,
@@ -343,7 +369,7 @@ export class ArenaRoom extends Room<ArenaState> {
 
   onDispose() {
     activeRooms.delete(this.roomId);
-    this.telemetry.write({
+    this.emitTelemetry({
       ...this.telemetryBase(),
       type: "match_end",
       durationS: Math.round((Date.now() - this.matchStartedAt) / 100) / 10,
@@ -361,14 +387,14 @@ export class ArenaRoom extends Room<ArenaState> {
     this.tickCount += 1;
     const dtMs = dt * 1000;
     if (dtMs > TICK_WATCHDOG_MS) {
-      this.telemetry.write({ ...this.telemetryBase(), type: "tick_slow", dtMs, thresholdMs: TICK_WATCHDOG_MS });
+      this.emitTelemetry({ ...this.telemetryBase(), type: "tick_slow", dtMs, thresholdMs: TICK_WATCHDOG_MS });
     }
     try {
       this.updateInner(dt);
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
       console.error("[arena] erro no tick:", e);
-      this.telemetry.write({
+      this.emitTelemetry({
         ...this.telemetryBase(),
         type: "error",
         context: "update",
@@ -438,7 +464,7 @@ export class ArenaRoom extends Room<ArenaState> {
         // de XP (progressão); briga (≥1) → cura % da vida FALTANTE, escalando com o nº de
         // inimigos até um teto, sem overheal. Anti-snowball: cura só onde havia risco real.
         const threats = this.countLivingEnemiesNear(hit.killerId, hit.targetId, killer.x, killer.z);
-        this.telemetry.write({
+        this.emitTelemetry({
           ...this.telemetryBase(),
           type: "kill",
           killerToken: killer.playerToken,
@@ -477,7 +503,7 @@ export class ArenaRoom extends Room<ArenaState> {
         if (this.state.flagEnabled && this.state.flag.carrierId === id) {
           this.flagSystem.drop(this.state.flag, p.x, p.z, now);
           this.emitDebug("flag_drop", { playerId: id, reason: "death" });
-          this.telemetry.write({
+          this.emitTelemetry({
             ...this.telemetryBase(),
             type: "flag_possession",
             playerToken: p.playerToken,
@@ -563,7 +589,7 @@ export class ArenaRoom extends Room<ArenaState> {
           if (Math.hypot(p.x - this.state.flag.x, p.z - this.state.flag.z) < FLAG_PICKUP_DIST) {
             this.flagSystem.pickup(this.state.flag, id);
             this.emitDebug("flag_pickup", { playerId: id });
-            this.telemetry.write({
+            this.emitTelemetry({
               ...this.telemetryBase(),
               type: "flag_possession",
               playerToken: p.playerToken,
@@ -588,7 +614,7 @@ export class ArenaRoom extends Room<ArenaState> {
             this.effects.apply(pid, p, "speed_up", now);
             break;
           case "coin_buff":
-            p.coins += COIN_BUFF_AMOUNT;
+            p.coins += Math.round(COIN_BUFF_AMOUNT * this.coinMultiplier);
             break;
           case "farm_event":
             this.effects.apply(pid, p, "xp_boost", now);
@@ -817,7 +843,7 @@ export class ArenaRoom extends Room<ArenaState> {
 
   /** XP → nível → oferta de cards (T-003/T-016). Loop cobre XP suficiente p/ vários níveis de uma vez. */
   private grantXp(id: string, p: Player, amount: number) {
-    p.xp += amount * p.xpMult; // xp_boost (farm_event) dobra o ganho — T-004
+    p.xp += amount * p.xpMult * this.xpMultiplier; // xp_boost (farm_event) dobra o ganho — T-004
 
     while (p.xp >= xpToNext(p.level)) {
       p.xp -= xpToNext(p.level);
@@ -850,7 +876,7 @@ export class ArenaRoom extends Room<ArenaState> {
       cards: pending.cards,
       timeoutMs: UPGRADE_CHOICE_TIMEOUT_MS,
     });
-    this.telemetry.write({
+    this.emitTelemetry({
       ...this.telemetryBase(),
       type: "upgrade_offer",
       playerToken: p.playerToken,
@@ -913,7 +939,7 @@ export class ArenaRoom extends Room<ArenaState> {
       level,
       auto: cardId === null,
     });
-    this.telemetry.write({
+    this.emitTelemetry({
       ...this.telemetryBase(),
       type: "upgrade_choice",
       playerToken: p.playerToken,
