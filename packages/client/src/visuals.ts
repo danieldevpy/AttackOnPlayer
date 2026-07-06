@@ -2,9 +2,11 @@
 // Fases: 1 primitivas | 2 composição | 3 sprites 3D | 4 low-poly
 // Guia completo: instrucoes/FASES_VISUAIS.md
 import * as THREE from "three";
-import { POWER_BAND_MID, POWER_BAND_HIGH } from "@aop/shared";
+import { POWER_BAND_MID, POWER_BAND_HIGH, DEFAULT_CLASS_ID, CLASS_REGISTRY } from "@aop/shared";
+import { createCharacterVisual } from "./characters";
 
-export const VISUAL_PHASE: 1 | 2 | 3 | 4 = 1;
+// T-053 (SPEC-0014): personagens sobem de F1 (cápsula) para F2 (composição procedural).
+export const VISUAL_PHASE: 1 | 2 | 3 | 4 = 2;
 
 const playerGeo = new THREE.CapsuleGeometry(0.35, 0.5, 4, 8);
 const ringGeo = new THREE.RingGeometry(0.45, 0.58, 24);
@@ -117,13 +119,28 @@ export function colorFor(id: string): number {
 export function createPlayerVisual(id: string, isSelf: boolean): THREE.Group {
   const group = new THREE.Group();
 
-  // F1: cápsula. (F2: compor corpo+cabeça+mãos aqui. F3: THREE.Sprite. F4: GLTF.)
-  const body = new THREE.Mesh(
-    playerGeo,
-    new THREE.MeshLambertMaterial({ color: isSelf ? 0x42a5f5 : colorFor(id) })
-  );
-  body.position.y = 0.6;
-  group.add(body);
+  // F2 (T-053): boneco procedural da classe. O ANEL (abaixo) continua sendo o sinal de
+  // aliado/inimigo (SPEC-0002) e a leitura de facing vem do próprio modelo (arco à frente),
+  // então o "nariz" placeholder só existe na F1. Classe/skin default por enquanto — a
+  // seleção no join (T-059) passará os valores da rede quando chegar.
+  // (F3: THREE.Sprite. F4: GLTF.)
+  if (VISUAL_PHASE >= 2) {
+    const skinId = CLASS_REGISTRY[DEFAULT_CLASS_ID].skinIds[0];
+    group.add(createCharacterVisual(DEFAULT_CLASS_ID, skinId));
+  } else {
+    // F1: cápsula + "nariz" de facing.
+    const body = new THREE.Mesh(
+      playerGeo,
+      new THREE.MeshLambertMaterial({ color: isSelf ? 0x42a5f5 : colorFor(id) })
+    );
+    body.position.y = 0.6;
+    group.add(body);
+
+    const nose = new THREE.Mesh(noseGeo, noseMat);
+    nose.rotation.z = -Math.PI / 2; // aponta para +X local, mesma convenção do dir (atan2(z,x))
+    nose.position.set(0.65, 0.65, 0);
+    group.add(nose);
+  }
 
   const ring = new THREE.Mesh(
     ringGeo,
@@ -137,13 +154,6 @@ export function createPlayerVisual(id: string, isSelf: boolean): THREE.Group {
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.02;
   group.add(ring);
-
-  // T-011: "nariz" — para onde o grupo aponta é o facing (dir). Gira com o grupo
-  // inteiro; nenhuma arte ainda (ADR-003), só deixa a rotação legível.
-  const nose = new THREE.Mesh(noseGeo, noseMat);
-  nose.rotation.z = -Math.PI / 2; // aponta para +X local, mesma convenção do dir (atan2(z,x))
-  nose.position.set(0.65, 0.65, 0);
-  group.add(nose);
 
   return group;
 }

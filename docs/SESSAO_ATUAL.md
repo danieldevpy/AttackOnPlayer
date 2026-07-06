@@ -19,9 +19,16 @@ T-050/T-051 ✅). Ver `docs/DEVLOG.md` (Sessão 29) e `docs/prompts/PROMPT-0046.
 `packages/shared/src/classes.ts` (`ClassDef`/`CLASS_REGISTRY` só `archer`/
 `resolveClassSelection`), `Player.classId`/`skinId` no schema, join valida (inválido/ausente ⇒
 default, nunca rejeita). 12 testes novos, shared 38/38 · server 80/80 · tsc ×3 limpo. Ver
-`docs/DEVLOG.md` (Sessão 30) e `docs/prompts/PROMPT-0047.md`. Outras frentes (T-053+
-Personagens visual, T-060 Backend) podem estar em andamento em paralelo por outros agentes —
-conferir BACKLOG antes de assumir status.
+`docs/DEVLOG.md` (Sessão 30) e `docs/prompts/PROMPT-0047.md`.
+**Sessão 31 (agente worker, Frente C): T-053 — Arqueiro low poly procedural (F2)** entregue:
+`packages/client/src/characters.ts` novo (`createCharacterVisual` — 8 partes nomeadas,
+`flatShading`, geometrias singleton + materiais em cache por classe/skin), `visuals.ts`
+`VISUAL_PHASE` 1→2 e `createPlayerVisual` bifurca F1/F2. tsc client+server limpo · vite build OK
+· shared 38/38 · bots 9×120 sem regressão. Draw calls (análise): 9/player, ~90 com 10 players
+(<200). Screenshot/F3 pro CD **pendente** — preview roda oculto (rAF pausado, ver avisos). Ver
+`docs/DEVLOG.md` (Sessão 31) e `docs/prompts/PROMPT-0048.md`. Outras frentes (T-054+ animação,
+T-060 Backend) podem estar em andamento em paralelo por outros agentes — conferir BACKLOG antes
+de assumir status.
 
 ---
 
@@ -43,6 +50,12 @@ conferir BACKLOG antes de assumir status.
   normalmente durante a verificação da T-028c. Se voltar a falhar, investigar de novo antes de
   assumir que é preciso um browser real. Tela cheia de fato e o diálogo nativo do `beforeunload`
   (T-048) continuam exigindo gesto real de usuário — esses dois ainda pendem de confirmação do CD.
+  - **Ressalva (Sessão 31, T-053):** na sessão de preview usada para verificar o T-053 a janela
+    veio **oculta** (`document.hidden === true`, `visibilityState === "hidden"`), com o
+    `requestAnimationFrame` **pausado** (0 frames em 800 ms) — o WebGL não pinta, então
+    `preview_screenshot` dá timeout e `renderer.info` (draw calls) fica congelado no 1º frame.
+    Ou seja: **depende do estado da janela do preview**. Para captura visual / medição de draw
+    calls confiável, garantir a janela visível/focada ou rodar `dev:client` num browser real.
 - **`location.reload()`/atribuir a mesma URL a `location.href` via `preview_eval` não recarregam
   a página** neste ambiente — o JS antigo continua rodando (mesma sessão Colyseus, mesmo estado).
   Pra testar fluxo de "carga inicial" de verdade, ou usar um browser fora do preview, ou validar
@@ -94,9 +107,11 @@ ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
    (lobby) a partir da proposal (modelo barato, ver GUIA_MODELOS_CLAUDE.md). SPEC-0013 ainda
    não existe como arquivo — T-049 seguiu direto pela descrição do BACKLOG.
 2. **Frente S (Som) fechada:** T-049 ✅ · T-050 ✅ · T-051 ✅ (Sessões 28/29).
-3. **Frente C (Personagens):** T-052 ✅ (Sessão 30 — contrato `ClassDef`/`CLASS_REGISTRY` +
-   schema + join). Próxima: **T-053** (visual procedural do arqueiro, depende de T-052 ✅) ·
-   **T-060** (KDA/ranking) seguem paralelizáveis. Lobby (T-057+) só depois de T-053 e T-061.
+3. **Frente C (Personagens):** T-052 ✅ (Sessão 30 — contrato) · T-053 ✅ (Sessão 31 — visual
+   procedural do arqueiro em F2, `characters.ts`). Próximas: **T-054** (animação procedural,
+   consome as partes nomeadas de `characters.ts`) · **T-055** (projéteis/flecha) · **T-056**
+   (skins por paleta) — todas dependem de T-053 ✅. **T-060** (KDA/ranking) paralelizável.
+   Lobby (T-057+, reusa `createCharacterVisual` no preview) só depois de T-053 ✅ e T-061.
 
 **F4 — Plataforma (SPEC-0008), continuação:**
 1. **T-029** 〔P〕 — ADR-012 liga na conta: a progressão persistente (acumulador da box, hoje

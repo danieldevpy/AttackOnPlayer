@@ -1,5 +1,32 @@
 # Devlog
 
+## 2026-07-06 — Sessão 31: T-053 (SPEC-0014) — Arqueiro low poly procedural (F2)
+- **Task (agente worker, Frente C — Personagens/classe/skin, client):** `packages/client/src/
+  characters.ts` novo — `createCharacterVisual(classId, skinId)` retorna `THREE.Group` do
+  arqueiro procedural (8 partes nomeadas: `legL`/`legR`/`body`/`armL`/`armR`/`head`/`hood`/
+  `bow`), `MeshStandardMaterial flatShading`, geometrias singleton de módulo e materiais
+  memoizados por `classId:skinId` (`materialsFor`) — N players da mesma classe reusam o mesmo
+  conjunto. Cor vem do `baseTint` da classe (T-052); `skinId` já na chave do cache (pronto pra
+  T-056).
+- **Ponto de troca (ADR-008):** `visuals.ts` `VISUAL_PHASE` 1 → **2**; `createPlayerVisual`
+  bifurca — F2 monta o personagem + anel de aliado/inimigo; F1 mantém cápsula + "nariz". Como o
+  modelo já dá o facing (arco à frente, +X local, mesma convenção do `dir` da rede), o nariz
+  placeholder passa a existir só na F1.
+- **Escopo:** não mexi na assinatura `createPlayerVisual(id, isSelf)` nem em `main.ts` — usa
+  `DEFAULT_CLASS_ID` + skin default; ligar classe/skin da rede (`Player.classId`) é a T-059.
+  Animação procedural (T-054) e projéteis/skins (T-055/T-056) ficam pras próprias tasks; os
+  nomes de partes são o contrato que a T-054 vai consumir.
+- **Verificado:** tsc limpo client+server · `vite build` OK · shared 38/38 · smoke `npm run
+  bots -- 9 120` (9 bots entram sem regressão do schema classId). **Draw calls (análise
+  determinística):** 9/player em F2 (8 meshes + anel) vs 3 em F1 → 90 base com 10 players,
+  < 200 com chão/props/coletáveis. `npm run aci -- index` ao final. Detalhes: `docs/prompts/
+  PROMPT-0048.md`.
+- **Limitação de verificação:** screenshot pro CD e medição empírica de draw calls no F3 NÃO
+  rodaram no harness de preview — janela **oculta** (`document.hidden`), `requestAnimationFrame`
+  pausado (0 frames/800 ms), WebGL não pinta (screenshot dá timeout). Cliente compila/empacota/
+  conecta/inicializa canvas sem erro; captura visual e F3 pedem sessão GPU visível (rodar
+  `dev:server` + `dev:client` + bots localmente). Registrado no PROMPT-0048.
+
 ## 2026-07-06 — Sessão 30: T-052 (SPEC-0014) — Registry de classes (contrato)
 - **Task (agente worker, Frente C — Personagens/classe/skin, shared+server):**
   `packages/shared/src/classes.ts` novo — `ClassDef { id, launcherIds, baseTint, skinIds }`,
