@@ -29,6 +29,7 @@ export class Player extends Schema {
   inputX = 0;
   inputZ = 0;
   playerToken = ""; // T-004b: ADR-012
+  accountId = ""; // T-028b: sub do JWT verificado (conta) — "" = guest; nunca poder in-round
   firing = false; // T-010: gatilho — direção do tiro vem de `dir` (facing), não do input
   lastFireAt = 0; // T-005
 }

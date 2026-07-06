@@ -89,6 +89,7 @@ import { loadMap } from "../mapLoader";
 import { TelemetryLog } from "../telemetry/log";
 import { TelemetryEvent, TELEMETRY_SCHEMA_VERSION } from "../telemetry/events";
 import { platformClient, EffectiveConfig } from "../platform/platformClient";
+import { verifyAccountToken } from "../platform/authVerifier";
 
 // T-026 (SPEC-0008): limiar do watchdog de tick — 2x o intervalo nominal (TICK_RATE=20 ⇒ 50ms).
 // É um número de observabilidade (detecta o servidor "engasgando" sob carga), não de gameplay —
@@ -303,11 +304,26 @@ export class ArenaRoom extends Room<ArenaState> {
     );
   }
 
-  onJoin(client: Client, options: { name?: string; bot?: boolean; token?: string; boss?: boolean }) {
+  async onJoin(
+    client: Client,
+    options: { name?: string; bot?: boolean; token?: string; boss?: boolean; authToken?: string }
+  ) {
     const p = new Player();
     p.name = String(options?.name ?? "player").slice(0, 16);
     p.isBot = Boolean(options?.bot);
     p.playerToken = options?.token || `bot_${client.sessionId}`;
+
+    // T-028b (SPEC-0008): authToken é opcional — ausente/inválido/expirado cai para guest sem
+    // rejeitar o join (join nunca falha por causa de auth). Atrás de PLATFORM_ENABLED, como o
+    // resto da integração com a plataforma (T-027g) — off por default, zero mudança de
+    // comportamento nos testes/smoke atuais.
+    if (process.env.PLATFORM_ENABLED === "1" && options?.authToken) {
+      const claims = await verifyAccountToken(options.authToken);
+      if (claims && !claims.isGuest) {
+        p.accountId = claims.sub;
+        p.name = claims.displayName.slice(0, 16);
+      }
+    }
     // T-024: mapa curado traz seus próprios spawns; sem mapId, mantém os 8 cantos/meios-de-borda de sempre.
     const spawns = this.curatedSpawns ?? spawnPoints(this.map.w, this.map.h);
     const spawn = spawns[this.state.players.size % spawns.length];
