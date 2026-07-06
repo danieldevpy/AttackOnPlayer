@@ -22,6 +22,7 @@ import { createVfxSystem } from "./vfx";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
 import { initImmersion, setUnloadGuard } from "./immersion";
+import { initAuth, getAuthToken } from "./auth";
 
 // T-048 (SPEC-0012): blindagem contra ações do navegador (menu de contexto, zoom, seleção
 // de texto, etc.) — sempre ativa, independente de perfil de controle ou conexão.
@@ -289,11 +290,16 @@ if (!playerToken) {
   localStorage.setItem("aop_token", playerToken);
 }
 
+// T-028c (SPEC-0008): janela discreta de login/registro — guest continua o default. Só
+// depois do token local existir, pra poder registrar o guest no Django (best-effort).
+initAuth();
+
 async function connect() {
   try {
     room = await client.joinOrCreate(ROOM_NAME, {
       name: `web-${Math.floor(Math.random() * 999)}`,
-      token: playerToken
+      token: playerToken,
+      authToken: getAuthToken() ?? undefined
     });
     mySessionId = room.sessionId;
     // T-048 (SPEC-0012): partida em andamento pede confirmação antes de fechar/recarregar a aba.
