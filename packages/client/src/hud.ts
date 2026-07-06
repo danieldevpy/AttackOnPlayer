@@ -9,6 +9,9 @@ export interface HudCtx {
   getSessionId(): string;
   getPing(): number;
   getProfileId(): string;
+  /** T-050 (SPEC-0013): toca um som do AUDIO_REGISTRY — hud.ts não importa audio.ts direto
+   * pra não duplicar o singleton; main.ts injeta `audio.play`. */
+  playSound(name: string): void;
 }
 
 // Dica de controles por perfil ativo (ADR-015/T-019b) — o HUD só reflete o perfil.
@@ -171,7 +174,10 @@ export function onCombatEvent(ev: { type: string; payload: any }, myId: string) 
   if (!myId) return;
   if (ev.type === "hit" && ev.payload?.isKill && ev.payload.shooterId === myId) {
     streak += 1;
-    if (streak >= 2) pushToast(`🔥 ${streak} kills sem morrer!`); // T-023: toast, não mais texto cru
+    if (streak >= 2) {
+      pushToast(`🔥 ${streak} kills sem morrer!`); // T-023: toast, não mais texto cru
+      ctx.playSound("streak"); // T-050
+    }
   } else if (ev.type === "death" && ev.payload?.playerId === myId) {
     streak = 0;
   }

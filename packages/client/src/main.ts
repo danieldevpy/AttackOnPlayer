@@ -206,22 +206,26 @@ interface ProjStyle {
   geo: THREE.SphereGeometry;
   mat: THREE.MeshBasicMaterial;
   muzzle: string; // entrada em VFX_DEFS disparada no nascimento do projétil
+  sound: string; // T-050: entrada em AUDIO_REGISTRY — fire distinto por launcher
 }
 const projStyles: Record<string, ProjStyle> = {
   basic_shot: {
     geo: new THREE.SphereGeometry(0.22), // acompanha o sceneryRadius fino da T-038
     mat: new THREE.MeshBasicMaterial({ color: 0xffaa00 }),
     muzzle: "muzzle_flash",
+    sound: "fire_basic",
   },
   heavy_shot: {
     geo: new THREE.SphereGeometry(0.34), // bala pesada, bem visível
     mat: new THREE.MeshBasicMaterial({ color: 0xff6d00 }),
     muzzle: "muzzle_heavy",
+    sound: "fire_heavy",
   },
   rapid_shot: {
     geo: new THREE.SphereGeometry(0.2), // pequena e ágil
     mat: new THREE.MeshBasicMaterial({ color: 0x40c4ff }),
     muzzle: "muzzle_rapid",
+    sound: "fire_rapid",
   },
 };
 function projStyleFor(launcherId: string): ProjStyle {
@@ -313,7 +317,10 @@ async function connect() {
     room.onError(() => setUnloadGuard(false));
     room.onMessage("pong", (t: number) => (ping = Math.round(performance.now() - t)));
     room.onMessage("announce", (msg: { kind: string }) => {
-      if (msg.kind === "farm_event") pushToast("🔥 farm_event na zona de guerra!"); // T-023: toast, não mais texto cru
+      if (msg.kind === "farm_event") {
+        pushToast("🔥 farm_event na zona de guerra!"); // T-023: toast, não mais texto cru
+        audio.play("farm_event_announce"); // T-050: broadcast de sala, sem posição própria
+      }
     });
     room.onMessage("debug_event", (ev: any) => {
       pushDebugEvent(ev);
@@ -352,14 +359,20 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
       spawnDamagePopup(vis.position.x, vis.position.z, ev.payload.damage, ev.payload.isKill === true);
       vfx.spawnAt("hit_spark", vis.position.x, vis.position.z);
       vfx.spawnAt("blood_hit", vis.position.x, vis.position.z);
-      audio.play("hit"); // T-049: som de teste — mapeamento completo é T-050
     }
+    // T-050: hit dado/recebido — pessoal (só o próprio jogador ouve, senão o combate dos
+    // bots ao redor vira ruído contínuo). "Recebido" pesa mais que "dado" (regra de risco real).
+    if (ev.payload.victimId === mySessionId) audio.play("hit_taken");
+    else if (ev.payload.shooterId === mySessionId) audio.play("hit_given");
+    if (ev.payload.isKill && ev.payload.shooterId === mySessionId) audio.play("kill");
   }
   // T-022: registry de VFX — cada efeito nasce de um evento que o servidor já emite.
   if (ev.type === "death") {
     const vis = playerVisuals.get(ev.payload.playerId);
     if (vis) vfx.spawnAt("death_burst", vis.position.x, vis.position.z);
-    audio.play("death"); // T-049: som de teste — mapeamento completo é T-050
+    // T-050: própria morte é dramática/pessoal; morte alheia é ambiente, posicional (T-051).
+    if (ev.payload.playerId === mySessionId) audio.play("death_self");
+    else if (vis) audio.play("death_other", vis.position.x, vis.position.z);
   } else if (ev.type === "kill_heal") {
     // SPEC-0010: cura por abate em briga — feedback verde ("+X") + partículas no matador.
     const vis = playerVisuals.get(ev.payload.playerId);
@@ -370,6 +383,22 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
   } else if (ev.type === "pickup") {
     const vis = playerVisuals.get(ev.payload.playerId);
     if (vis) vfx.spawnAt("pickup_glint", vis.position.x, vis.position.z);
+    // T-050: coleta por kind — pessoal (só o coletor ouve; farm de XP de vários bots ao
+    // mesmo tempo não pode virar ruído contínuo). weapon é "priority" (dedicado no registry).
+    if (ev.payload.playerId === mySessionId) {
+      const pickupSound: Record<string, string> = {
+        xp_orb: "pickup_xp",
+        coin_buff: "pickup_coin",
+        hp_orb: "pickup_hp",
+        shield_temp: "pickup_shield",
+        weapon: "pickup_weapon",
+        box: "pickup_box",
+        speed_up: "pickup_speed",
+        farm_event: "pickup_farm",
+      };
+      const soundName = pickupSound[ev.payload.kind];
+      if (soundName) audio.play(soundName);
+    }
     // pickup é o instante exato em que os buffs temporários são (re)aplicados no servidor —
     // reseta o anel de cooldown pra refletir a renovação, não só a 1ª aplicação.
     const kind =
@@ -421,18 +450,33 @@ function pushDebugEvent(ev: {time: number; type: string; payload: any}) {
     if (ev.payload.boosted) {
       const vis = playerVisuals.get(ev.payload.playerId);
       if (vis) spawnCollectPopup(vis.position.x, vis.position.z, `combo ×${ev.payload.count}`, "#ffb300");
+      if (ev.payload.playerId === mySessionId) audio.play("xp_combo"); // T-050
     }
   } else if (ev.type === "impulso") {
     buffApplied.set(ev.payload.playerId, { kind: "kill_rush", expiresAt: performance.now() + BUFF_DURATION_MS.kill_rush });
   } else if (ev.type === "upgrade") {
     const vis = playerVisuals.get(ev.payload.playerId);
     if (vis) vfx.spawnAt(ev.payload.auto ? "level_up_auto" : "upgrade_chosen_aura", vis.position.x, vis.position.z);
+    // T-050: level-up + card escolhido — pessoal (progressão de outro jogador não é minha leitura).
+    if (ev.payload.playerId === mySessionId) audio.play(ev.payload.auto ? "level_up_auto" : "card_chosen");
+  } else if (ev.type === "box_skill") {
+    // T-050: skill nova vinda de box na zona de guerra — pessoal, raro.
+    if (ev.payload.playerId === mySessionId) audio.play("skill_unlock");
+  } else if (ev.type === "flag_pickup") {
+    // T-050: bandeira — tático, todo mundo ouve (só existe 1 no mapa); posicional (T-051).
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) audio.play("flag_pickup", vis.position.x, vis.position.z);
+  } else if (ev.type === "flag_drop") {
+    const vis = playerVisuals.get(ev.payload.playerId);
+    if (vis) audio.play("flag_drop", vis.position.x, vis.position.z);
   } else if (ev.type === "flag_cooldown_start") {
     // T-042 (SPEC-0011): a bandeira saiu do jogo por um tempo (cooldown) — toast de leitura.
     pushToast("🏳️ Bandeira em cooldown");
+    audio.play("flag_cooldown", ev.payload.x, ev.payload.z); // T-050
   } else if (ev.type === "flag_respawn") {
     // T-042: renasceu no centro, acesa e disputável de novo.
     pushToast("🚩 Bandeira renasceu no centro!");
+    audio.play("flag_respawn", ev.payload.x, ev.payload.z); // T-050
   }
 }
 
@@ -709,7 +753,10 @@ function syncWorld() {
         spawnAnim.set(id, { startedAt: performance.now(), durationMs: SPAWN_ANIM_MS });
         vfx.spawnAt("spawn_materialize", vis.position.x, vis.position.z, 0.5);
         // Para o próprio jogador: overlay de tela para eliminar o corte seco de câmera.
-        if (id === mySessionId) triggerSpawnFade();
+        if (id === mySessionId) {
+          triggerSpawnFade();
+          audio.play("respawn_self"); // T-050: pessoal (join inicial ou respawn após morte)
+        }
       }
       lastSpawnProtection.set(id, curProtection);
     }
@@ -852,7 +899,7 @@ function syncWorld() {
       scene.add(mesh);
       projectileMeshes.set(id, mesh);
       vfx.spawnAt(style.muzzle, proj.x, proj.z); // T-022/T-039: muzzle no cano (leve p/ basic, rico p/ vantajosos)
-      audio.play("fire"); // T-049: som de teste — mapeamento completo é T-050
+      audio.play(style.sound, proj.x, proj.z); // T-050: fire distinto por launcher, posicional (T-051)
     }
     mesh.position.x += (proj.x - mesh.position.x) * 0.5;
     mesh.position.z += (proj.z - mesh.position.z) * 0.5;
@@ -894,6 +941,7 @@ initHud({
   getSessionId: () => mySessionId,
   getPing: () => ping,
   getProfileId: () => profileManager.id,
+  playSound: (name) => audio.play(name),
 });
 
 // ---------- Loop ----------
@@ -904,6 +952,7 @@ function animate() {
   t += 0.05;
   syncWorld();
   followCamera();
+  audio.setListenerPosition(camera.position.x, camera.position.z); // T-051: câmera nunca gira, pan = X do mundo
   collectibleMeshes.forEach((mesh) => {
     mesh.position.y = 0.4 + Math.sin(t) * 0.08;
     mesh.rotation.y += 0.02;

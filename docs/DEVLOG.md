@@ -1,5 +1,37 @@
 # Devlog
 
+## 2026-07-06 — Sessão 29: T-050+T-051 (SPEC-0013) — mapeamento evento→som + áudio posicional
+- **Task (agente worker, Frente S — fecha a frente):** `packages/client/src/audio.ts` — registry
+  saiu de 3 sons de teste (T-049) pra **27 sons nomeados** cobrindo todo o mapeamento pedido:
+  fire por launcher (`fire_basic`/`fire_heavy`/`fire_rapid`), hit dado/recebido (`hit_given`/
+  `hit_taken`), `kill`, `death_self`/`death_other`, `respawn_self`, level-up (`level_up_auto`/
+  `card_chosen`), coleta por kind (`pickup_xp`/`coin`/`hp`/`shield`/`weapon`/`box`/`speed`/
+  `farm`), `xp_combo`, `skill_unlock` (box), `streak`, bandeira (`flag_pickup`/`flag_drop`/
+  `flag_cooldown`/`flag_respawn`) e `farm_event_announce` (evento de zona).
+- **Regra de legibilidade (decisão da IA):** eventos pessoais (combate, progresso, coleta) só
+  tocam pro jogador dono — numa partida de bots, tocar isso globalmente vira ruído contínuo
+  (aceite pedia "legível de olhos fechados"). Eventos ambientes (fire, morte alheia, bandeira,
+  zona) continuam globais.
+- **T-051 (mesma task, dependia da T-050):** `AudioContext` ganhou 3 buses — `master` (mute+
+  volume geral) → `sfxBus` (volume de efeitos, persistido separado) → `duckBus` (só sons
+  não-`priority`). Som `priority` toca direto no `sfxBus` e abaixa o `duckBus` por ~350ms
+  (ducking simples). `play(name, x?, z?)` com posição opcional: atenuação linear até 26
+  unidades + `StereoPannerNode` — como a câmera nunca gira (`followCamera` sempre olha -Z),
+  pan = diferença de X do mundo direto, sem trig de facing. `setListenerPosition` chamado
+  1×/frame (mesmo padrão do `vfx.update`). Volumes persistidos em
+  `localStorage["aop_audio_volume"]` — UI de slider fica pra T-058 (lobby).
+- **`hud.ts`:** `HudCtx` ganhou `playSound` (main.ts injeta `audio.play`) — usado no toast de
+  kill streak, a única leitura de combate que mora em hud.ts e não em main.ts.
+- **Descoberta:** `flag_pickup`/`flag_drop` já existiam como debug events no servidor
+  (`ArenaRoom.ts`) mas o client nunca tinha handler pra eles (nem VFX nem toast) — adicionados
+  agora só pra áudio, sem VFX novo (fora do pedido).
+- **Verificado:** `tsc --noEmit` limpo. Preview manual — as 27 entradas do registry tocaram
+  sem exceção (sem posição/perto/longe-demais); volumes persistiram no localStorage; partida
+  real com 4 bots (combate de verdade, hp 100→60/80) — F3 confirmou pickup/xp_combo/upgrade
+  (auto e manual) passando pelos handlers novos, console sem erro. `npm run aci -- index`
+  rodado ao final. Detalhes: `docs/prompts/PROMPT-0046.md`.
+- **Frente S (Som, SPEC-0013) fechada:** T-049 ✅ · T-050 ✅ · T-051 ✅.
+
 ## 2026-07-06 — Sessão 28: T-049 (SPEC-0013) — AudioSystem + registry procedural
 - **Task (agente worker, Frente S de PROPOSAL-0004):** `packages/client/src/audio.ts` novo —
   `SoundDef` (`wave: sine|square|sawtooth|triangle|noise`, `freq`/`freqEnd` opcional pra sweep,

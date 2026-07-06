@@ -11,8 +11,12 @@ e T-D13/D14/D15 no BACKLOG; alocação de modelo por task em `instrucoes/GUIA_MO
 Ver `docs/DEVLOG.md` (Sessão 27) e `docs/prompts/PROMPT-0044.md`.
 **Sessão 28 (agente worker, Frente S): T-049 — AudioSystem + registry procedural** entregue
 (`packages/client/src/audio.ts` novo, espelha `vfx.ts`). Ver `docs/DEVLOG.md` (Sessão 28) e
-`docs/prompts/PROMPT-0045.md`. Outras frentes (T-052 Personagens, T-060 Backend) podem estar em
-andamento em paralelo por outros agentes — conferir BACKLOG antes de assumir status.
+`docs/prompts/PROMPT-0045.md`.
+**Sessão 29 (agente worker, Frente S): T-050+T-051 — mapeamento evento→som completo (27 sons)
++ áudio posicional/ducking/volumes persistidos.** **Frente S (Som, SPEC-0013) fechada** (T-049/
+T-050/T-051 ✅). Ver `docs/DEVLOG.md` (Sessão 29) e `docs/prompts/PROMPT-0046.md`. Outras
+frentes (T-052 Personagens, T-060 Backend) podem estar em andamento em paralelo por outros
+agentes — conferir BACKLOG antes de assumir status.
 
 ---
 
@@ -84,8 +88,7 @@ ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
 1. **T-D13/D14/D15** 〔docs〕 — gerar SPEC-0013 (som), SPEC-0014 (personagens) e SPEC-0015
    (lobby) a partir da proposal (modelo barato, ver GUIA_MODELOS_CLAUDE.md). SPEC-0013 ainda
    não existe como arquivo — T-049 seguiu direto pela descrição do BACKLOG.
-2. **T-049 ✅ (Sessão 28):** AudioSystem + registry procedural (`packages/client/src/audio.ts`).
-   Próximo da Frente S: **T-050** (mapeamento evento→som completo) · depende: T-049 ✅.
+2. **Frente S (Som) fechada:** T-049 ✅ · T-050 ✅ · T-051 ✅ (Sessões 28/29).
 3. Demais frentes paralelizáveis: **T-052** (⚠schema ClassDef — modelo forte) · **T-060**
    (KDA/ranking). Lobby (T-057+) só depois de T-053 e T-061.
 
