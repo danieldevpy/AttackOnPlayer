@@ -1,5 +1,6 @@
-"""Endpoints de conta (SPEC-0008). `guest`/`jwks` são públicos; `me`/`link` exigem JWT de conta —
-isso sobrescreve os defaults de service-token do REST_FRAMEWORK (ver settings/base.py)."""
+"""Endpoints de conta (SPEC-0008). `guest`/`jwks`/`register`/`login` são públicos; `me`/`link`
+exigem JWT de conta — isso sobrescreve os defaults de service-token do REST_FRAMEWORK (ver
+settings/base.py). Google OAuth fica fora de escopo por ora (T-028)."""
 from django.db import transaction
 from rest_framework.decorators import (
     api_view,
@@ -12,7 +13,13 @@ from rest_framework.response import Response
 from . import jwt as jwt_lib
 from .authentication import JWTAuthentication
 from .models import Account, GuestLink, PlayerStats
-from .serializers import AccountSerializer, GuestRequestSerializer, LinkRequestSerializer
+from .serializers import (
+    AccountSerializer,
+    GuestRequestSerializer,
+    LinkRequestSerializer,
+    LoginSerializer,
+    RegisterSerializer,
+)
 
 
 @api_view(["POST"])
@@ -42,6 +49,44 @@ def guest_login(request):
 @permission_classes([AllowAny])
 def jwks_view(_request):
     return Response(jwt_lib.jwks())
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def register(request):
+    """Cria conta registrada por email/senha. Google OAuth: fora de escopo (deferred, T-028)."""
+    body = RegisterSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    email = body.validated_data["email"]
+    password = body.validated_data["password"]
+    display_name = body.validated_data.get("display_name") or email.split("@")[0]
+
+    with transaction.atomic():
+        account = Account.objects.create_user(
+            email=email, password=password, display_name=display_name[:32]
+        )
+        PlayerStats.objects.create(account=account)
+
+    token = jwt_lib.sign_account(account)
+    return Response({"token": token, "account": AccountSerializer(account).data}, status=201)
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def login(request):
+    body = LoginSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    email = Account.objects.normalize_email(body.validated_data["email"])
+    password = body.validated_data["password"]
+
+    account = Account.objects.filter(email__iexact=email, is_guest=False).first()
+    if account is None or not account.check_password(password):
+        return Response({"detail": "email ou senha inválidos"}, status=401)
+
+    token = jwt_lib.sign_account(account)
+    return Response({"token": token, "account": AccountSerializer(account).data})
 
 
 @api_view(["GET"])
