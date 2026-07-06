@@ -24,6 +24,12 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "npm run dev -w @aop/client -- --port 5299 --strictPort"],
       "port": 5299
+    },
+    {
+      "name": "client-prod-verify",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd packages/client && npx vite preview --port 5301 --strictPort"],
+      "port": 5301
     }
   ]
 }

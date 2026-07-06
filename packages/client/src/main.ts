@@ -30,7 +30,7 @@ import { initAuth, getAuthToken } from "./auth";
 // de texto, etc.) — sempre ativa, independente de perfil de controle ou conexão.
 initImmersion();
 
-// T-023 (SPEC-0006): build prod não tem overlay de debug (F3/roster/feeds) — só dev.
+// T-023 (SPEC-0006): build prod não tem overlay de debug (F3/feeds) — só dev.
 const IS_DEV = import.meta.env.DEV;
 
 const hud = document.getElementById("hud")!;

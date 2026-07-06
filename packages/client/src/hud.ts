@@ -28,17 +28,16 @@ interface UpgradeOffer {
 }
 
 // T-023 (SPEC-0006): HUD dev/prod. Build prod = painel compacto (ping discreto, HP/nível),
-// sem F3/roster/feeds; atributos completos só aparecem segurando [Tab]. Dev mantém tudo
+// sem F3/feeds; atributos completos só aparecem segurando [Tab]. Dev mantém tudo
 // sempre visível (import.meta.env.DEV é injetado pelo Vite: true em `npm run dev`, false
 // no build de produção — nenhuma flag nova pra manter em sincronia).
+// Pedido do CD: roster (painel de players) passou a aparecer também em produção.
 const IS_DEV = import.meta.env.DEV;
 
 let ctx: HudCtx;
 const hudEl = document.getElementById("hud")!;
 const rosterEl = document.getElementById("roster")!;
 const cardsEl = document.getElementById("upgrade-cards")!;
-
-if (!IS_DEV) rosterEl.remove(); // T-023: roster é artefato de dev — não existe em build prod
 
 let attrsHeld = IS_DEV; // dev sempre mostra; prod só enquanto [Tab] estiver pressionado
 if (!IS_DEV) {
@@ -286,7 +285,7 @@ export function updateHud(now: number) {
     refs.details.innerHTML = !IS_DEV ? `<span class="hint">[Tab] atributos</span>` : "";
   }
 
-  if (!IS_DEV || now < rosterNext || !st?.players) return;
+  if (now < rosterNext || !st?.players) return;
   rosterNext = now + 250;
   let html = `<div class="title">PLAYERS</div>`;
   st.players.forEach((p: any, id: string) => {
