@@ -65,3 +65,40 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.display_name} ({'guest' if self.is_guest else self.email})"
+
+
+class PlayerStats(models.Model):
+    """Scaffold do acumulador de estatística. Migração real do ADR-012 é a T-029."""
+
+    account = models.OneToOneField(
+        Account, on_delete=models.CASCADE, primary_key=True, related_name="stats"
+    )
+    kills = models.PositiveIntegerField(default=0)
+    deaths = models.PositiveIntegerField(default=0)
+    matches_played = models.PositiveIntegerField(default=0)
+    xp_total = models.PositiveBigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "accounts_player_stats"
+
+    def __str__(self):
+        return f"stats({self.account.display_name})"
+
+
+class GuestLink(models.Model):
+    """Mapeia `player_token` (identidade local do client, pré-conta) -> Account guest.
+
+    Consumido pelo fluxo guest->conta (T-027c): ao logar/registrar, o `player_token` do client
+    é usado para achar a conta guest e transferir `PlayerStats` para a conta definitiva.
+    """
+
+    player_token = models.CharField(max_length=64, unique=True)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="guest_links")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "accounts_guest_link"
+
+    def __str__(self):
+        return f"{self.player_token} -> {self.account_id}"
