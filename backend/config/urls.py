@@ -11,6 +11,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/auth/", include("accounts.urls")),
     path("api/v1/maps/", include("maps.urls")),
-    # path("api/v1/gameops/", include("gameops.urls")),    # T-027e
+    path("api/v1/gameops/", include("gameops.urls")),
     # path("api/v1/telemetry/", include("telemetry.urls")),# T-027f
 ]

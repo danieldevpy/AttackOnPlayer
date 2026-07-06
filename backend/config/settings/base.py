@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "common",
     "accounts",
     "maps",
+    "gameops",
 ]
 
 MIDDLEWARE = [
