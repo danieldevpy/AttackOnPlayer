@@ -1,7 +1,13 @@
-"""Rotas de conta/auth. Endpoints (guest/jwks/me/link) chegam na T-027c."""
+"""Rotas de conta/auth (T-027c)."""
+from django.urls import path
+
+from . import views
 
 app_name = "accounts"
 
 urlpatterns = [
-    # T-027c: guest, jwks.json, me, link
+    path("guest", views.guest_login, name="guest"),
+    path("jwks.json", views.jwks_view, name="jwks"),
+    path("me", views.me, name="me"),
+    path("link", views.link, name="link"),
 ]
