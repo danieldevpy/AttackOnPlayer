@@ -1,5 +1,39 @@
 # Devlog
 
+## 2026-07-06 — Sessão 35 (pedido direto do CD, fora da fila V1): Deploy em VPS sem domínio + reorganização de scripts
+- **Pedido do CD:** confirmar se dá pra jogar com amigos numa VPS acessando só pelo IP público
+  (sem domínio/TLS) e, se sim, montar o plano + automação; depois, subir bots junto igual o
+  `run.sh` de dev; por fim, organizar todos os `.sh` soltos numa pasta `script/` e commitar.
+- **Confirmado que dá:** `packages/server/src/index.ts` já escuta em todas as interfaces
+  (`httpServer.listen(port)` sem host); o client é estático (build Vite); página `http://` +
+  WebSocket `ws://` não sofre bloqueio de mixed content; backend Django é opcional
+  (`PLATFORM_ENABLED` off por padrão).
+- **Único ajuste de código:** `packages/client/src/main.ts` assumia `wss://` (TLS) pra qualquer
+  host que não fosse `localhost`/`192.x`, quebrando IP público sem certificado. Adicionado
+  override de build `VITE_SERVER_URL` (retrocompatível — fluxo com domínio/SPEC-0009 não seta a
+  env e cai na regra antiga). Validado com `tsc --noEmit` e `vite build` real (IP fixo no bundle).
+- **Novo `script/deploy-vps-sem-dominio.sh`:** idempotente — detecta IP público, instala
+  Node/pm2 se faltar, `git pull`, `npm install`, builda o client com `VITE_SERVER_URL`, sobe
+  `aop-server`/`aop-client` via pm2, libera `ufw`, healthcheck em `/health`. Aceita `-b/-c/-t`
+  (mesma sintaxe do `run.sh`) pra subir `aop-bots` via pm2, com `--no-autorestart` quando a
+  duração é finita (evita loop de restart depois que os bots terminam).
+- **Reorganização:** `run.sh` e `snapshot-test.sh` (soltos na raiz, untracked, antes marcados
+  como "resíduo não investigado") + o novo script de deploy foram movidos pra `script/` e
+  commitados pela primeira vez. `script/run.sh` teve o `cd` ajustado (`dirname/..`) pra
+  continuar resolvendo a raiz do repo a partir do novo nível; `script/snapshot-test.sh` só
+  precisou de ajuste de texto (usa `$(pwd)`, não `dirname`). `backend/dev.sh` e o script do
+  skill `attackonplayer-executor` ficaram de fora a pedido do CD (o primeiro é acoplado aos
+  arquivos do Django em `backend/`; o segundo não é parte do jogo).
+- **Verificado:** `tsc --noEmit` do client limpo (antes e depois da reorganização), `vite build`
+  real gerando o bundle certo, parsing das flags `-b/-c/-t` testado isoladamente (todas as
+  combinações), sintaxe dos 3 scripts (`bash -n`) ok. `npm run aci -- index` rodado após cada
+  lote de mudança de código/doc.
+- **Docs:** `docs/deploy/PLANO-VPS-SEM-DOMINIO.md` (plano de estudo + passo a passo + trade-offs
+  + quando migrar pro fluxo oficial com domínio) e nota em `SESSAO_ATUAL.md` atualizando o
+  status dos scripts (não é mais "resíduo não investigado").
+- **Fora de escopo:** não mexe no fluxo oficial de lançamento (SPEC-0009/M5, domínio+TLS+Docker+
+  hardening) nem no backend Django — os dois fluxos coexistem.
+
 ## 2026-07-06 — Sessão 34: Personagens procedurais V2 (evolui T-053/T-054, SPEC-0014)
 - **Pedido do CD (fora da numeração):** evoluir o arqueiro procedural pra qualidade de arte
   mobile low-poly (Kingshot/Archero/Whiteout), 100% por código Three.js, sem asset externo,

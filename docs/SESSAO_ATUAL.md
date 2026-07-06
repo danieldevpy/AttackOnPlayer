@@ -69,8 +69,16 @@ frentes (T-056 skins, T-060 Backend) podem estar em paralelo — conferir BACKLO
   (`pkill -f "manage.py runserver"` + `./dev.sh` de novo) pra pegar o valor novo, porque o
   autoreloader do Django não observa mudanças em `.env`.
 - `packages/aci/` (PROPOSAL-0003, ADR-018) segue isolado — nenhum pacote do jogo o importa. `npm run
-  aci:test` 39/39. `snapshot-test.sh`/`run.sh` soltos na raiz são resíduo não relacionado, ainda
-  não investigado (não tocar).
+  aci:test` 39/39.
+- **Scripts organizados em `script/`** (pedido direto do CD, fora da fila V1): `run.sh` (dev,
+  server+client+bots opcionais) e `snapshot-test.sh` (cópia congelada pra teste isolado) saíram
+  da raiz pra `script/` e foram commitados pela primeira vez (antes eram untracked/"resíduo não
+  investigado" — investigados agora, são utilitários de dev legítimos; `script/run.sh` teve o
+  `cd` ajustado pra subir um nível). Novo: `script/deploy-vps-sem-dominio.sh` — deploy numa VPS
+  por IP público sem domínio/TLS (atalho pra jogar com amigos antes do lançamento oficial com
+  domínio do SPEC-0009); aceita `-b/-c/-t` pra bots headless via pm2, igual `run.sh`. Exigiu um
+  ajuste retrocompatível em `packages/client/src/main.ts` (override `VITE_SERVER_URL` em
+  build-time; não afeta o fluxo com domínio). Ver `docs/deploy/PLANO-VPS-SEM-DOMINIO.md`.
 - **Preview headless renderiza WebGL nesta config** (contrário do que uma nota de sessão anterior
   registrou) — `server-verify` (2604) + `client-verify` (5299) mostraram o mundo 3D e o HUD
   normalmente durante a verificação da T-028c. Se voltar a falhar, investigar de novo antes de

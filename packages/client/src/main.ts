@@ -324,10 +324,16 @@ function triggerSpawnFade() {
 // `?port=NNNN` só pra testar contra um servidor local em porta alternativa (ex.: quando a
 // porta padrão já está ocupada por outra sessão de dev) — nunca usado fora de localhost.
 const devPortOverride = new URLSearchParams(location.search).get("port");
+// `VITE_SERVER_URL` (build-time): deploy em VPS por IP público sem domínio/TLS — força
+// ws:// explícito pro host:porta do game server, pulando a heurística abaixo (que assume
+// wss:// atrás de proxy em qualquer host que não seja localhost/LAN). Ver plano de deploy
+// sem domínio. Não usado no fluxo com domínio+TLS (M5/SPEC-0009), que não seta essa env.
+const configuredUrl = import.meta.env.VITE_SERVER_URL as string | undefined;
 const url =
-  location.hostname === "localhost" || location.hostname.startsWith("192.")
+  configuredUrl ||
+  (location.hostname === "localhost" || location.hostname.startsWith("192.")
     ? `ws://${location.hostname}:${devPortOverride ?? SERVER_PORT}`
-    : `wss://${location.host}`;
+    : `wss://${location.host}`);
 
 const client = new Client(url);
 let room: Room | undefined;
