@@ -24,6 +24,20 @@ Mapa completo: `docs/DOC_MAP.md`. Resumo:
 
 **Conflito:** SESSAO_ATUAL vence VISAO-ATUAL para “próximo passo”; código vence docs para números/comportamento.
 
+## Camada de contexto para agentes (ACI) — use antes de abrir arquivos inteiros
+
+`packages/aci` (PROPOSAL-0003, ADR-018) indexa código e documentação do repo e devolve **trechos/resumos cirúrgicos** em vez do arquivo inteiro — economia medida de ~80–95% de tokens nas consultas típicas. Hoje é uma **CLI** (o servidor MCP é a F5, ainda não construída), então chame via `Bash`/terminal antes de ler um arquivo por inteiro:
+
+```bash
+npm run aci -- summary <SPEC-NNNN|ADR-NNN|PROMPT-NNNN|PROPOSAL-NNNN|caminho/do/arquivo.md>
+npm run aci -- search <termo> [--kind=function|class|interface|type|enum|const|doc|spec|adr|prompt|proposal]
+npm run aci -- related <símbolo|caminho/arquivo.ts|ADR-NNN>   # "quem governa X?" — código→docs e doc→doc
+npm run aci -- index [--force]                                # reindexa (cache incremental por hash) após editar código/docs
+npm run aci -- doctor                                          # diagnóstico se a busca parecer desatualizada
+```
+
+**Fluxo recomendado:** `summary`/`related`/`search` primeiro → só abre o arquivo inteiro (`Read`) se o trecho devolvido não bastar. Cobre `packages/*/src` (símbolos exportados) e docs/specs/ADRs/prompts/proposals (por seção de heading). Isolado do jogo — `packages/aci` não é importado por nenhum outro pacote, fora dos gates do jogo, remoção trivial.
+
 ## Agentes especialistas (contexto mínimo por papel)
 
 Para economizar tokens, cada especialista lê APENAS seus arquivos:
@@ -56,7 +70,7 @@ O Creative Director tem sua pasta de referência em `instrucoes/` — mantê-la 
 3. **Partidas curtas** — sessão alvo de 2–3 min. Toda mecânica respeita isso.
 4. **Anti pay-to-win / anti snowball** — vantagem vem de habilidade; aura dá oportunidade, não sorte.
 5. **Leve sempre** — roda em navegador de celular fraco. Orçamento: < 200 draw calls, geometria placeholder.
-6. **Token economy** — agentes leem só o contexto do seu papel; nunca o repo inteiro.
+6. **Token economy** — agentes leem só o contexto do seu papel; nunca o repo inteiro. Ver §Camada de contexto para agentes (ACI) pra ferramenta concreta antes de abrir arquivos.
 7. **Docs em PT-BR**, código e identificadores em inglês.
 
 ## Comandos
@@ -66,4 +80,5 @@ npm install            # raiz (workspaces)
 npm run dev:server     # servidor Colyseus :2567
 npm run dev:client     # cliente Vite :5173
 npm run bots -- 3 30   # 3 bots por 30s
+npm run aci -- doctor  # ACI: infra de contexto pra agentes — ver seção acima
 ```

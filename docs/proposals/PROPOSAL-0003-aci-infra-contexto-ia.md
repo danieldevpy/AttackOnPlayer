@@ -106,6 +106,8 @@ Cada resposta respeita um **orçamento de tokens** configurável (progressive di
 
 **Como os agentes usam (documentado no AGENTS.md via um único ponteiro aditivo):** em vez de "leia AGENTS.md → DOC_MAP → abra 6 arquivos", o fluxo vira "chame `aci_context_for_feature('T-020 IA dos bots')` → receba o pacote mínimo → só então leia o que faltar". O fluxo legado **continua válido** (o ACI é opcional, igual o DOC_MAP se declarou "camada opcional de continuidade").
 
+> **Nota de execução (adiantada, antes da F4/F5):** o CD pediu para validar a economia de tokens **já**, via CLI, antes de investir no servidor MCP — então o ponteiro aditivo no `AGENTS.md` (originalmente previsto pra sair junto da F5) foi antecipado. Hoje `AGENTS.md` tem uma seção própria ("Camada de contexto para agentes (ACI)") instruindo qualquer agente a chamar `npm run aci -- summary/search/related` via `Bash` **antes** de abrir um arquivo inteiro. Sem MCP ainda, isso depende do agente lembrar de rodar o comando (não é uma *tool* nativa) — é o teste real de adoção que vai informar se a F5 compensa. Auto-validado: `search "camada de contexto" --kind=doc` já acha a seção nova do próprio `AGENTS.md` com ~88% de economia.
+
 ---
 
 ## 4. Justificativa técnica das escolhas
