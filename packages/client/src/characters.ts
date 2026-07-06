@@ -100,9 +100,80 @@ export function createCharacterVisual(classId: string, skinId: string): THREE.Gr
     mesh.name = spec.name;
     mesh.position.set(spec.pos[0], spec.pos[1], spec.pos[2]);
     if (spec.rot) mesh.rotation.set(spec.rot[0], spec.rot[1], spec.rot[2]);
+    // T-054: guarda a pose de repouso — a animação procedural anima OFFSETS sobre ela.
+    mesh.userData.baseX = spec.pos[0];
+    mesh.userData.baseY = spec.pos[1];
     group.add(mesh);
     parts[spec.name] = mesh;
   }
   group.userData.parts = parts;
   return group;
+}
+
+// --- Animação procedural (T-054, SPEC-0014) --------------------------------------------
+// Update central por frame, dirigido pelo estado JÁ sincronizado (posição ⇒ velocidade de
+// passada; evento de disparo ⇒ puxar arco). Reusa o relógio-fase global `t` do main.ts
+// (nenhum clock novo) e não aloca nada por frame. Os 4 estados do aceite:
+//   idle  — respiração sutil (corpo/cabeça sobem/descem em seno lento).
+//   walk  — pernas/braços balançam em contra-fase, amplitude pela velocidade planar.
+//   shoot — puxar/soltar o arco numa janela curta (SHOOT_MS), acionado no spawn do projétil.
+//   spawn/death — a materialização (scale-in, T-045) roda por cima; aqui as poses ficam
+//                 neutras (moveSpeed ~0) pra não brigar com o nascimento. Morte no servidor
+//                 é respawn imediato (ArenaRoom), então o cue visível é o próprio spawn.
+const STRIDE = 3.2; // fator sobre `t` — cadência da passada (~1.4 Hz a 60 fps)
+const SHOOT_MS = 260; // duração do "puxar e soltar" o arco
+
+export interface CharAnimOpts {
+  t: number; // fase global do loop (main.ts `t`) — sem relógio novo
+  moveSpeed: number; // 0..1 velocidade planar normalizada (0 = parado ⇒ idle)
+  nowMs: number; // performance.now() para a janela de shoot
+}
+
+/** Marca que este player disparou agora — dispara a animação de puxar o arco. */
+export function triggerCharacterShoot(playerGroup: THREE.Group, nowMs: number): void {
+  const char = playerGroup.userData.character as THREE.Group | undefined;
+  if (char) char.userData.shootAt = nowMs;
+}
+
+/**
+ * Anima o boneco de um player. Seguro em qualquer fase: se o grupo não tem personagem
+ * (F1), retorna sem custo. Só lê/escreve escalares — nenhuma alocação por frame.
+ */
+export function updateCharacterAnimation(playerGroup: THREE.Group, opts: CharAnimOpts): void {
+  const char = playerGroup.userData.character as THREE.Group | undefined;
+  if (!char) return;
+  const p = char.userData.parts as Record<string, THREE.Mesh>;
+  const { t, moveSpeed, nowMs } = opts;
+
+  // passada: seno em contra-fase nas pernas; amplitude escala com a velocidade (idle ⇒ 0).
+  const phase = t * STRIDE;
+  const swing = Math.sin(phase) * 0.5 * moveSpeed;
+  p.legL.rotation.z = swing;
+  p.legR.rotation.z = -swing;
+
+  // idle (respiração) + leve bob de passada — corpo/cabeça/capuz sobem juntos.
+  const breathe = Math.sin(t * 1.2) * 0.015;
+  const bob = Math.abs(Math.sin(phase)) * 0.03 * moveSpeed;
+  p.body.position.y = p.body.userData.baseY + breathe + bob;
+  p.head.position.y = p.head.userData.baseY + breathe + bob;
+  p.hood.position.y = p.hood.userData.baseY + breathe + bob;
+
+  // shoot: enquanto a janela está aberta, os braços erguem o arco e soltam (recuo suave);
+  // sobrepõe o balanço de braço da passada (o arqueiro está ocupado mirando).
+  const shootAt = (char.userData.shootAt as number) ?? 0;
+  const dt = nowMs - shootAt;
+  if (shootAt > 0 && dt < SHOOT_MS) {
+    const raise = Math.sin((dt / SHOOT_MS) * Math.PI); // 0→1→0 (levanta e volta)
+    p.armL.rotation.z = -raise * 0.9;
+    p.armR.rotation.z = -raise * 0.9;
+    p.bow.scale.setScalar(1 + raise * 0.18);
+    p.bow.position.x = p.bow.userData.baseX + raise * 0.06;
+  } else {
+    // braços acompanham a passada (contra-fase das pernas); arco em repouso.
+    p.armL.rotation.z = -swing * 0.7;
+    p.armR.rotation.z = swing * 0.7;
+    if (p.bow.scale.x !== 1) p.bow.scale.setScalar(1);
+    p.bow.position.x = p.bow.userData.baseX;
+    if (shootAt > 0) char.userData.shootAt = 0; // encerra a janela
+  }
 }

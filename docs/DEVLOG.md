@@ -1,5 +1,30 @@
 # Devlog
 
+## 2026-07-06 — Sessão 32: T-054 (SPEC-0014) — Animações procedurais
+- **Task (agente worker, Frente C — Personagens/classe/skin, client):** animação procedural do
+  arqueiro, update central por frame em `characters.ts`, **sem clock global novo** (reusa o
+  relógio-fase `t` do `main.ts`) e sem alocação por frame.
+- **API:** `updateCharacterAnimation(playerGroup, { t, moveSpeed, nowMs })` +
+  `triggerCharacterShoot(...)`; poses de repouso guardadas na fábrica (`mesh.userData.baseX/
+  baseY`, T-053) e a animação anima offsets sobre elas. `visuals.ts` guarda
+  `group.userData.character`; `main.ts` dirige por player.
+- **4 estados:** **idle** (respiração no y do corpo/cabeça) · **walk** (pernas/braços em
+  contra-fase, amplitude ∝ velocidade planar) · **shoot** (puxar/soltar o arco numa janela de
+  260 ms) · **spawn/death** (materialização scale-in da T-045; animação zera durante ela).
+- **Sinais (sem velocity/ownerId/evento fire na rede):** walk usa o **deslocamento renderizado**
+  do grupo (posição da rede já suavizada), suavizado em `vis.userData.moveSpeed`; shoot é
+  disparado no **spawn de projétil**, atribuído ao player mais próximo do ponto de nascimento
+  (projétil nasce na posição do atirador; `ownerId` não é sincronizado). Morte no servidor é
+  **respawn imediato** (`ArenaRoom.ts:528`) — cliente nunca vê `hp<=0`, então o cue de morte é o
+  próprio spawn.
+- **Verificado:** tsc client+server limpo · `vite build` OK · shared 38/38 · smoke `bots 4 12`
+  (entra/sai limpo, sem regressão — só toquei client). **Teste headless da animação (sem
+  WebGL, matemática de objeto): 11/11 asserts** (idle/walk/shoot/F1-noop) provando que roda e
+  mexe as partes em runtime. `npm run aci -- index` ao final. Detalhes: `docs/prompts/
+  PROMPT-0049.md`.
+- **Limitação:** screenshot dos 4 estados com bots pro CD segue pendente — preview roda oculto
+  (rAF pausado), pede sessão GPU visível. A lógica está coberta pelo teste headless.
+
 ## 2026-07-06 — Sessão 31: T-053 (SPEC-0014) — Arqueiro low poly procedural (F2)
 - **Task (agente worker, Frente C — Personagens/classe/skin, client):** `packages/client/src/
   characters.ts` novo — `createCharacterVisual(classId, skinId)` retorna `THREE.Group` do

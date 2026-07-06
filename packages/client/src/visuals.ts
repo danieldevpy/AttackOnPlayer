@@ -126,7 +126,9 @@ export function createPlayerVisual(id: string, isSelf: boolean): THREE.Group {
   // (F3: THREE.Sprite. F4: GLTF.)
   if (VISUAL_PHASE >= 2) {
     const skinId = CLASS_REGISTRY[DEFAULT_CLASS_ID].skinIds[0];
-    group.add(createCharacterVisual(DEFAULT_CLASS_ID, skinId));
+    const char = createCharacterVisual(DEFAULT_CLASS_ID, skinId);
+    group.userData.character = char; // T-054: a animação procedural acha o boneco por aqui
+    group.add(char);
   } else {
     // F1: cápsula + "nariz" de facing.
     const body = new THREE.Mesh(

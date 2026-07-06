@@ -26,9 +26,16 @@ default, nunca rejeita). 12 testes novos, shared 38/38 · server 80/80 · tsc ×
 `VISUAL_PHASE` 1→2 e `createPlayerVisual` bifurca F1/F2. tsc client+server limpo · vite build OK
 · shared 38/38 · bots 9×120 sem regressão. Draw calls (análise): 9/player, ~90 com 10 players
 (<200). Screenshot/F3 pro CD **pendente** — preview roda oculto (rAF pausado, ver avisos). Ver
-`docs/DEVLOG.md` (Sessão 31) e `docs/prompts/PROMPT-0048.md`. Outras frentes (T-054+ animação,
-T-060 Backend) podem estar em andamento em paralelo por outros agentes — conferir BACKLOG antes
-de assumir status.
+`docs/DEVLOG.md` (Sessão 31) e `docs/prompts/PROMPT-0048.md`.
+**Sessão 32 (agente worker, Frente C): T-054 — Animações procedurais** entregue: update central
+por frame em `characters.ts` (`updateCharacterAnimation`/`triggerCharacterShoot`, sem clock
+novo, sem alocação) — idle (respiração), walk (contra-fase por velocidade derivada do
+deslocamento renderizado), shoot (puxar arco no spawn de projétil), spawn/death integra com o
+scale-in da T-045 (morte = respawn imediato no servidor). tsc client+server limpo · vite build OK
+· shared 38/38 · bots 4×12 sem regressão · **teste headless da animação 11/11**. Screenshot dos
+4 estados pro CD **pendente** (preview oculto). Ver `docs/DEVLOG.md` (Sessão 32) e
+`docs/prompts/PROMPT-0049.md`. Outras frentes (T-055 flechas, T-056 skins, T-060 Backend) podem
+estar em andamento em paralelo por outros agentes — conferir BACKLOG antes de assumir status.
 
 ---
 
@@ -108,10 +115,10 @@ ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
    não existe como arquivo — T-049 seguiu direto pela descrição do BACKLOG.
 2. **Frente S (Som) fechada:** T-049 ✅ · T-050 ✅ · T-051 ✅ (Sessões 28/29).
 3. **Frente C (Personagens):** T-052 ✅ (Sessão 30 — contrato) · T-053 ✅ (Sessão 31 — visual
-   procedural do arqueiro em F2, `characters.ts`). Próximas: **T-054** (animação procedural,
-   consome as partes nomeadas de `characters.ts`) · **T-055** (projéteis/flecha) · **T-056**
-   (skins por paleta) — todas dependem de T-053 ✅. **T-060** (KDA/ranking) paralelizável.
-   Lobby (T-057+, reusa `createCharacterVisual` no preview) só depois de T-053 ✅ e T-061.
+   procedural do arqueiro em F2) · T-054 ✅ (Sessão 32 — animação procedural idle/walk/shoot/
+   spawn em `characters.ts`). Próximas: **T-055** (projéteis/flecha) · **T-056** (skins por
+   paleta) — dependem de T-053 ✅. **T-060** (KDA/ranking) paralelizável. Lobby (T-057+, reusa
+   `createCharacterVisual` no preview) só depois de T-053 ✅ e T-061.
 
 **F4 — Plataforma (SPEC-0008), continuação:**
 1. **T-029** 〔P〕 — ADR-012 liga na conta: a progressão persistente (acumulador da box, hoje

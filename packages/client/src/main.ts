@@ -17,6 +17,7 @@ import {
   LAUNCHERS,
 } from "@aop/shared";
 import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate } from "./visuals";
+import { updateCharacterAnimation, triggerCharacterShoot } from "./characters";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
 import { createVfxSystem } from "./vfx";
 import { createAudioSystem } from "./audio";
@@ -781,6 +782,28 @@ function syncWorld() {
       }
     }
 
+    // T-054: animação procedural do boneco (idle/walk/shoot). A velocidade de passada vem do
+    // deslocamento RENDERIZADO do próprio grupo (posição da rede já suavizada no lerp acima) —
+    // não há campo de velocidade na rede. Durante a materialização (spawn/respawn) zera pra não
+    // brigar com o scale-in da T-045.
+    {
+      const av = vis.userData;
+      if (spawnAnim.has(id)) {
+        av.lastX = vis.position.x;
+        av.lastZ = vis.position.z;
+        av.moveSpeed = 0;
+      } else {
+        const lastX = av.lastX ?? vis.position.x;
+        const lastZ = av.lastZ ?? vis.position.z;
+        const step = Math.hypot(vis.position.x - lastX, vis.position.z - lastZ);
+        av.lastX = vis.position.x;
+        av.lastZ = vis.position.z;
+        const inst = Math.min(1, step / 0.09); // ~passada cheia perto do topo de velocidade
+        av.moveSpeed = (av.moveSpeed ?? 0) + (inst - (av.moveSpeed ?? 0)) * 0.25; // suaviza
+      }
+      updateCharacterAnimation(vis, { t, moveSpeed: av.moveSpeed ?? 0, nowMs: performance.now() });
+    }
+
     updatePowerVisual(vis, p.level ?? 1, t); // T-018: aro de poder por faixa de nível
     const shielded = (p.spawnProtectedUntil ?? 0) > Date.now();
     updateShieldVisual(vis, shielded, t); // SPEC-0005: bolha de invuln
@@ -900,6 +923,21 @@ function syncWorld() {
       projectileMeshes.set(id, mesh);
       vfx.spawnAt(style.muzzle, proj.x, proj.z); // T-022/T-039: muzzle no cano (leve p/ basic, rico p/ vantajosos)
       audio.play(style.sound, proj.x, proj.z); // T-050: fire distinto por launcher, posicional (T-051)
+      // T-054: o projétil nasce na posição do atirador (ownerId não é sincronizado) — atribui o
+      // disparo ao player mais próximo do ponto de spawn e dispara a animação de puxar o arco.
+      // Heurística puramente cosmética, tolerante a erro se dois players estiverem colados.
+      let shooter: THREE.Group | undefined;
+      let bestD = 1.6 * 1.6;
+      playerVisuals.forEach((pv) => {
+        const dx = pv.position.x - proj.x;
+        const dz = pv.position.z - proj.z;
+        const d = dx * dx + dz * dz;
+        if (d < bestD) {
+          bestD = d;
+          shooter = pv;
+        }
+      });
+      if (shooter) triggerCharacterShoot(shooter, performance.now());
     }
     mesh.position.x += (proj.x - mesh.position.x) * 0.5;
     mesh.position.z += (proj.z - mesh.position.z) * 0.5;
