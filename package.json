@@ -8,7 +8,9 @@
     "bots": "npm run start -w @aop/bots --",
     "map": "tsx packages/server/src/cli/mapCli.ts",
     "analyze": "tsx packages/server/src/cli/analyze.ts",
-    "test": "npm run test -w @aop/shared"
+    "test": "npm run test -w @aop/shared",
+    "aci": "npm run aci -w @aop/aci --",
+    "aci:test": "npm run test -w @aop/aci"
   },
   "engines": { "node": ">=20" }
 }

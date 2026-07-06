@@ -1,0 +1,29 @@
+{
+  "$schema": "./aci.schema.json",
+  "version": 1,
+  "root": "../..",
+  "cacheDir": ".aci-cache",
+  "sources": {
+    "code": {
+      "include": ["packages/*/src/**/*.ts"],
+      "exclude": ["**/*.test.ts", "**/node_modules/**", "**/dist/**"],
+      "kinds": ["function", "class", "interface", "type", "enum", "const"]
+    },
+    "docs": {
+      "include": ["docs/**/*.md", "instrucoes/**/*.md", "AGENTS.md", "README.md"],
+      "exclude": []
+    },
+    "specs": { "include": ["specs/SPEC-*.md"] },
+    "adrs": { "file": "docs/DECISION_LOG.md", "pattern": "^## (ADR-\\d+)" },
+    "prompts": { "include": ["docs/prompts/PROMPT-*.md"] },
+    "proposals": { "include": ["docs/proposals/PROPOSAL-*.md"] },
+    "roadmap": { "file": "docs/ROADMAP.md" },
+    "backlog": { "file": "docs/BACKLOG.md" }
+  },
+  "budget": {
+    "defaultMaxTokens": 800,
+    "summaryMaxTokens": 120,
+    "snippetContextLines": 6
+  },
+  "notes": "Camada isolada. Nenhum outro pacote importa @aop/aci. Remover = deletar packages/aci + entrada MCP."
+}
