@@ -54,9 +54,14 @@ attributos e ser mais sortido para não ficar sempre repetitivo."
   browser de verdade; a IA pode (e deve) adicionar pontos de verificação textual (F3, logs) como
   substituto parcial, mas não deve reivindicar veredito visual que não pôde observar.
 
+## Veredito CD
+- Confirmado em: 2026-07-06 (via chat, não teste em browser — ambiente ainda sem verificação visual real)
+- Escopo: os 3 itens deste prompt (bandeira, SPEC-0010, variedade de cards)
+- Resultado: **aprovado sem ressalvas** ("estou de acordo com tudo")
+- Observações: a bandeira e a sensação dos cards sorteados não foram jogadas de fato (pendência
+  técnica: preview headless não renderiza WebGL, ver acima) — o CD aprovou pela implementação e
+  explicação, não por ter visto/jogado. Se ao jogar de verdade algo destoar (bandeira ou variedade
+  de cards "demais"), é reabertura, não reversão de decisão.
+
 ## Pendências para o próximo prompt
-- Veredito de sensação do CD sobre a nova variedade de cards (12 cards, oferta sorteada) — se
-  "sortido demais" tirar identidade de build, dá pra reduzir a pool ou pesar o sorteio.
-- Veredito visual da bandeira (livre/carregada/cooldown) — pendente desde a T-041, ainda sem
-  confirmação humana em browser real.
 - Retomar a fila V1: F4 — Plataforma (SPEC-0008), começando por T-026 (telemetria NDJSON).

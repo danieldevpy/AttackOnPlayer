@@ -58,3 +58,5 @@ Voz do Daniel. A IA registra aqui, mas o conteúdo é decisão dele.
 **Cards de level-up repetitivos:** quer mais variações de atributo e sorteio, "para não ficar sempre repetitivo". *(Reverte a decisão de T-016/SPEC-0004 — "determinístico, nunca sorteio" — registrada como pilar habilidade>sorte. IA implementou o pedido (pool de 6→12 cards, oferta sorteada a cada level-up) e registrou a tensão com a decisão anterior em `LEAD_DESIGNER_NOTES.md`, mas seguiu a instrução explícita do CD.)*
 
 **Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0041.md`.
+
+**Veredito (mesmo dia, via chat):** "estou de acordo com tudo" — aprovado sem ressalvas, inclusive os 2 pontos que ficaram pendentes de teste em browser (bandeira visual, sensação dos cards sorteados). Não foi um teste jogado no browser (ambiente sem isso ainda) — é aprovação pela implementação/explicação descrita. Libera a esteira para prosseguir ao F4.
