@@ -8,6 +8,8 @@ import { Timer, queryMetrics } from "./metrics/metrics.js";
 import { indexCode, type SymbolKind } from "./index/code.js";
 import { indexDocs, type DocKind } from "./index/docs.js";
 import { searchCode, searchDocs } from "./query/search.js";
+import { relatedDocs, docsReferencing, isDocId } from "./graph/links.js";
+import { summarize } from "./summarize/summaries.js";
 
 const DOC_KINDS = new Set<string>(["doc", "spec", "adr", "prompt", "proposal"]);
 
@@ -15,8 +17,9 @@ const COMMANDS = [
   "doctor",
   "index",
   "search",
-  "context",
+  "related",
   "summary",
+  "context",
   "stats",
 ] as const;
 
@@ -33,8 +36,12 @@ Comandos:
                        nome/assinatura/heading/conteúdo
                        [--kind=function|class|interface|type|enum|const
                                |doc|spec|adr|prompt|proposal]
+  related <alvo>      (F3) Grafo de relações — símbolo/arquivo → docs que o
+                       mencionam (ex.: ProjectileSystem), ou docId → docs que
+                       o referenciam (ex.: ADR-009)
+  summary <id>        (F3) Resumo automático de spec/ADR/prompt/proposal/doc
+                       (ex.: SPEC-0004, ADR-014, AGENTS.md)
   context <feature>   (F4+) Pacote de contexto mínimo — stub
-  summary <id>        (F3+) Resumo de spec/doc/pacote — stub
 `);
 }
 
@@ -98,7 +105,8 @@ function stats(): number {
   console.log("  símbolos indexados:", symbols.length);
   console.log("  arquivos de doc indexados:", docs.keys("docs:file:").length);
   console.log("  seções de doc indexadas:", sections.length);
-  console.log("  (F3+ somará grafo de relações e resumos)");
+  console.log("  (grafo/resumos da F3 são computados sob demanda — sem cache próprio)");
+  console.log("  (F4+ somará orçamento de contexto por feature)");
   return 0;
 }
 
@@ -198,6 +206,84 @@ function stub(name: string, phase: string): number {
   return 0;
 }
 
+function relatedCmd(args: string[]): number {
+  const target = args.filter((a) => !a.startsWith("--")).join(" ");
+  if (!target) {
+    console.error("Uso: npm run aci -- related <símbolo|arquivo|docId>  — ex.: ProjectileSystem, ADR-009");
+    return 1;
+  }
+
+  const cfg = loadConfig();
+  const t = new Timer();
+  const hits = isDocId(target)
+    ? docsReferencing(docsStore(cfg), target).map((section) => ({ section, matchedSymbol: target }))
+    : relatedDocs(codeStore(cfg), docsStore(cfg), target);
+  const searchMs = t.ms();
+
+  if (hits.length === 0) {
+    console.log(`Nada referencia/menciona "${target}". Rode "npm run aci -- index" primeiro?`);
+    return 0;
+  }
+
+  console.log(`ACI related — "${target}"\n`);
+  for (const { section, matchedSymbol } of hits) {
+    const label = section.docId ? `${section.docId} — ${section.heading}` : section.heading;
+    console.log(`  ${section.file}:${section.line}  [${section.kind}]  ${label}  (menciona "${matchedSymbol}")`);
+  }
+
+  const returnedText = hits.map((h) => `${h.section.heading}\n${h.section.snippet}`).join("\n");
+  const uniqueFiles = [...new Set(hits.map((h) => h.section.file))];
+  const fullFilesText = uniqueFiles
+    .map((f) => {
+      try {
+        return readFileSync(resolve(cfg.rootAbs, f), "utf8");
+      } catch {
+        return "";
+      }
+    })
+    .join("\n");
+  const m = queryMetrics(target, searchMs, hits.length, returnedText, fullFilesText);
+  console.log(
+    `\n  ${hits.length} resultado(s) em ${m.searchMs}ms — ~${m.tokensReturned} tokens (vs ~${m.tokensIfFullFiles} lendo os arquivos inteiros; economia ~${m.savedPct}%)`,
+  );
+  return 0;
+}
+
+function summaryCmd(args: string[]): number {
+  const target = args.filter((a) => !a.startsWith("--")).join(" ");
+  if (!target) {
+    console.error("Uso: npm run aci -- summary <id|arquivo>  — ex.: SPEC-0004, ADR-014, AGENTS.md");
+    return 1;
+  }
+
+  const cfg = loadConfig();
+  const t = new Timer();
+  const doc = summarize(docsStore(cfg), target);
+  const searchMs = t.ms();
+
+  if (!doc) {
+    console.log(`Nenhum doc/spec/ADR encontrado para "${target}". Rode "npm run aci -- index" primeiro?`);
+    return 0;
+  }
+
+  console.log(`ACI summary — ${doc.docId ? doc.docId + " — " : ""}${doc.title}\n`);
+  console.log(`  [${doc.kind}] ${doc.file}`);
+  console.log(`\n${doc.snippet}\n`);
+
+  const returnedText = `${doc.title}\n${doc.snippet}`;
+  let fullFileText = "";
+  try {
+    fullFileText = readFileSync(resolve(cfg.rootAbs, doc.file), "utf8");
+  } catch {
+    fullFileText = "";
+  }
+  const m = queryMetrics(target, searchMs, 1, returnedText, fullFileText);
+  console.log(
+    `  ~${m.tokensReturned} tokens (vs ~${m.tokensIfFullFiles} lendo o arquivo inteiro; economia ~${m.savedPct}%)`,
+  );
+  return 0;
+}
+
 function main(): void {
   const [cmd, ...args] = process.argv.slice(2);
   const t = new Timer();
@@ -215,11 +301,14 @@ function main(): void {
     case "search":
       code = searchCmd(args);
       break;
-    case "context":
-      code = stub("context", "F4");
+    case "related":
+      code = relatedCmd(args);
       break;
     case "summary":
-      code = stub("summary", "F3");
+      code = summaryCmd(args);
+      break;
+    case "context":
+      code = stub("context", "F4");
       break;
     case undefined:
     case "help":

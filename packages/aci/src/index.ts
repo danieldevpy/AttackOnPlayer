@@ -37,3 +37,10 @@ export {
   type SearchOptions,
   type DocSearchOptions,
 } from "./query/search.js";
+export {
+  relatedDocs,
+  docsReferencing,
+  isDocId,
+  type RelatedDoc,
+} from "./graph/links.js";
+export { summarize, type DocSummary } from "./summarize/summaries.js";
