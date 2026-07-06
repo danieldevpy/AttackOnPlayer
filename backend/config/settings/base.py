@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "accounts",
     "maps",
     "gameops",
+    "telemetry",
 ]
 
 MIDDLEWARE = [
