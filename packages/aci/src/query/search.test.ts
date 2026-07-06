@@ -56,6 +56,11 @@ describe("aci · query/search (F1)", () => {
     expect(r1.metrics.filesSkipped).toBe(r1.metrics.filesTotal);
     expect(r1.metrics.symbolsIndexed).toBeGreaterThan(0);
   });
+
+  it("query multi-termo é OR por palavra, não frase exata (regressão: query inteira não achava nada)", () => {
+    const hits = searchCode(store, "ArenaRoom termoQueNaoExisteEmLugarNenhum12345");
+    expect(hits.some((h) => h.name === "ArenaRoom")).toBe(true);
+  });
 });
 
 /**
@@ -98,5 +103,17 @@ describe("aci · query/search — docs (F2)", () => {
     expect(r1.metrics.filesParsed).toBe(0);
     expect(r1.metrics.filesSkipped).toBe(r1.metrics.filesTotal);
     expect(r1.metrics.sectionsIndexed).toBeGreaterThan(0);
+  });
+
+  it('regressão: "guest link auth" (multi-termo) acha SPEC-0008, mesmo sem a frase exata no texto', () => {
+    const hits = searchDocs(docsStore, "guest link auth");
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some((h) => h.docId === "SPEC-0008")).toBe(true);
+  });
+
+  it('regressão: "JWT RS256 guest jwks" acha SPEC-0008 via OR (rs256/jwks não estão no corpus, jwt/guest sim)', () => {
+    const hits = searchDocs(docsStore, "JWT RS256 guest jwks");
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some((h) => h.docId === "SPEC-0008")).toBe(true);
   });
 });

@@ -12,6 +12,14 @@ export interface DocSearchOptions {
   limit?: number;
 }
 
+/** Divide a query em palavras (só por espaço) — mantém identificadores com hífen/número intactos (ex.: "ADR-014", "RS256"). */
+function tokenize(query: string): string[] {
+  return query
+    .split(/\s+/)
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 function loadAllSymbols(store: Store): CodeSymbol[] {
   return store.get<CodeSymbol[]>("code:all") ?? [];
 }
@@ -37,48 +45,78 @@ export function findSymbol(
   return opts.limit ? out.slice(0, opts.limit) : out;
 }
 
-/** Busca textual (nome + assinatura) — o caso "achar por palavra-chave". */
+/**
+ * Busca textual (nome + assinatura) — "achar por palavra-chave". A query é
+ * tokenizada por espaço (cada palavra vira um termo OR, não uma frase exata):
+ * "guest link auth" acha símbolos que mencionem QUALQUER um dos termos,
+ * pontuados por quantos/quais termos batem — não exige a frase inteira.
+ */
 export function searchCode(
   store: Store,
   query: string,
   opts: SearchOptions = {},
 ): CodeSymbol[] {
-  const q = query.toLowerCase();
+  const tokens = tokenize(query);
+  if (tokens.length === 0) return [];
   const all = loadAllSymbols(store).filter((s) => !opts.kind || s.kind === opts.kind);
-  const nameHits: CodeSymbol[] = [];
-  const sigHits: CodeSymbol[] = [];
+  const scored: { symbol: CodeSymbol; score: number }[] = [];
   for (const s of all) {
-    if (s.name.toLowerCase().includes(q)) nameHits.push(s);
-    else if (s.signature.toLowerCase().includes(q)) sigHits.push(s);
+    const name = s.name.toLowerCase();
+    const sig = s.signature.toLowerCase();
+    let score = 0;
+    for (const t of tokens) {
+      if (name.includes(t)) score += 2;
+      else if (sig.includes(t)) score += 1;
+    }
+    if (score > 0) scored.push({ symbol: s, score });
   }
+  scored.sort((a, b) => b.score - a.score);
   const limit = opts.limit ?? 20;
-  return [...nameHits, ...sigHits].slice(0, limit);
+  return scored.slice(0, limit).map((x) => x.symbol);
 }
 
 function loadAllDocSections(store: Store): DocSection[] {
   return store.get<DocSection[]>("docs:all") ?? [];
 }
 
+const DOC_KIND_PRIORITY: Record<DocKind, number> = {
+  adr: 0,
+  spec: 1,
+  prompt: 2,
+  proposal: 3,
+  doc: 4,
+};
+
 /**
  * Busca textual sobre o corpus de documentação (docs/specs/ADRs/prompts/proposals).
- * Prioridade: docId exato (ex.: "ADR-014") > heading > corpo da seção — o caso
- * "ADR sobre facing" ou "spec de skills" acha a seção certa sem abrir o arquivo inteiro.
+ * A query é tokenizada por espaço — cada palavra é um termo OR pontuado (docId
+ * > heading > corpo da seção), não uma frase exata: "guest link auth" acha
+ * seções que mencionem qualquer um dos termos, rankeadas por quantos/onde
+ * batem. Consultas de 1 termo (ex.: "facing", "ADR-014") continuam se
+ * comportando como antes.
  */
 export function searchDocs(
   store: Store,
   query: string,
   opts: DocSearchOptions = {},
 ): DocSection[] {
-  const q = query.toLowerCase();
+  const tokens = tokenize(query);
+  if (tokens.length === 0) return [];
   const all = loadAllDocSections(store).filter((s) => !opts.kind || s.kind === opts.kind);
-  const idHits: DocSection[] = [];
-  const headingHits: DocSection[] = [];
-  const snippetHits: DocSection[] = [];
+  const scored: { section: DocSection; score: number }[] = [];
   for (const s of all) {
-    if (s.docId && s.docId.toLowerCase().includes(q)) idHits.push(s);
-    else if (s.heading.toLowerCase().includes(q)) headingHits.push(s);
-    else if (s.snippet.toLowerCase().includes(q)) snippetHits.push(s);
+    const docId = s.docId?.toLowerCase();
+    const heading = s.heading.toLowerCase();
+    const snippet = s.snippet.toLowerCase();
+    let score = 0;
+    for (const t of tokens) {
+      if (docId && docId.includes(t)) score += 3;
+      else if (heading.includes(t)) score += 2;
+      else if (snippet.includes(t)) score += 1;
+    }
+    if (score > 0) scored.push({ section: s, score });
   }
+  scored.sort((a, b) => b.score - a.score || DOC_KIND_PRIORITY[a.section.kind] - DOC_KIND_PRIORITY[b.section.kind]);
   const limit = opts.limit ?? 20;
-  return [...idHits, ...headingHits, ...snippetHits].slice(0, limit);
+  return scored.slice(0, limit).map((x) => x.section);
 }
