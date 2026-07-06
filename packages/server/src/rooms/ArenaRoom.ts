@@ -83,6 +83,7 @@ import {
   XP_COMBO_START,
   XP_COMBO_MULT,
   xpComboLimit,
+  resolveClassSelection,
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
 import { loadMap } from "../mapLoader";
@@ -306,12 +307,25 @@ export class ArenaRoom extends Room<ArenaState> {
 
   async onJoin(
     client: Client,
-    options: { name?: string; bot?: boolean; token?: string; boss?: boolean; authToken?: string }
+    options: {
+      name?: string;
+      bot?: boolean;
+      token?: string;
+      boss?: boolean;
+      authToken?: string;
+      classId?: string;
+      skinId?: string;
+    }
   ) {
     const p = new Player();
     p.name = String(options?.name ?? "player").slice(0, 16);
     p.isBot = Boolean(options?.bot);
     p.playerToken = options?.token || `bot_${client.sessionId}`;
+    // T-052 (SPEC-0014): classId/skinId inválidos ou ausentes caem pro default — join
+    // nunca rejeita por causa de seleção de personagem ruim (mesma regra do authToken).
+    const { classId, skinId } = resolveClassSelection(options?.classId, options?.skinId);
+    p.classId = classId;
+    p.skinId = skinId;
 
     // T-028b (SPEC-0008): authToken é opcional — ausente/inválido/expirado cai para guest sem
     // rejeitar o join (join nunca falha por causa de auth). Atrás de PLATFORM_ENABLED, como o

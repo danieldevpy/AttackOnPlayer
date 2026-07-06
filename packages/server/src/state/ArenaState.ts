@@ -1,7 +1,10 @@
 import { Schema, MapSchema, ArraySchema, type } from "@colyseus/schema";
+import { CLASS_REGISTRY, DEFAULT_CLASS_ID } from "@aop/shared";
 
 export class Player extends Schema {
   @type("string") name = "player";
+  @type("string") classId = DEFAULT_CLASS_ID; // T-052 (SPEC-0014): join valida contra CLASS_REGISTRY, nunca rejeita
+  @type("string") skinId = CLASS_REGISTRY[DEFAULT_CLASS_ID].skinIds[0]; // T-052: paleta dentro da classe (T-056 expande)
   @type("number") x = 0;
   @type("number") z = 0;
   @type("number") level = 1;

@@ -5,3 +5,4 @@ export * from "./mapFile";
 export * from "./rng";
 export * from "./launchers";
 export * from "./skills";
+export * from "./classes";

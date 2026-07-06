@@ -14,9 +14,14 @@ Ver `docs/DEVLOG.md` (Sessão 27) e `docs/prompts/PROMPT-0044.md`.
 `docs/prompts/PROMPT-0045.md`.
 **Sessão 29 (agente worker, Frente S): T-050+T-051 — mapeamento evento→som completo (27 sons)
 + áudio posicional/ducking/volumes persistidos.** **Frente S (Som, SPEC-0013) fechada** (T-049/
-T-050/T-051 ✅). Ver `docs/DEVLOG.md` (Sessão 29) e `docs/prompts/PROMPT-0046.md`. Outras
-frentes (T-052 Personagens, T-060 Backend) podem estar em andamento em paralelo por outros
-agentes — conferir BACKLOG antes de assumir status.
+T-050/T-051 ✅). Ver `docs/DEVLOG.md` (Sessão 29) e `docs/prompts/PROMPT-0046.md`.
+**Sessão 30 (agente worker, Frente C): T-052 — Registry de classes (contrato)** entregue:
+`packages/shared/src/classes.ts` (`ClassDef`/`CLASS_REGISTRY` só `archer`/
+`resolveClassSelection`), `Player.classId`/`skinId` no schema, join valida (inválido/ausente ⇒
+default, nunca rejeita). 12 testes novos, shared 38/38 · server 80/80 · tsc ×3 limpo. Ver
+`docs/DEVLOG.md` (Sessão 30) e `docs/prompts/PROMPT-0047.md`. Outras frentes (T-053+
+Personagens visual, T-060 Backend) podem estar em andamento em paralelo por outros agentes —
+conferir BACKLOG antes de assumir status.
 
 ---
 
@@ -89,8 +94,9 @@ ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
    (lobby) a partir da proposal (modelo barato, ver GUIA_MODELOS_CLAUDE.md). SPEC-0013 ainda
    não existe como arquivo — T-049 seguiu direto pela descrição do BACKLOG.
 2. **Frente S (Som) fechada:** T-049 ✅ · T-050 ✅ · T-051 ✅ (Sessões 28/29).
-3. Demais frentes paralelizáveis: **T-052** (⚠schema ClassDef — modelo forte) · **T-060**
-   (KDA/ranking). Lobby (T-057+) só depois de T-053 e T-061.
+3. **Frente C (Personagens):** T-052 ✅ (Sessão 30 — contrato `ClassDef`/`CLASS_REGISTRY` +
+   schema + join). Próxima: **T-053** (visual procedural do arqueiro, depende de T-052 ✅) ·
+   **T-060** (KDA/ranking) seguem paralelizáveis. Lobby (T-057+) só depois de T-053 e T-061.
 
 **F4 — Plataforma (SPEC-0008), continuação:**
 1. **T-029** 〔P〕 — ADR-012 liga na conta: a progressão persistente (acumulador da box, hoje

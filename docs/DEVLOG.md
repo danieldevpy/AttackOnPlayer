@@ -1,5 +1,26 @@
 # Devlog
 
+## 2026-07-06 — Sessão 30: T-052 (SPEC-0014) — Registry de classes (contrato)
+- **Task (agente worker, Frente C — Personagens/classe/skin, shared+server):**
+  `packages/shared/src/classes.ts` novo — `ClassDef { id, launcherIds, baseTint, skinIds }`,
+  `CLASS_REGISTRY` com só `archer` (os 3 launchers atuais — basic/heavy/rapid — viram os
+  "projéteis da classe"), `DEFAULT_CLASS_ID`, `isValidClassId`/`isValidSkinId`/
+  `resolveClassSelection` (mesmo molde de `SKILLS`/`WEAPON_PICKUP_LAUNCHERS`: registro
+  data-driven + função pura de resolução).
+- **Schema:** `Player.classId`/`Player.skinId` em `ArenaState.ts`, default vindo do registro
+  (`CLASS_REGISTRY[DEFAULT_CLASS_ID]`).
+- **Join:** `ArenaRoom.onJoin` aceita `classId?`/`skinId?` nas options e resolve via
+  `resolveClassSelection` antes de aplicar ao player — classe/skin inválida ou ausente cai pro
+  default, join nunca rejeita (mesma regra do `authToken` opcional da T-028b).
+- **Verificado:** 12 testes novos (8 em `shared/src/classes.test.ts`, 4 em
+  `server/src/rooms/classes.test.ts` cobrindo válida/inválida/ausente/bot). Gates: shared
+  38/38 · server 80/80 · tsc limpo em server/client/bots · smoke com `npm run bots -- 3 8`
+  (bots sem classId no join, sem regressão). `npm run aci -- index` rodado ao final. Detalhes:
+  `docs/prompts/PROMPT-0047.md`.
+- **Fora do escopo desta task (outras tasks do BACKLOG já cobrem):** trocar o launcher ativo
+  por classe (só 1 classe existe ainda), protocolo completo de join com nick/profile e troca
+  de classe pós-join (T-059), visual procedural/skins (T-053/T-056).
+
 ## 2026-07-06 — Sessão 29: T-050+T-051 (SPEC-0013) — mapeamento evento→som + áudio posicional
 - **Task (agente worker, Frente S — fecha a frente):** `packages/client/src/audio.ts` — registry
   saiu de 3 sons de teste (T-049) pra **27 sons nomeados** cobrindo todo o mapeamento pedido:
