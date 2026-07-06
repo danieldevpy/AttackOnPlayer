@@ -152,7 +152,7 @@
 - **T-025** 〔M〕 ✅ (PROMPT-0040) **CLI de mapas**: `npm run map -- gen|save|save-current|update|list|preview`. `gen` só imprime preview (não grava); `save`/`update` persistem (`update` regenera preservando id/name/author); `save-current` lê `/debug/rooms` (ganhou campo `mapId`) e regenera via `buildMap(w,h,seed)` — determinístico, sem endpoint novo. Novo em shared: `gameMapToMapFile` + `mapFilePreview` (ASCII com props/spawns/bandeira). Validado ponta a ponta: sala real capturada (`arena-live-capture.map.json`) e rejogada por `BOT_MAP_ID`, sem regressão. 2 mapas curados no repo (`arena-teste` + `arena-live-capture`). Gates 29/49/35 + tsc ×3. · depende: T-024
 
 **F4 — Plataforma (SPEC-0008)**
-- **T-026** 〔M〕 Telemetria estruturada p/ IA (NDJSON versionado, `npm run analyze`, watchdog de tick)
+- **T-026** 〔M〕 ✅ (PROMPT-0042) **Telemetria estruturada p/ IA**: 1 NDJSON versionado por partida (`packages/server/logs/telemetry/<roomId>.ndjson`) com `match_start`/`match_end`, `kill` (posições+níveis dos dois lados, threats), `upgrade_offer`/`upgrade_choice` (ofertados E recusados), `flag_possession`, `quit`, `tick_slow` (watchdog, >100ms), `error` (tick nunca derruba a sala). `npm run analyze -- [matchId|--list]` imprime funil, cards mais recusados, heatmap ASCII de mortes, watchdog/erros — lógica pura testável em `telemetry/analyze.ts`. Validado ponta a ponta com 8 bots reais. Gates 30/62/35 + tsc ×3.
 - **T-027** 〔G〕 Backend Django: accounts/maps/gameops/telemetry + admin (ADR-016 — fronteira Node×Django)
 - **T-028** 〔G〕 Auth: anônimo default + Google + "registre-se" (JWT no join; guest vincula ao logar) · depende: T-027
 - **T-029** 〔P〕 ADR-012 liga na conta (estatística, nunca poder in-round) · depende: T-028

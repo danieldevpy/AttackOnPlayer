@@ -86,6 +86,13 @@ import {
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
 import { loadMap } from "../mapLoader";
+import { TelemetryLog } from "../telemetry/log";
+import { TELEMETRY_SCHEMA_VERSION } from "../telemetry/events";
+
+// T-026 (SPEC-0008): limiar do watchdog de tick — 2x o intervalo nominal (TICK_RATE=20 ⇒ 50ms).
+// É um número de observabilidade (detecta o servidor "engasgando" sob carga), não de gameplay —
+// por isso não vive em shared/constants.ts junto dos números que afetam sensação/balance.
+const TICK_WATCHDOG_MS = 100;
 
 export const activeRooms = new Map<string, ArenaRoom>();
 
@@ -128,6 +135,24 @@ export class ArenaRoom extends Room<ArenaState> {
   // `xpComboLimit`: limite sorteado ao iniciar o combo (1ª coleta); -1 = ainda não sorteado.
   private xpComboCount = new Map<string, number>();
   private xpComboLimitMap = new Map<string, number>();
+
+  // T-026 (SPEC-0008): telemetria por evento (kill/upgrade/bandeira/quit/erro), 1 arquivo NDJSON
+  // por partida — complementa (não substitui) o `metrics` por-jogador acima.
+  private telemetry!: TelemetryLog;
+  private tickCount = 0;
+  private matchStartedAt = 0;
+  private totalJoins = 0;
+  private joinedAtMap = new Map<string, number>();
+
+  private telemetryBase() {
+    return {
+      v: TELEMETRY_SCHEMA_VERSION as typeof TELEMETRY_SCHEMA_VERSION,
+      ts: Date.now(),
+      tick: this.tickCount,
+      matchId: this.roomId,
+      mapId: this.state.mapId || undefined,
+    };
+  }
 
   onCreate(options?: { expectedPlayers?: number; flagEnabled?: boolean; mapId?: string }) {
     this.setState(new ArenaState());
@@ -174,6 +199,18 @@ export class ArenaRoom extends Room<ArenaState> {
     this.flagSystem.initAt(this.state.flag, this.flagCenter.x, this.flagCenter.z);
 
     activeRooms.set(this.roomId, this);
+
+    // T-026: telemetria por partida — 1 arquivo NDJSON por roomId.
+    this.telemetry = new TelemetryLog(this.roomId);
+    this.matchStartedAt = Date.now();
+    this.telemetry.write({
+      ...this.telemetryBase(),
+      type: "match_start",
+      mapW: this.state.mapW,
+      mapH: this.state.mapH,
+      mapSeed: this.state.mapSeed,
+      expectedPlayers: options?.expectedPlayers,
+    });
 
     // pré-popula metade do orçamento (ninguém entra num mapa vazio)
     for (let i = 0; i < Math.floor(this.budget / 2); i++) this.spawnCollectible();
@@ -254,6 +291,8 @@ export class ArenaRoom extends Room<ArenaState> {
     if (options?.boss) this.initBoss(client.sessionId, p);
     this.state.players.set(client.sessionId, p);
     this.metrics.start(client.sessionId, p.name, p.isBot, this.roomId, p.level);
+    this.totalJoins += 1;
+    this.joinedAtMap.set(client.sessionId, Date.now());
     // T-024: mapa curado não dá pra reconstruir por seed no cliente/bots — o JSON completo
     // viaja uma vez no join (mapas pequenos, sem custo de tráfego contínuo).
     if (this.curatedMapFile) client.send("map_data", this.curatedMapFile);
@@ -282,6 +321,15 @@ export class ArenaRoom extends Room<ArenaState> {
     if (p) {
       this.emitDebug("disconnect", { playerId: client.sessionId });
       this.metrics.end(client.sessionId, p.level);
+      const joinedAt = this.joinedAtMap.get(client.sessionId) ?? Date.now();
+      this.telemetry.write({
+        ...this.telemetryBase(),
+        type: "quit",
+        playerToken: p.playerToken,
+        reason: "disconnect",
+        durationS: Math.round((Date.now() - joinedAt) / 100) / 10,
+        finalLevel: p.level,
+      });
       console.log(`[arena] - ${p.name} (nível ${p.level})`);
     }
     this.effects.clear(client.sessionId);
@@ -289,15 +337,48 @@ export class ArenaRoom extends Room<ArenaState> {
     this.xpAccum.delete(client.sessionId); // SPEC-0005
     this.xpComboCount.delete(client.sessionId); // T-043
     this.xpComboLimitMap.delete(client.sessionId); // T-043
+    this.joinedAtMap.delete(client.sessionId); // T-026
     this.state.players.delete(client.sessionId);
   }
 
   onDispose() {
     activeRooms.delete(this.roomId);
+    this.telemetry.write({
+      ...this.telemetryBase(),
+      type: "match_end",
+      durationS: Math.round((Date.now() - this.matchStartedAt) / 100) / 10,
+      playerCount: this.totalJoins,
+    });
     console.log(`[arena] Sala ${this.roomId} fechada.`);
   }
 
+  /**
+   * T-026: wrapper fino sobre `updateInner` — watchdog de tick (dt real acima do limiar vira
+   * evento, nunca trava o loop) + captura de erro (um tick ruim não derruba a sala inteira;
+   * fica registrado como evento `error` com contexto, em vez de crashar o processo).
+   */
   private update(dt: number) {
+    this.tickCount += 1;
+    const dtMs = dt * 1000;
+    if (dtMs > TICK_WATCHDOG_MS) {
+      this.telemetry.write({ ...this.telemetryBase(), type: "tick_slow", dtMs, thresholdMs: TICK_WATCHDOG_MS });
+    }
+    try {
+      this.updateInner(dt);
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      console.error("[arena] erro no tick:", e);
+      this.telemetry.write({
+        ...this.telemetryBase(),
+        type: "error",
+        context: "update",
+        message: e.message,
+        stack: e.stack,
+      });
+    }
+  }
+
+  private updateInner(dt: number) {
     const now = Date.now();
 
     // efeitos expiram antes do movimento (velocidade correta no tick)
@@ -357,6 +438,17 @@ export class ArenaRoom extends Room<ArenaState> {
         // de XP (progressão); briga (≥1) → cura % da vida FALTANTE, escalando com o nº de
         // inimigos até um teto, sem overheal. Anti-snowball: cura só onde havia risco real.
         const threats = this.countLivingEnemiesNear(hit.killerId, hit.targetId, killer.x, killer.z);
+        this.telemetry.write({
+          ...this.telemetryBase(),
+          type: "kill",
+          killerToken: killer.playerToken,
+          killerPos: { x: killer.x, z: killer.z },
+          killerLevel: killer.level,
+          victimToken: victim.playerToken,
+          victimPos: { x: victim.x, z: victim.z },
+          victimLevel: victim.level,
+          threats,
+        });
         if (threats === 0) {
           this.grantXp(hit.killerId, killer, KILL_DUEL_XP_BONUS_PER_LEVEL * victim.level);
           this.emitDebug("kill_duel_bonus", { playerId: hit.killerId, xp: KILL_DUEL_XP_BONUS_PER_LEVEL * victim.level });
@@ -385,6 +477,13 @@ export class ArenaRoom extends Room<ArenaState> {
         if (this.state.flagEnabled && this.state.flag.carrierId === id) {
           this.flagSystem.drop(this.state.flag, p.x, p.z, now);
           this.emitDebug("flag_drop", { playerId: id, reason: "death" });
+          this.telemetry.write({
+            ...this.telemetryBase(),
+            type: "flag_possession",
+            playerToken: p.playerToken,
+            action: "drop",
+            pos: { x: p.x, z: p.z },
+          });
         }
 
         // SPEC-0005: a morte ZERA o nível (volta ao 1) — antes perdia só uma fração
@@ -464,6 +563,13 @@ export class ArenaRoom extends Room<ArenaState> {
           if (Math.hypot(p.x - this.state.flag.x, p.z - this.state.flag.z) < FLAG_PICKUP_DIST) {
             this.flagSystem.pickup(this.state.flag, id);
             this.emitDebug("flag_pickup", { playerId: id });
+            this.telemetry.write({
+              ...this.telemetryBase(),
+              type: "flag_possession",
+              playerToken: p.playerToken,
+              action: "pickup",
+              pos: { x: p.x, z: p.z },
+            });
           }
         });
       }
@@ -744,6 +850,13 @@ export class ArenaRoom extends Room<ArenaState> {
       cards: pending.cards,
       timeoutMs: UPGRADE_CHOICE_TIMEOUT_MS,
     });
+    this.telemetry.write({
+      ...this.telemetryBase(),
+      type: "upgrade_offer",
+      playerToken: p.playerToken,
+      level,
+      offeredCardIds: pending.cards.map((c) => c.id),
+    });
   }
 
   /**
@@ -799,6 +912,15 @@ export class ArenaRoom extends Room<ArenaState> {
       label: card.label,
       level,
       auto: cardId === null,
+    });
+    this.telemetry.write({
+      ...this.telemetryBase(),
+      type: "upgrade_choice",
+      playerToken: p.playerToken,
+      level,
+      chosenCardId: card.id,
+      declinedCardIds: pending.cards.filter((c) => c.id !== card.id).map((c) => c.id),
+      autoPick: cardId === null,
     });
 
     if (pending.levels.length > 0) this.sendUpgradeOffer(id, p, pending);

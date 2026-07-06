@@ -1,5 +1,12 @@
 # Devlog
 
+## 2026-07-06 — Sessão 22: T-026 (telemetria estruturada, abre F4/SPEC-0008)
+- **Telemetria por evento** (`packages/server/src/telemetry/`): 1 NDJSON versionado por partida (`packages/server/logs/telemetry/<roomId>.ndjson`, mesma pasta gitignored do M0). Eventos: `match_start`/`match_end`, `kill` (posições+níveis de matador E vítima + `threats` da SPEC-0010), `upgrade_offer`/`upgrade_choice` (cards ofertados E recusados — não só o escolhido), `flag_possession` (pickup/drop), `quit`, `tick_slow` (watchdog: dt real > 100ms, 2× o nominal de `TICK_RATE=20`), `error` (tick captura exceção e grava evento em vez de derrubar a sala — `update()` virou wrapper fino sobre `updateInner()`).
+- **`npm run analyze -- [matchId|--list]`:** lê o NDJSON de uma partida e imprime funil de eventos, cards mais recusados (ordenado por taxa de recusa), heatmap ASCII de mortes (posição da vítima, bucketizado pelo tamanho do mapa) e resumo de watchdog/erros. Lógica pura em `telemetry/analyze.ts` (testável sem tocar disco), CLI fino em `cli/analyze.ts` — mesmo padrão de `mapFile.ts`/`mapCli.ts` da T-025.
+- **Validado ponta a ponta:** servidor real + 8 bots por 60s → `npm run analyze` respondeu de fato "onde as mortes se concentram" (heatmap) e "qual card é mais recusado" (tabela ordenada) — os 2 critérios de aceite centrais da SPEC-0008 pra esta task.
+- **Gates:** shared 30/30 · server **62/62** (13 testes novos: `telemetry/log.test.ts` + `telemetry/analyze.test.ts`) · bots 35/35 · tsc ×3 limpo. Detalhes em `docs/prompts/PROMPT-0042.md`.
+- **Próximo passo:** T-027 (backend Django + admin, ADR-016) — escopo bem maior (novo serviço, fronteira Node×Django), recomendo alinhar com o CD antes de começar.
+
 ## 2026-07-06 — Sessão 21: 3 correções (bandeira, verificação SPEC-0010, variedade de cards)
 - **Bandeira:** pedido do CD já estava coberto por T-041/T-042 (livre=acesa/carregada=apagada/cooldown=some) — código revisado, sem bug. F3 ganhou linha de estado textual (`bandeira: livre/carregada/cooldown`) porque o ambiente de preview desta sessão não sustenta o loop de render WebGL (`document.hidden` pausa o `requestAnimationFrame` — causa raiz confirmada, mesma limitação já suspeitada em sessões anteriores).
 - **SPEC-0010:** confirmada funcional via smoke ao vivo (8 bots, 100s, polling do `/debug/rooms`) — `kill_heal`/`kill_duel_bonus` batendo a fórmula da spec, `hp_orb`/`shield_temp` respeitando teto e respawn; redução de dano do escudo já coberta por teste unitário.
