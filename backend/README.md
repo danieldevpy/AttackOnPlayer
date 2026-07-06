@@ -12,23 +12,31 @@ Django 5.1 · DRF · Postgres 16 · PyJWT (RS256) · pip + venv.
 
 ```bash
 cd backend
+./dev.sh
+```
+
+Idempotente: na primeira vez cria a venv, instala `requirements-dev.txt`, copia `.env.example`
+para `.env` e gera o par de chaves JWT (`secrets/`); nas próximas só sobe o Postgres, aplica
+migrations e o `runserver` em `0.0.0.0:${DJANGO_PORT:-8000}`. Superuser ainda é manual
+(`python manage.py createsuperuser`, com a venv ativa) — sanidade: `curl -s localhost:8000/healthz`
+→ `{"ok": true, ...}`.
+
+Passo a passo equivalente, caso prefira rodar na mão:
+
+```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt
-
 cp .env.example .env            # ajuste segredos locais
-
 docker compose up -d db         # Postgres em localhost:5432
-
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver 0.0.0.0:8000
 ```
 
-Sanidade: `curl -s localhost:8000/healthz` → `{"ok": true, ...}`.
-
 ## Chaves JWT (RS256) — T-027c
 
-As chaves **não são commitadas** (`secrets/` e `*.pem` estão no `.gitignore`). Gerar localmente:
+As chaves **não são commitadas** (`secrets/` e `*.pem` estão no `.gitignore`). `./dev.sh` gera o
+par automaticamente se `secrets/jwt_private.pem` não existir. Para gerar na mão:
 
 ```bash
 mkdir -p backend/secrets
