@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     # apps da plataforma (adicionados conforme as sub-tasks T-027b..f)
     "common",
     "accounts",
+    "maps",
 ]
 
 MIDDLEWARE = [
