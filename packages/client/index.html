@@ -6,6 +6,14 @@
     <title>AttackOnPlayer — M0.5</title>
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #111; }
+      /* T-048 (SPEC-0012): imersão de navegador — o jogo inteiro (fora do overlay de debug)
+         não deixa o navegador roubar o gesto: sem seleção de texto, sem pinch-zoom/pull-to-refresh. */
+      html, body {
+        touch-action: none; overscroll-behavior: none;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #debug-overlay, #debug-overlay * { user-select: text; }
       /* Perfil mouse (ADR-015/T-019): oculta o cursor do SO — o crosshair abaixo o substitui */
       body.cursor-hidden, body.cursor-hidden canvas { cursor: none; }
       #crosshair {
@@ -44,6 +52,9 @@
         border: 1px solid transparent; background: transparent; color: #ccc; cursor: pointer;
       }
       #profile-selector button.active { background: rgba(255,213,79,.18); border-color: #ffd54f66; color: #ffd54f; }
+      /* T-048 (SPEC-0012): tela cheia — separado por uma divisória sutil dos perfis de controle. */
+      #fullscreen-toggle { margin-left: 4px; padding-left: 10px; border-left: 1px solid rgba(255,255,255,.15); }
+      #fullscreen-toggle.active { background: rgba(255,213,79,.18); border-color: #ffd54f66; color: #ffd54f; }
       /* HUD gamificado (passe visual): badge de nível + barras HP/XP + chips de efeito.
          Regra mantida: só exibe estado — a UI é a "camada de leitura", nada é calculado. */
       #hud.hud-panel {
@@ -211,6 +222,7 @@
       <button data-profile="mouse" title="Mouse">🖱️</button>
       <button data-profile="keyboard" title="Teclado">⌨️</button>
       <button data-profile="touch" title="Touch">📱</button>
+      <button id="fullscreen-toggle" title="Tela cheia">⛶</button>
     </div>
     <div id="touch-move-base" class="touch-stick-base"><div id="touch-move-knob" class="touch-stick-knob"></div></div>
     <div id="touch-aim-base" class="touch-stick-base"><div id="touch-aim-knob" class="touch-stick-knob"></div></div>

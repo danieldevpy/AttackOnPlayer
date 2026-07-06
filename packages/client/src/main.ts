@@ -21,6 +21,11 @@ import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOff
 import { createVfxSystem } from "./vfx";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
+import { initImmersion, setUnloadGuard } from "./immersion";
+
+// T-048 (SPEC-0012): blindagem contra ações do navegador (menu de contexto, zoom, seleção
+// de texto, etc.) — sempre ativa, independente de perfil de controle ou conexão.
+initImmersion();
 
 // T-023 (SPEC-0006): build prod não tem overlay de debug (F3/roster/feeds) — só dev.
 const IS_DEV = import.meta.env.DEV;
@@ -291,6 +296,10 @@ async function connect() {
       token: playerToken
     });
     mySessionId = room.sessionId;
+    // T-048 (SPEC-0012): partida em andamento pede confirmação antes de fechar/recarregar a aba.
+    setUnloadGuard(true);
+    room.onLeave(() => setUnloadGuard(false));
+    room.onError(() => setUnloadGuard(false));
     room.onMessage("pong", (t: number) => (ping = Math.round(performance.now() - t)));
     room.onMessage("announce", (msg: { kind: string }) => {
       if (msg.kind === "farm_event") pushToast("🔥 farm_event na zona de guerra!"); // T-023: toast, não mais texto cru

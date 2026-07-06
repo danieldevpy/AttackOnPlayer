@@ -5,9 +5,8 @@
 
 **Atualizado em:** 2026-07-06
 **Branch:** `evolução`. **Marco:** V1.
-**Sessão 24:** T-027 concluída (backend Django completo: accounts/maps/gameops/telemetry + admin +
-`platformClient` no Node) — fecha o backend da F4 (SPEC-0008). Ver `docs/DEVLOG.md` (Sessão 24) e
-`docs/DECISION_LOG.md` (ADR-019).
+**Sessão 25:** T-048 concluída (imersão de navegador — SPEC-0012, fora de fase, pedido direto
+do CD antes de retomar T-028). Ver `docs/DEVLOG.md` (Sessão 25) e `docs/prompts/PROMPT-0043.md`.
 
 ---
 
@@ -23,6 +22,9 @@
   preview pausa o `requestAnimationFrame` do client — sem loop de render, sem screenshot útil.
   Verificação visual de 3D/UI precisa do CD num browser de verdade. `.claude/launch.json` tem
   `server-verify` (2604) / `client-verify` (5299) prontos, com override `?port=NNNN` no cliente.
+  **Novo (T-048):** por essa mesma razão, tela cheia real (exige gesto de clique) e o diálogo
+  nativo do `beforeunload` (fechar/recarregar aba) também não são verificáveis no ambiente
+  automatizado — pendem de confirmação do CD num browser de verdade.
 - **Cuidado com `cd` + comandos em sequência no Bash tool:** um `cd` feito num comando anterior pode
   deixar o cwd em um workspace errado e fazer `npm run <script-da-raiz>` resolver o script errado.
   Preferir `npm --prefix <caminho-absoluto>` quando o cwd não for garantido.
@@ -32,24 +34,23 @@
 
 ## Onde paramos
 
-**F3 (SPEC-0007) fechada** desde a sessão 20. Sessão 24 (esta) entregou **T-027 — Backend Django**
-completo, em 7 sub-tasks incrementais (T-027a..g), cada uma com gate verde e commit próprio:
-- **accounts:** `Account` (custom user, PK uuid) + `PlayerStats` + `GuestLink`; JWT RS256 (PyJWT) com
-  JWKS público (`/auth/jwks.json`), guest por padrão (`/auth/guest`), perfil (`/auth/me`) e
-  `/auth/link` (migra `PlayerStats` do guest pra conta registrada — aceite #5 da SPEC-0008).
-- **maps:** registry (`MapEntry`) + `validate_map_file` (espelho Python das regras de bounds/objectId/
-  spawns/flag de `mapFile.ts`) + `import_maps` (ingere `maps/*.map.json`) + `GET /maps/`/`GET /maps/<id>/`
-  (devolve o `MapFileV1` byte-a-byte idêntico ao arquivo — verificado).
-- **gameops:** `RoomConfig` (base) + `GameEvent` (override por janela) + `GET /gameops/config/` —
-  verificado manualmente: `GameEvent` "XP ×2" ativo reflete na hora, sem deploy (aceite #2).
-- **telemetry:** `POST /telemetry/batch/` valida schema T-026, ingestão tudo-ou-nada.
-- **Node (`packages/server/src/platform/platformClient.ts`):** cache+TTL de `gameops/config` +
-  batch de telemetria, atrás de `PLATFORM_ENABLED` (default off). `ArenaRoom.onCreate` virou `async`
-  e aplica a config quando habilitada. Verificado: Django derrubado no meio → nova room cai no
-  cache/defaults sem lançar (aceite #3).
+**F3 (SPEC-0007) fechada** desde a sessão 20. **F4 (SPEC-0008)** entregou T-026/T-027 (sessões
+22/24) e está em T-028 (auth Google + registro). **Sessão 25 (esta)** foi uma interrupção
+direta do CD, fora da fila V1, antes de retomar T-028:
 
-**Gates:** shared 30/30 · server 70/70 · bots 35/35 · tsc limpo ×3 · backend pytest 71/71 (Postgres
-real) · `ruff check` limpo · `makemigrations --check` limpo.
+- **T-048 — Imersão de navegador (SPEC-0012):** botão ⛶ de tela cheia no `#profile-selector`
+  (Fullscreen API); `contextmenu`/clique-do-meio/`Ctrl+scroll`/`gesturestart`/`dragstart`
+  suprimidos globalmente (não são mais atributo de perfil de controle — sempre ativos);
+  `touch-action`/`overscroll-behavior`/`user-select` globais (antes só `body.touch-profile`
+  tinha `touch-action`), com exceção de seleção de texto no overlay de debug (F3); `beforeunload`
+  liga com sala conectada (`room.onLeave`/`onError` desliga) — confirmação nativa antes de
+  fechar/recarregar no meio de uma partida. Tudo em `packages/client/src/immersion.ts` (novo),
+  client-only, zero mudança de contrato de rede.
+- **Gates:** shared 30/30 · server 70/70 · bots 35/35 · tsc limpo ×3 (inalterados — mudança é
+  100% client). Verificado em browser real via preview (`server-verify`+`client-verify`):
+  conexão ponta a ponta ok, `contextmenu`/`wheel(ctrl)`/`dragstart` confirmam `defaultPrevented`,
+  estilos globais confirmados via computed style. Tela cheia de fato e o diálogo do
+  `beforeunload` exigem gesto real de usuário — pendem de confirmação do CD.
 
 **Fora da fila V1 (paralelo):** `packages/aci` — infraestrutura de contexto para agentes
 (PROPOSAL-0003, ADR-018), F0-F3 prontos. Próximo: F4 (contexto por feature) e F5 (servidor MCP) —
@@ -68,6 +69,7 @@ ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
 
 | Item | Notas |
 |---|---|
+| Confirmar tela cheia + `beforeunload` (T-048) num browser de verdade | ambiente automatizado não exercita gesto real de clique nem o diálogo nativo |
 | Sensação dos cards sorteados (12 no pool) | aprovado sem ter jogado (sessão 21); reabrir se destoar jogando |
 | Visual da bandeira (livre/carregada/cooldown) | aprovado sem ter jogado (sessão 21); F3 mostra o estado em texto |
 | Sensação da SPEC-0011 (aura, arsenal, bandeira, combo) | dials na F2.6 do BACKLOG |
@@ -95,9 +97,6 @@ ruff check .
 
 ## Leituras se a sessão nova for só conversa
 
-- Esta sessão → `docs/DEVLOG.md` (Sessão 24) e `docs/DECISION_LOG.md` (ADR-019)
-- Sessão anterior → `docs/DEVLOG.md` (Sessão 23 — merge do ACI)
+- Esta sessão → `docs/DEVLOG.md` (Sessão 25) e `docs/prompts/PROMPT-0043.md`
+- Sessão anterior → `docs/DEVLOG.md` (Sessão 24 — backend Django, ADR-019)
 - Escopo por task + dials da SPEC-0011 → `docs/BACKLOG.md` seção F2.6
-- Fila V1 → `docs/BACKLOG.md` (T-027 ✅; próxima: T-028 — Auth Google/registro/login)
-- F4 em detalhe → `specs/SPEC-0008-plataforma-django-auth.md`
-- Backend → `backend/README.md` (como rodar, chaves JWT, gates)

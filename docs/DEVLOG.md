@@ -1,5 +1,31 @@
 # Devlog
 
+## 2026-07-06 — Sessão 25: T-048 — imersão de navegador (SPEC-0012, fora de fase)
+- **Pedido direto do CD, antes de retomar T-028:** "quero que o jogo ganhe uma imersão no
+  navegador, estilo tela cheia, sem que atalhos, cliques errados etc, atrapalhem o jogador."
+  Virou `SPEC-0012` (aprovada no próprio pedido) + `T-048` no BACKLOG.
+- **`packages/client/src/immersion.ts` (novo):** botão ⛶ de tela cheia (Fullscreen API,
+  `#fullscreen-toggle` dentro do `#profile-selector` existente, ícone reflete `fullscreenchange`
+  via classe `.active`); `contextmenu`, clique-do-meio, `Ctrl/Cmd+scroll` (zoom), `gesturestart`
+  (pinch no Safari) e `dragstart` suprimidos globalmente no documento — nenhum é atributo de
+  perfil de controle, então ficam sempre ativos, independente de mouse/teclado/touch.
+  `setUnloadGuard(bool)` liga/desliga um `beforeunload` que pede confirmação nativa antes de
+  fechar/recarregar a aba — ligado em `main.ts` no `joinOrCreate` bem-sucedido, desligado em
+  `room.onLeave`/`room.onError` (handlers novos, não existiam antes).
+- **`index.html`:** `touch-action: none` + `overscroll-behavior: none` + `user-select: none`
+  globais em `html, body` (antes só `body.touch-profile` tinha `touch-action`) — bloqueia
+  pinch-zoom e pull-to-refresh em mobile independente do perfil ativo. Overlay de debug (F3)
+  ganhou exceção (`user-select: text`) pra continuar copiável em dev.
+- **Verificação:** gates inalterados (mudança 100% client) — shared 30/30 · server 70/70 ·
+  bots 35/35 · tsc limpo. Browser real via preview (`server-verify`:2604 + `client-verify`:5299):
+  HUD conectou ponta a ponta com o servidor real sem regressão do fluxo de join; disparo
+  sintético de `contextmenu`/`wheel(ctrl)`/`dragstart` confirmou `defaultPrevented`; estilos
+  globais (`touch-action`/`user-select`) confirmados via computed style; exceção do debug
+  overlay preservada. Fullscreen de fato e o diálogo nativo do `beforeunload` exigem gesto real
+  de usuário — não testáveis no ambiente automatizado, ficam para o CD confirmar num browser.
+  Detalhes: `docs/prompts/PROMPT-0043.md`.
+- **Próximo passo:** retomar a fila V1 em T-028 (auth Google + registro, SPEC-0008).
+
 ## 2026-07-06 — Sessão 24: T-027 — backend Django completo (SPEC-0008/ADR-016/ADR-019)
 - **Backend novo em `backend/`** (não é workspace npm — pip+venv, Django 5.1+DRF+Postgres 16 via docker compose), entregue em sub-tasks incrementais com gate verde a cada uma (T-027a..g): scaffold + `common` (service token, `/healthz`) → `accounts` (Account/PlayerStats/GuestLink) → JWT RS256 + guest/JWKS/link → `maps` (registry + validador espelho do TS + `import_maps`) → `gameops` (RoomConfig/GameEvent + config efetiva) → `telemetry` (ingestão batch) → integração Node (`platformClient.ts` em `packages/server`).
 - **Auth (fundação, T-028 fecha o resto):** guest por padrão (1 clique) com `Account` custom (PK uuid), JWT RS256 assinado/verificado via PyJWT, JWKS público para o Colyseus validar sem round-trip, e `POST /auth/link` migra `PlayerStats` do guest pra conta registrada. Google OAuth e a UI de login ficam pra T-028.
