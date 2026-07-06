@@ -1,4 +1,4 @@
-import { GameMap, Prop, Zone, TILE_FREE, TILE_WALL, floodFillReachable } from "./map";
+import { GameMap, Prop, Zone, TILE_FREE, TILE_WALL, floodFillReachable, spawnPoints, mapCenter } from "./map";
 import { OBJECT_DEFS, isKnownObjectId } from "./objects";
 
 /** T-024 (SPEC-0007): formato de mapa versionado. Um mapa curado é um `MapFileV1` salvo em
@@ -85,4 +85,75 @@ export function mapFileToGameMap(m: MapFileV1): GameMap {
   }
 
   return { w: m.w, h: m.h, seed: m.seed ?? 0, cells, props, zones: m.zones ?? [] };
+}
+
+/** T-025 (CLI de mapas): inverso de `mapFileToGameMap` — usado por `gen`/`save`/`update` da CLI
+ * pra empacotar um `GameMap` recém-gerado (por seed) no formato v1 persistível. Spawns e
+ * bandeira usam os defaults de sempre (cantos/meios-de-borda, centro do mapa) — o mesmo que a
+ * sala usa no caminho procedural (`ArenaRoom.onCreate` sem `mapId`). */
+export function gameMapToMapFile(map: GameMap, meta: { id: string; name: string; author?: string }): MapFileV1 {
+  return {
+    version: MAP_FILE_VERSION,
+    id: meta.id,
+    name: meta.name,
+    author: meta.author,
+    w: map.w,
+    h: map.h,
+    seed: map.seed,
+    instances: map.props.map((p) => ({ objectId: p.type, x: p.x, z: p.z })),
+    zones: map.zones,
+    spawns: spawnPoints(map.w, map.h),
+    flag: mapCenter(map.w, map.h),
+  };
+}
+
+const OBJECT_SYMBOLS: Record<string, string> = {
+  pedra: "o",
+  arvore: "A",
+  caixa: "C",
+  muro: "=",
+  bandeira: "b",
+};
+
+/** T-025 (CLI de mapas): preview ASCII de um `MapFileV1` — legível o suficiente pra revisar um
+ * mapa curado sem abrir o jogo (critério de aceite da SPEC-0007). Desenha o grid completo
+ * (borda + props pelo footprint do registry) e sobrepõe spawns/bandeira-objetivo como marcadores. */
+export function mapFilePreview(m: MapFileV1): string {
+  const grid: string[][] = [];
+  for (let z = 0; z < m.h; z++) {
+    const row: string[] = [];
+    for (let x = 0; x < m.w; x++) {
+      const border = x === 0 || z === 0 || x === m.w - 1 || z === m.h - 1;
+      row.push(border ? "#" : ".");
+    }
+    grid.push(row);
+  }
+
+  for (const inst of m.instances ?? []) {
+    const def = OBJECT_DEFS[inst.objectId];
+    if (!def) continue;
+    const sym = OBJECT_SYMBOLS[inst.objectId] ?? "?";
+    for (let dz = 0; dz < def.footprint.h; dz++) {
+      for (let dx = 0; dx < def.footprint.w; dx++) {
+        const tx = inst.x + dx;
+        const tz = inst.z + dz;
+        if (tx >= 0 && tz >= 0 && tx < m.w && tz < m.h) grid[tz][tx] = sym;
+      }
+    }
+  }
+
+  for (const s of m.spawns ?? []) {
+    const tx = Math.floor(s.x);
+    const tz = Math.floor(s.z);
+    if (tx >= 0 && tz >= 0 && tx < m.w && tz < m.h) grid[tz][tx] = "S";
+  }
+  if (m.flag) {
+    const tx = Math.floor(m.flag.x);
+    const tz = Math.floor(m.flag.z);
+    if (tx >= 0 && tz >= 0 && tx < m.w && tz < m.h) grid[tz][tx] = "F";
+  }
+
+  const header = `Mapa "${m.id}" — ${m.name} (${m.w}x${m.h}${m.seed != null ? `, seed ${m.seed}` : ""})`;
+  const legend = "Legenda: # parede/borda · . livre · o pedra · A arvore · C caixa · = muro · b bandeira(zona) · S spawn · F bandeira-objetivo";
+  return [header, ...grid.map((row) => row.join("")), "", legend].join("\n");
 }

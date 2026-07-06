@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MapFileV1, validateMapFile, mapFileToGameMap } from "./mapFile";
-import { isWall } from "./map";
+import { MapFileV1, validateMapFile, mapFileToGameMap, gameMapToMapFile, mapFilePreview } from "./mapFile";
+import { isWall, buildMap } from "./map";
 
 function baseMap(overrides: Partial<MapFileV1> = {}): MapFileV1 {
   return {
@@ -59,5 +59,43 @@ describe("mapFileToGameMap", () => {
     const map = mapFileToGameMap(baseMap({ instances: [{ objectId: "bandeira", x: 4, z: 4 }] }));
     expect(isWall(map, 4, 4)).toBe(false);
     expect(map.props.some((p) => p.type === ("bandeira" as any))).toBe(true);
+  });
+});
+
+describe("gameMapToMapFile (T-025: CLI de mapas)", () => {
+  it("é o inverso de mapFileToGameMap — round-trip preserva colisão", () => {
+    const generated = buildMap(21, 17, 42);
+    const file = gameMapToMapFile(generated, { id: "gerado", name: "Gerado" });
+    expect(validateMapFile(file)).toEqual([]);
+
+    const rebuilt = mapFileToGameMap(file);
+    expect(rebuilt.cells).toEqual(generated.cells);
+    expect(rebuilt.props.length).toBe(generated.props.length);
+  });
+
+  it("aplica id/name/author do metadado pedido", () => {
+    const file = gameMapToMapFile(buildMap(15, 13, 1), { id: "x", name: "Nome X", author: "IA" });
+    expect(file.id).toBe("x");
+    expect(file.name).toBe("Nome X");
+    expect(file.author).toBe("IA");
+    expect(file.seed).toBe(1);
+  });
+});
+
+describe("mapFilePreview (T-025: CLI de mapas)", () => {
+  it("desenha grid do tamanho certo com borda de parede", () => {
+    const file = gameMapToMapFile(buildMap(11, 9, 7), { id: "p", name: "Preview" });
+    const preview = mapFilePreview(file);
+    const lines = preview.split("\n").filter((l) => /^[#.A-Za-z=]+$/.test(l) && l.length === 11);
+    expect(lines.length).toBe(9);
+    expect(lines[0]).toBe("#".repeat(11));
+  });
+
+  it("marca spawns com S e a bandeira com F", () => {
+    const file = baseMap({ w: 10, h: 10, spawns: [{ x: 1.5, z: 1.5 }], flag: { x: 5, z: 5 } });
+    const preview = mapFilePreview(file);
+    const rows = preview.split("\n").slice(1, 11);
+    expect(rows[1][1]).toBe("S");
+    expect(rows[5][5]).toBe("F");
   });
 });

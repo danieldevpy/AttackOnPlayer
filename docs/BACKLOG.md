@@ -149,7 +149,7 @@
 
 **F3 — Conteúdo (SPEC-0007)**
 - **T-024** 〔G〕 ✅ (PROMPT-0036) **Registry de objetos** (`ObjectDef` no shared — código agora, sistema/Django depois) + formato de mapa v1 (instâncias `{objectId, x, z, ...}`, zonas, spawns, bandeira) + loader por `mapId` com validação/flood-fill
-- **T-025** 〔M〕 CLI de mapas: `npm run map -- gen|save|save-current|update|list|preview` (**save-current** serializa o mapa da sala em execução; preview ASCII para curadoria IA+CD) · depende: T-024
+- **T-025** 〔M〕 ✅ (PROMPT-0040) **CLI de mapas**: `npm run map -- gen|save|save-current|update|list|preview`. `gen` só imprime preview (não grava); `save`/`update` persistem (`update` regenera preservando id/name/author); `save-current` lê `/debug/rooms` (ganhou campo `mapId`) e regenera via `buildMap(w,h,seed)` — determinístico, sem endpoint novo. Novo em shared: `gameMapToMapFile` + `mapFilePreview` (ASCII com props/spawns/bandeira). Validado ponta a ponta: sala real capturada (`arena-live-capture.map.json`) e rejogada por `BOT_MAP_ID`, sem regressão. 2 mapas curados no repo (`arena-teste` + `arena-live-capture`). Gates 29/49/35 + tsc ×3. · depende: T-024
 
 **F4 — Plataforma (SPEC-0008)**
 - **T-026** 〔M〕 Telemetria estruturada p/ IA (NDJSON versionado, `npm run analyze`, watchdog de tick)

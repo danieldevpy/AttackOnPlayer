@@ -6,7 +6,7 @@ import { MapFileV1, validateMapFile, mapFileToGameMap, GameMap } from "@aop/shar
  * de nenhum package (a CLI da T-025 escreve/lê aqui). Servidor roda sempre via tsx a partir do
  * source (sem etapa de build), então `__dirname` aponta pro `.ts` real e a subida até a raiz do
  * repo é estável: packages/server/src -> packages/server -> packages -> raiz. */
-const MAPS_DIR = join(__dirname, "..", "..", "..", "maps");
+export const MAPS_DIR = join(__dirname, "..", "..", "..", "maps");
 
 export function loadMapFile(mapId: string): MapFileV1 {
   const path = join(MAPS_DIR, `${mapId}.map.json`);

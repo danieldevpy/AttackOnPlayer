@@ -13,7 +13,7 @@ app.get("/debug/rooms", async (_req, res) => {
   const roomsData = Array.from(activeRooms.values()).map(r => ({
     roomId: r.roomId,
     clients: r.clients.length,
-    map: { w: r.state.mapW, h: r.state.mapH, seed: r.state.mapSeed },
+    map: { w: r.state.mapW, h: r.state.mapH, seed: r.state.mapSeed, mapId: r.state.mapId || undefined },
     budget: (r as any).budget ?? 0,
     projectiles: r.state.projectiles.size,
     recentEvents: r.debugEvents ?? []
