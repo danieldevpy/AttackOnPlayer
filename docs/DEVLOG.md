@@ -1,5 +1,16 @@
 # Devlog
 
+## 2026-07-06 — Sessão 27 (design): PROPOSAL-0004 — som, personagens/classes e lobby
+- **Pedido do CD:** 4 frentes pra fechar na V1 (som procedural; classe `archer` low poly por
+  composição direto no Three.js com animações; fechamento backend/admin — ranking/KDA/settings/
+  nicks/eventos/salas; janela pré-sala) + console staff opcional pós-V1. Plano fatiado para
+  execução agêntica com modelos menores + guia de alocação de modelo Claude por task.
+- **Entregue:** `PROPOSAL-0004` · BACKLOG com **T-049..T-063** e T-D13/D14/D15 (SPEC-0013/0014/
+  0015 a gerar) · `instrucoes/GUIA_MODELOS_CLAUDE.md`. Decisões do CD: som WebAudio procedural;
+  tasks direto no BACKLOG. Sem mudança de código. Detalhes: `docs/prompts/PROMPT-0044.md`.
+- **Próximo passo:** gerar as specs (T-D13..D15, modelo barato) e abrir as frentes S/C/B em
+  paralelo (T-049 · T-052 · T-060).
+
 ## 2026-07-06 — Sessão 26: T-028 — Auth email+senha (SPEC-0008/ADR-020)
 - **Pedido do CD:** retomar T-028, mas separar Google OAuth como opcional/futuro — só a fatia
   email+senha entra agora. Virou `ADR-020` + T-028 fechada em 3 sub-tasks incrementais

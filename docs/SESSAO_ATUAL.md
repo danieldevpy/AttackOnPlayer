@@ -5,10 +5,10 @@
 
 **Atualizado em:** 2026-07-06
 **Branch:** `evolução`. **Marco:** V1.
-**Sessão 26:** T-028 concluída (auth email+senha: Django register/login + verificação de JWT
-no join do Colyseus + janela discreta no client) — Google OAuth adiado a pedido do CD
-(ADR-020, vira T-028-google). Ver `docs/DEVLOG.md` (Sessão 26) e `docs/DECISION_LOG.md`
-(ADR-020).
+**Sessão 27 (design):** PROPOSAL-0004 aprovada (som procedural + classe `archer` low poly +
+lobby pré-sala + fechamento backend/admin + console staff opcional) — tasks **T-049..T-063**
+e T-D13/D14/D15 no BACKLOG; alocação de modelo por task em `instrucoes/GUIA_MODELOS_CLAUDE.md`.
+Ver `docs/DEVLOG.md` (Sessão 27) e `docs/prompts/PROMPT-0044.md`.
 
 ---
 
@@ -75,6 +75,12 @@ backend pytest 79/79 (+9 de register/login, Postgres real) · `ruff check` limpo
 ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
 
 ## Próximo passo
+
+**PROPOSAL-0004 (Sessão 27) — abrir as frentes:**
+1. **T-D13/D14/D15** 〔docs〕 — gerar SPEC-0013 (som), SPEC-0014 (personagens) e SPEC-0015
+   (lobby) a partir da proposal (modelo barato, ver GUIA_MODELOS_CLAUDE.md).
+2. Frentes paralelizáveis: **T-049** (AudioSystem) · **T-052** (⚠schema ClassDef — modelo forte)
+   · **T-060** (KDA/ranking). Lobby (T-057+) só depois de T-053 e T-061.
 
 **F4 — Plataforma (SPEC-0008), continuação:**
 1. **T-029** 〔P〕 — ADR-012 liga na conta: a progressão persistente (acumulador da box, hoje

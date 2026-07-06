@@ -170,4 +170,41 @@
 - **T-032** 〔G〕 🚀 V1 na VPS: deploy prod, domínio+TLS, página inicial, teste de carga, go-live e divulgação · depende: todas
 
 ---
+
+# V1 — Som, personagens e lobby (PROPOSAL-0004) · ✅ aprovada pelo CD (2026-07-06)
+
+> Plano: **`docs/proposals/PROPOSAL-0004-som-personagens-lobby.md`**. Specs a gerar: Som → `SPEC-0013` · Personagens → `SPEC-0014` · Lobby → `SPEC-0015` (tasks de docs abaixo).
+> Alocação de modelo por task: **`instrucoes/GUIA_MODELOS_CLAUDE.md`**.
+> Frentes disjuntas (Som ∥ Personagens ∥ Backend; Lobby depois) — paralelizáveis; dentro da frente, executar em série. Tudo antes de T-030/T-032.
+
+**Frente S — Som (SPEC-0013) — client-only**
+- **T-049** 〔M〕 **AudioSystem + registry procedural**: `packages/client/src/audio.ts` novo — `SoundDef` (synth WebAudio: tipo/freq/envelope/noise; campo `file?` reservado), `AUDIO_REGISTRY`, `AudioContext` com unlock no primeiro gesto, master gain + mute, teto de vozes, pool. Espelhar o padrão do `vfx.ts` (T-022): sons derivados de eventos existentes, nada ad-hoc no `main.ts`. **Contexto:** `packages/client/src/vfx.ts` (padrão) · `packages/client/src/main.ts` (pontos de evento). **Aceite:** 3 sons de teste tocam por evento real; mute funciona; zero erro de autoplay no console.
+- **T-050** 〔M〕 **Mapeamento evento→som completo**: coleta por kind (xp/coin/hp/shield/weapon/box/farm_event), fire por launcher (basic/heavy/rapid), hit dado/recebido, kill/death/respawn, level-up + card escolhido, bandeira (pickup/drop/cooldown/respawn), xp_combo, spawn_materialize, toast. Sons distinguíveis entre si (tabela na SPEC-0013). **Contexto:** `packages/client/src/audio.ts` · `vfx.ts` (lista de eventos) · `hud.ts`. **Aceite:** partida com bots audível e legível de olhos fechados; sem estouro de vozes. · depende: T-049
+- **T-051** 〔P〕 **Áudio posicional + polish**: atenuação/pan por distância da câmera, ducking simples, sliders master/sfx persistidos em localStorage (o lobby T-058 expõe depois). **Contexto:** `packages/client/src/audio.ts`. · depende: T-050
+
+**Frente C — Personagens/classe/skin (SPEC-0014) — shared+client**
+- **T-052** 〔M〕⚠schema **Registry de classes (contrato)**: `packages/shared/src/classes.ts` — `ClassDef { id, launcherIds, baseTint, skinIds }`, `CLASS_REGISTRY` com só `archer` (launchers atuais viram os projéteis da classe); `Player.classId`/`skinId` no schema; join valida (inválido ⇒ default, nunca rejeita). **Contexto:** `packages/shared/src/{launchers,constants}.ts` · `packages/server/src/state/ArenaState.ts` · `packages/server/src/rooms/ArenaRoom.ts`. **Aceite:** testes de join com classe válida/inválida/ausente; bots sem regressão; tsc ×3.
+- **T-053** 〔G〕 **Arqueiro low poly procedural (F2, ADR-008)**: `packages/client/src/characters.ts` — `createCharacterVisual(classId, skinId)` retorna `THREE.Group` com partes nomeadas (cabeça cone 4 lados, corpo cylinder, braços/pernas boxes, capuz, arco), `flatShading`, **geometrias/materiais singleton**; plugado em `createPlayerVisual` (`visuals.ts`, `VISUAL_PHASE=2` para personagens). Referência visual: imagem do CD (PROMPT-0044). **Contexto:** `instrucoes/FASES_VISUAIS.md` · `packages/client/src/visuals.ts`. **Aceite:** silhueta legível e direção óbvia de facing; draw calls medidos antes/depois no F3 (< 200 total com 10 players); screenshot pro CD. · depende: T-052
+- **T-054** 〔M〕 **Animações procedurais**: idle (respiração), walk (pernas/braços por seno, velocity da rede), shoot (puxar arco no evento fire), death/spawn (integra com `SPAWN_ANIM_MS` da T-045). Update central por frame em `characters.ts`; sem clock global novo. **Contexto:** `packages/client/src/characters.ts` · `main.ts` (loop + eventos). **Aceite:** os 4 estados visíveis com bots; sem custo de frame perceptível. · depende: T-053
+- **T-055** 〔M〕 **Projéteis do arqueiro**: visual de flecha (mesh orientado pela velocidade) para os launchers da classe; trail leve no heavy; mantém dano/rede intactos. **Contexto:** `packages/client/src/{main,vfx}.ts` · `packages/shared/src/launchers.ts` (leitura). **Aceite:** flecha aponta pra onde voa; 3 launchers visualmente distintos. · depende: T-053
+- **T-056** 〔P〕 **Skins por paleta**: variações de cor por `skinId` (tabela em `classes.ts`), aplicadas na fábrica; gancho pronto pra classes futuras (guerreiro/mago = nova entrada no registry). **Contexto:** `packages/shared/src/classes.ts` · `packages/client/src/characters.ts`. · depende: T-053
+
+**Frente B — Fechamento backend/painel (extensão SPEC-0008) — Django+platform**
+- **T-060** 〔M〕 **KDA + ranking**: agregar kills/deaths da telemetria (T-026/T-027) em `PlayerStats`; endpoints `GET /stats/me` e `GET /ranking` (paginado); admin list com busca. **Contexto:** `backend/` (apps `telemetry`, `accounts`) · schema NDJSON da T-026. **Aceite:** pytest de agregação; partida real de bots reflete no ranking.
+- **T-061** 〔M〕 **Auditoria + fechamento do admin**: passar o pente em `GameEvent`/`RoomConfig`/contas/nicks — o que falta pra operar eventos, salas, moderação de nick e métricas 100% pelo admin, sem deploy; endpoint de settings do player (usado pela T-058). **Contexto:** `backend/` · `packages/server/src/platform/platformClient.ts`. **Aceite:** checklist da SPEC-0008 todo verde; criar evento novo pelo admin muda sala ao vivo. · depende: T-060
+- **T-029** (já listado acima, F4) entra nesta frente. · depende: T-028 ✅
+
+**Frente L — Lobby pré-sala (SPEC-0015) — client(+auth)**
+- **T-057** 〔G〕 **Janela pré-sala**: card único antes do join evoluindo `#profile-selector` + pill da T-028 (nunca cadeia de modais): identidade (guest/conta, nick), seleção de classe com preview 3D girando (`createCharacterVisual`), settings (perfil de controle, volumes, fullscreen T-048), botão **Jogar**. **Regra: 1 clique com defaults.** **Contexto:** `packages/client/src/{auth,main,characters,immersion}.ts` · `index.html`. **Aceite:** jogador novo entra com 1 clique; tudo configurável sem sair do card; mobile ok. · depende: T-053, T-052
+- **T-058** 〔M〕 **Persistência de settings + nick**: localStorage sempre; conta Django quando logado (endpoint da T-061); nick sanitizado/limitado server-side. **Contexto:** `packages/client/src/auth.ts` · `packages/server/src/rooms/ArenaRoom.ts` · endpoint T-061. **Aceite:** settings sobrevivem a reload e a outra máquina (logado); nick malicioso vira fallback. · depende: T-057, T-061
+- **T-059** 〔M〕⚠schema **Seleção no join**: join envia `{nick, classId, skinId, profile}`; servidor valida contra `CLASS_REGISTRY` e reflete no estado; bots ganham classe default. **Contexto:** `packages/server/src/rooms/ArenaRoom.ts` · `packages/shared/src/classes.ts` · `packages/bots/src/bot.ts`. **Aceite:** testes de join; troca de classe no lobby aparece pros outros players. · depende: T-057, T-052
+- **T-062** 〔P〕 **Ranking/stats no lobby**: consumir `GET /stats/me` + `GET /ranking` no card (aba discreta). **Contexto:** `packages/client/src/auth.ts` · endpoints T-060. · depende: T-057, T-060
+
+**Docs (gerar antes de cada frente — tasks baratas)**
+- **T-D13** 〔docs〕 SPEC-0013 (som) a partir do §3 da PROPOSAL-0004 + tabela evento→som · **T-D14** 〔docs〕 SPEC-0014 (personagens) a partir do §4 + esqueleto de partes/animações · **T-D15** 〔docs〕 SPEC-0015 (lobby) a partir do §5 + wireframe texto do card. Usar `specs/TEMPLATE.md`.
+
+**Frente X — Console staff (OPCIONAL, pós-V1, não bloqueia T-032)**
+- **T-063** 〔M〕 **Console staff**: claim `role=staff` no JWT (Django admin marca a conta); console in-game (tecla dedicada) com **whitelist server-side** de comandos (toggles de room, spawn rates, kick, flag on/off), audit log na telemetria; GUI fica pra V1.x. **Contexto:** `backend/accounts` · `packages/server/src/platform/authVerifier.ts` · `ArenaRoom.ts`. **Aceite:** comando fora da whitelist ignorado; não-staff não abre console; toda execução logada. · depende: T-028 ✅
+
+---
 Concluiu tudo? Reler `docs/VISAO-ATUAL.md` e abrir nova sessão de ideias (PROMPT-0004).
