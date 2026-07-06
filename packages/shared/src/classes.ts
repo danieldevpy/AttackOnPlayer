@@ -6,8 +6,9 @@
 export interface ClassDef {
   id: string;
   launcherIds: string[]; // lançadores (launchers.ts) disponíveis pra esta classe
-  baseTint: number; // cor base (hex 0xRRGGBB) do visual procedural (T-053)
-  skinIds: string[]; // paletas alternativas (T-056); 1º item é a skin default da classe
+  baseTint: number; // cor base (hex 0xRRGGBB) do visual procedural (T-053); tint da skin default
+  skinIds: string[]; // paletas alternativas; 1º item é a skin default da classe
+  skinTints: Record<string, number>; // T-056: cor (hex) por skinId — a fábrica deriva a paleta a partir dela
 }
 
 export const CLASS_REGISTRY: Record<string, ClassDef> = {
@@ -15,7 +16,12 @@ export const CLASS_REGISTRY: Record<string, ClassDef> = {
     id: "archer",
     launcherIds: ["basic_shot", "heavy_shot", "rapid_shot"],
     baseTint: 0x6b4f2a, // couro/madeira — placeholder de gameplay-first (ADR-008) até arte final
-    skinIds: ["default"],
+    skinIds: ["default", "verde", "cinza"],
+    skinTints: {
+      default: 0x6b4f2a, // couro/madeira (== baseTint)
+      verde: 0x3f5c3a, // couro esverdeado
+      cinza: 0x5a5f66, // couro acinzentado/metálico
+    },
   },
 };
 

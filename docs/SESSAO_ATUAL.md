@@ -53,8 +53,14 @@ instâncias → 1 material, 8 geometrias). Animações por pivô: idle/walk/shoo
 preservada (+`triggerCharacterHit`/`triggerCharacterDeath`). tsc client+server limpo · vite build
 OK · shared 38/38 · bots 5×12 sem regressão · **teste headless 24/25** (1 falha era artefato do
 teste). Screenshot pro CD **pendente** (preview oculto). Caminho futuro p/ centenas com 1 draw
-call/char: SkinnedMesh. Ver `docs/DEVLOG.md` (Sessão 34) e `docs/prompts/PROMPT-0051.md`. Outras
-frentes (T-056 skins, T-060 Backend) podem estar em paralelo — conferir BACKLOG antes de assumir.
+call/char: SkinnedMesh. Ver `docs/DEVLOG.md` (Sessão 34) e `docs/prompts/PROMPT-0051.md`.
+**Sessão 36 (agente worker, Frente C): T-056 — Skins por paleta** entregue: `ClassDef.skinTints`
+(tabela hex por `skinId`) em `packages/shared/src/classes.ts` (archer ganha `verde`/`cinza` além
+de `default`); `paletteFor` em `characters.ts` passa a ler o tint da skin (antes ignorava o
+parâmetro). Gancho pronto pra guerreiro/mago = nova entrada no registry. tsc ×3 limpo · shared
+39/39 (+1) · server 80/80 · bots 35/35 · smoke com 3 bots reais sem regressão. Ver `docs/DEVLOG.md`
+(Sessão 36) e `docs/prompts/PROMPT-0053.md`. Outras frentes (T-060 Backend, Lobby T-057+) podem
+estar em paralelo — conferir BACKLOG antes de assumir.
 
 ---
 
@@ -143,8 +149,8 @@ ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
 2. **Frente S (Som) fechada:** T-049 ✅ · T-050 ✅ · T-051 ✅ (Sessões 28/29).
 3. **Frente C (Personagens):** T-052 ✅ (Sessão 30 — contrato) · T-053 ✅ (Sessão 31 — visual
    procedural do arqueiro em F2) · T-054 ✅ (Sessão 32 — animação procedural idle/walk/shoot/
-   spawn em `characters.ts`) · T-055 ✅ (Sessão 33 — flecha orientada + trail no heavy). Próxima:
-   **T-056** (skins por paleta, depende de T-053 ✅). **T-060** (KDA/ranking) paralelizável.
+   spawn em `characters.ts`) · T-055 ✅ (Sessão 33 — flecha orientada + trail no heavy) · T-056 ✅
+   (Sessão 36 — skins por paleta). **Frente C fechada.** **T-060** (KDA/ranking) paralelizável.
    Lobby (T-057+, reusa `createCharacterVisual` no preview) só depois de T-053 ✅ e T-061.
 
 **F4 — Plataforma (SPEC-0008), continuação:**

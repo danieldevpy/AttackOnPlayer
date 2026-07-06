@@ -1,5 +1,25 @@
 # Devlog
 
+## 2026-07-06 — Sessão 36 (agente worker, Frente C): T-056 — Skins por paleta
+- **Task:** `packages/shared/src/classes.ts` ganha `ClassDef.skinTints: Record<string, number>` —
+  cor (hex) por `skinId`, tabela separada de `skinIds` (que continua sendo só a lista de ids
+  válidos pro contrato de rede/validação, inalterado). `archer` ganha 2 skins novas além de
+  `default`: `verde` e `cinza` (paletas de couro alternativas), com `skinTints.default ===
+  baseTint` (nenhuma regressão no visual atual).
+- **Fábrica (`packages/client/src/characters.ts`):** `paletteFor(classId, skinId)` — que já
+  recebia `skinId` mas o ignorava (`_skinId`) — agora lê `def.skinTints[skinId] ?? def.baseTint`
+  como o tint que alimenta as sombras derivadas (`shade()` pra couro/gola); resto da paleta
+  (pele/cabelo/madeira/metal) continua fixo, que é o visual "arqueiro" independente de skin.
+  Gancho pronto pra classes futuras: guerreiro/mago só precisam de uma entrada nova no
+  `CLASS_REGISTRY` com seu próprio `skinTints`.
+- **Fora de escopo (não tocado):** seleção de skin pela rede (`Player.skinId` já existe desde
+  T-052, mas `visuals.ts`/`createPlayerVisual` continua fixo em `DEFAULT_CLASS_ID`/skin
+  default — isso é a T-059/T-057, frente Lobby, ainda não fechada).
+- **Gates:** shared 39/39 (+1 teste novo: toda skin do registro tem cor, default == baseTint) ·
+  server 80/80 · bots 35/35 · `tsc --noEmit` limpo em server/client/bots (cobre shared via
+  project reference) · smoke com 3 bots reais por 8s contra o servidor de dev já ativo (join
+  sem regressão). `npm run aci -- index` rodado ao final.
+
 ## 2026-07-06 — Sessão 35 (pedido direto do CD, fora da fila V1): Deploy em VPS sem domínio + reorganização de scripts
 - **Pedido do CD:** confirmar se dá pra jogar com amigos numa VPS acessando só pelo IP público
   (sem domínio/TLS) e, se sim, montar o plano + automação; depois, subir bots junto igual o

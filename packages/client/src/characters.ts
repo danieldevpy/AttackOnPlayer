@@ -45,12 +45,12 @@ const paletteCache = new Map<string, Palette>();
 function shade(hex: number, f: number): number {
   return new THREE.Color(hex).multiplyScalar(f).getHex();
 }
-function paletteFor(classId: string, _skinId: string): Palette {
-  const key = `${classId}:${_skinId}`;
+function paletteFor(classId: string, skinId: string): Palette {
+  const key = `${classId}:${skinId}`;
   const cached = paletteCache.get(key);
   if (cached) return cached;
   const def = CLASS_REGISTRY[classId] ?? CLASS_REGISTRY[DEFAULT_CLASS_ID];
-  const tint = def.baseTint;
+  const tint = def.skinTints[skinId] ?? def.baseTint; // T-056: cor por skinId, cai pro tint base da classe
   const pal: Palette = {
     tunic: tint,
     leather: shade(tint, 0.72),

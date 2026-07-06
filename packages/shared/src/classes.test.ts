@@ -17,6 +17,14 @@ describe("CLASS_REGISTRY (T-052)", () => {
     expect(typeof archer.baseTint).toBe("number");
   });
 
+  it("toda skin da classe tem uma cor (T-056) e a skin default usa o baseTint", () => {
+    const archer = CLASS_REGISTRY.archer;
+    for (const skinId of archer.skinIds) {
+      expect(typeof archer.skinTints[skinId]).toBe("number");
+    }
+    expect(archer.skinTints[archer.skinIds[0]]).toBe(archer.baseTint);
+  });
+
   it("DEFAULT_CLASS_ID aponta pra uma classe que existe no registro", () => {
     expect(CLASS_REGISTRY[DEFAULT_CLASS_ID]).toBeDefined();
   });
