@@ -12,7 +12,7 @@ fila F4 (SPEC-0008). Ver `docs/DEVLOG.md` (Sessão 22) e `docs/prompts/PROMPT-00
 
 ## ⚠️ Avisos operacionais
 
-- Sessão paralela na branch `aci`: `packages/aci/` não versionado + `snapshot-test.sh` soltos = resíduos de outra esteira, **não mexer**. Portas 2567/5173 podem estar ocupadas por ela.
+- `packages/aci/` (PROPOSAL-0003, ADR-018) foi mergeado da branch dedicada `aci` direto para `evolução` — worktree `.claude/worktrees/aci` removido, desenvolvimento do ACI continua nesta branch a partir de agora. F0-F3 prontos (`npm run aci:test` 39/39). `snapshot-test.sh` solto na raiz é resíduo não relacionado, de outra sessão — ainda não investigado, mas não interfere no ACI nem no jogo.
 - **Preview headless não renderiza WebGL nesta config:** `document.hidden === true` no browser de preview pausa o `requestAnimationFrame` do client — sem loop de render, sem screenshot útil. Verificação visual de 3D/UI precisa do CD num browser de verdade. `.claude/launch.json` tem `server-verify` (2604) / `client-verify` (5299) prontos, com override `?port=NNNN` no cliente.
 - **Cuidado com `cd` + comandos em sequência no Bash tool:** um `cd` feito num comando anterior pode deixar o cwd em um workspace errado (ex.: `packages/bots`) e fazer `npm run <script-da-raiz>` resolver o script do workspace errado. Preferir `npm --prefix <caminho-absoluto>` quando o cwd não for garantido.
 - Branches de resgate do incidente S19: `funcional-0705` (= `7c9e28e`) e `trabalho-agente-interrompido` (= `185eb53`) — podem ser apagadas quando o CD quiser.
@@ -28,6 +28,8 @@ cards), todas aprovadas pelo CD. Sessão 22 (esta) entregou:
   Validado ponta a ponta com 8 bots reais.
 
 **Gates:** shared 30/30 · server 62/62 · bots 35/35 · tsc limpo ×3.
+
+**Fora da fila V1 (paralelo):** `packages/aci` — infraestrutura de contexto para agentes (PROPOSAL-0003, ADR-018), integrado nesta sessão via merge da branch `aci` (F0 scaffold, F1 índice de código, F2 índice de docs/corpus, F3 grafo de relações + resumos). `npm run aci:test` 39/39, tsc limpo, isolado (nenhum pacote do jogo importa `@aop/aci`). Próximo: F4 (contexto por feature) e F5 (servidor MCP) — ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
 
 ## Próximo passo
 
@@ -58,6 +60,9 @@ for p in server client bots; do (cd packages/$p && npx tsc --noEmit) && echo "$p
 npm run analyze -- --list              # partidas com telemetria disponível
 npm run analyze                        # relatório da partida mais recente
 npm run map -- list                    # mapas curados salvos
+npm run aci -- doctor                  # ACI: diagnóstico do ambiente (PROPOSAL-0003)
+npm run aci -- search <query>          # ACI: acha símbolo/spec/ADR sem abrir arquivo inteiro
+npm run aci:test                       # ACI: suíte de testes (39/39)
 ```
 
 ## Leituras se a sessão nova for só conversa
