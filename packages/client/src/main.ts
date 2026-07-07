@@ -24,7 +24,7 @@ import { createAudioSystem } from "./audio";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
 import { initImmersion, setUnloadGuard } from "./immersion";
-import { initAuth, getAuthToken } from "./auth";
+import { initAuth, getAuthToken, ensureGuestRegistered } from "./auth";
 import { showLobby } from "./lobby";
 
 // T-048 (SPEC-0012): blindagem contra ações do navegador (menu de contexto, zoom, seleção
@@ -357,6 +357,11 @@ let lobbySelection: import("./lobby").LobbySelection | null = null;
 
 async function connect() {
   try {
+    // Aguarda registro do guest no Django antes do join (SPEC-0008, T-060 — garante que o
+    // GuestLink existe ao receber eventos de telemetria de morte). Best-effort, nunca derruba o
+    // join se o Django estiver offline (degradação graciosa).
+    await ensureGuestRegistered();
+
     // T-059 (SPEC-0015): join envia a seleção real do lobby — nick, classId, skinId.
     // - `nick`: lido do localStorage (`aop_lobby_nick`, síncrono e já sanitizado localmente),
     //   NÃO de `lobbySelection.nick`, porque o PUT do Django (T-058) é fire-and-forget e pode

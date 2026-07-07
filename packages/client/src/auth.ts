@@ -65,7 +65,7 @@ async function apiPost(path: string, body: unknown, token?: string): Promise<any
 /** Registra o guest local no Django (best-effort, silencioso) — só assim o `/auth/link`
  * encontra o `player_token` depois, se o jogador vier a registrar/logar (aceite #5). Django
  * fora do ar não afeta o guest local em nada (aceite #3: degradação graciosa). */
-async function ensureGuestRegistered(): Promise<void> {
+export async function ensureGuestRegistered(): Promise<void> {
   if (getAuthToken()) return;
   const playerToken = localStorage.getItem(PLAYER_TOKEN_KEY);
   if (!playerToken) return;
