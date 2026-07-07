@@ -716,7 +716,7 @@ export class ArenaRoom extends Room<ArenaState> {
               forca: BOX_ATTR_BONUS_EACH,
               vitalidade: BOX_ATTR_BONUS_EACH,
             });
-            // T-004b: persistência entre partidas (ADR-012)
+            // T-004b: persistência entre partidas (ADR-012) — memória volátil, painel dev (F3).
             if (!p.isBot) {
               let prog = memDB.get(p.playerToken);
               if (!prog) prog = { forca: 0, agilidade: 0, vitalidade: 0 };
@@ -725,6 +725,16 @@ export class ArenaRoom extends Room<ArenaState> {
               prog.vitalidade += BOX_ATTR_BONUS_EACH;
               memDB.set(p.playerToken, prog);
               console.log(`[arena] ${p.name} progresso persistente:`, prog);
+            }
+            // T-029: mesmo acumulador persiste DE VERDADE na conta (PlayerStats), quando a
+            // plataforma está ligada e o join trouxe um JWT válido (accountId). Guardrail
+            // inalterado: só estatística — não afeta `addAttrPoints` acima nem o round atual.
+            if (process.env.PLATFORM_ENABLED === "1" && p.accountId) {
+              void platformClient.reportProgress(p.accountId, {
+                forca: BOX_ATTR_BONUS_EACH,
+                agilidade: BOX_ATTR_BONUS_EACH,
+                vitalidade: BOX_ATTR_BONUS_EACH,
+              });
             }
             // T-017: box também sorteia uma skill que falte (fecha a decisão do CD em
             // growth.md — "quando lançadores existirem, box passa a também sortear").

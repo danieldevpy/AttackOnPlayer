@@ -111,6 +111,36 @@ describe("PlatformClient (T-027g)", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("reportProgress (T-029) posta o delta com o account_id no corpo", async () => {
+    (fetch as any).mockResolvedValueOnce(jsonResponse({}, true, 200));
+    process.env.SERVICE_TOKEN = "tok-123";
+
+    await client.reportProgress("acc-1", { forca: 3, agilidade: 3, vitalidade: 3 });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = (fetch as any).mock.calls[0];
+    expect(url).toContain("/api/v1/accounts/progress");
+    expect(init.headers.Authorization).toBe("ServiceToken tok-123");
+    const body = JSON.parse(init.body);
+    expect(body).toEqual({ account_id: "acc-1", forca: 3, agilidade: 3, vitalidade: 3 });
+  });
+
+  it("reportProgress trata 204 (conta/stats inexistente) como sucesso, não erro", async () => {
+    (fetch as any).mockResolvedValueOnce(jsonResponse({}, true, 204));
+
+    await expect(
+      client.reportProgress("acc-inexistente", { forca: 1, agilidade: 1, vitalidade: 1 })
+    ).resolves.toBeUndefined();
+  });
+
+  it("reportProgress nunca lança em falha de rede (degradação graciosa)", async () => {
+    (fetch as any).mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+    await expect(
+      client.reportProgress("acc-1", { forca: 1, agilidade: 1, vitalidade: 1 })
+    ).resolves.toBeUndefined();
+  });
+
   it("descarta o batch em falha de rede em vez de acumular sem teto (degradação graciosa)", async () => {
     (fetch as any).mockRejectedValueOnce(new Error("ECONNREFUSED"));
     const event = { v: 1, ts: 1, tick: 1, matchId: "m1", type: "match_start" } as any;

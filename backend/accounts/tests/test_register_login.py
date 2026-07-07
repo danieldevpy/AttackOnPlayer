@@ -24,6 +24,9 @@ def test_register_creates_account_with_stats_and_token():
         "deaths": 0,
         "matches_played": 0,
         "xp_total": 0,
+        "forca": 0,
+        "agilidade": 0,
+        "vitalidade": 0,
     }
     assert "token" in body
     account = Account.objects.get(email="nova@aop.dev")

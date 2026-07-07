@@ -92,6 +92,27 @@ export class PlatformClient {
     }
   }
 
+  /** T-029 (ADR-012 → conta): envia 1 delta do acumulador persistente da box pra somar no
+   * `PlayerStats` da conta. Best-effort — nunca lança, nunca bloqueia o tick que chamou (a box é
+   * um drop raro; 1 request por pickup é aceitável, sem precisar de buffer/batch como a
+   * telemetria de alta frequência). Guardrail inalterado: isto é só estatística, nunca afeta o
+   * round em andamento — quem chama decide isso, este método só entrega o POST. */
+  async reportProgress(
+    accountId: string,
+    delta: { forca: number; agilidade: number; vitalidade: number }
+  ): Promise<void> {
+    try {
+      const res = await fetch(`${baseUrl()}/api/v1/accounts/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authHeader() },
+        body: JSON.stringify({ account_id: accountId, ...delta }),
+      });
+      if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      console.error("[platform] falha ao reportar progresso persistente (descartado):", e);
+    }
+  }
+
   /** Só para testes — evita timers pendurados entre casos. */
   stopFlushTimer() {
     if (this.flushTimer) clearInterval(this.flushTimer);

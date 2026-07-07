@@ -21,6 +21,9 @@ def test_guest_login_creates_account_and_stats():
         "deaths": 0,
         "matches_played": 0,
         "xp_total": 0,
+        "forca": 0,
+        "agilidade": 0,
+        "vitalidade": 0,
     }
     assert "token" in body
     assert GuestLink.objects.filter(player_token="tok-1").exists()
@@ -53,18 +56,44 @@ def test_me_returns_authenticated_profile():
 
 def test_link_transfers_stats_and_removes_guest_account():
     guest = Account.objects.create_guest()
-    PlayerStats.objects.create(account=guest, kills=5, deaths=2, matches_played=1, xp_total=100)
+    PlayerStats.objects.create(
+        account=guest,
+        kills=5,
+        deaths=2,
+        matches_played=1,
+        xp_total=100,
+        forca=3,
+        agilidade=2,
+        vitalidade=1,
+    )
     GuestLink.objects.create(player_token="tok-link", account=guest)
 
     real = Account.objects.create_user(email="real@aop.dev", password="secret123")
-    PlayerStats.objects.create(account=real, kills=1, deaths=1, matches_played=1, xp_total=10)
+    PlayerStats.objects.create(
+        account=real,
+        kills=1,
+        deaths=1,
+        matches_played=1,
+        xp_total=10,
+        forca=1,
+        agilidade=1,
+        vitalidade=1,
+    )
 
     response = APIClient().post(
         "/api/v1/auth/link", {"player_token": "tok-link"}, format="json", **auth_header(real)
     )
     assert response.status_code == 200
     body = response.json()["stats"]
-    assert body == {"kills": 6, "deaths": 3, "matches_played": 2, "xp_total": 110}
+    assert body == {
+        "kills": 6,
+        "deaths": 3,
+        "matches_played": 2,
+        "xp_total": 110,
+        "forca": 4,
+        "agilidade": 3,
+        "vitalidade": 2,
+    }
     assert not Account.objects.filter(pk=guest.pk).exists()
 
 
@@ -108,7 +137,15 @@ def test_stats_me_returns_own_stats():
 
     response = APIClient().get("/api/v1/stats/me", **auth_header(account))
     assert response.status_code == 200
-    assert response.json() == {"kills": 4, "deaths": 1, "matches_played": 2, "xp_total": 50}
+    assert response.json() == {
+        "kills": 4,
+        "deaths": 1,
+        "matches_played": 2,
+        "xp_total": 50,
+        "forca": 0,
+        "agilidade": 0,
+        "vitalidade": 0,
+    }
 
 
 def test_player_settings_requires_authentication():

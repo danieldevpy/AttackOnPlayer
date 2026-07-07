@@ -159,7 +159,7 @@
 - **T-027** 〔G〕 ✅ (Sessão 24, ADR-019) **Backend Django**: `accounts` (Account/PlayerStats/GuestLink, JWT RS256+JWKS+guest+link) + `maps` (registry, validador espelho do TS, `import_maps`) + `gameops` (RoomConfig/GameEvent, config efetiva por evento) + `telemetry` (ingestão batch, schema T-026) + admin + `platformClient.ts` no Node (cache+TTL de config, batch de telemetria, degradação atrás de `PLATFORM_ENABLED`). 71 testes pytest (Postgres real) + 8 vitest novos; aceites #2 (evento sem deploy) e #3 (degradação) verificados manualmente ponta a ponta. `backend/dev.sh` sobe tudo com 1 comando.
 - **T-028** 〔G〕 ✅ (2026-07-06, ADR-020) **Auth email+senha**: `POST /auth/register`+`/login` (Django) + verificação de JWT no join do Colyseus (`authVerifier.ts`, jose+JWKS, cache interno, sem round-trip por join; token inválido cai pra guest sem rejeitar) + janela discreta no client (`auth.ts`: pill no canto, nunca modal, guest permanece 1 clique; registra o guest local no Django em best-effort; login/registro herdam stats via `/auth/link`). **Google OAuth adiado a pedido do CD** — ver T-028-google. pytest 79/79 (+8 novos), vitest server 76/76 (+6 novos), tsc ×3 limpos. · depende: T-027 ✅
 - **T-028-google** 〔M〕 Provider Google OAuth (opcional, fora de fase) — plugar no mesmo endpoint de emissão de JWT; `Account.google_sub` já reservado no schema, sem migração nova · depende: T-028 ✅
-- **T-029** 〔P〕 ADR-012 liga na conta (estatística, nunca poder in-round) · depende: T-028 ✅
+- **T-029** 〔P〕 ✅ (2026-07-06) ADR-012 liga na conta (estatística, nunca poder in-round) · depende: T-028 ✅
 
 **F5 — Empacotamento (SPEC-0009)**
 - **T-030** 〔G〕 Docker compose dev/prod + `scripts/dev.sh`/`scripts/prod.sh` com verificação de saúde
@@ -192,7 +192,7 @@
 **Frente B — Fechamento backend/painel (extensão SPEC-0008) — Django+platform**
 - **T-060** 〔M〕 ✅ (2026-07-06) **KDA + ranking**: agregar kills/deaths da telemetria (T-026/T-027) em `PlayerStats`; endpoints `GET /stats/me` e `GET /ranking` (paginado); admin list com busca. **Contexto:** `backend/` (apps `telemetry`, `accounts`) · schema NDJSON da T-026. **Aceite:** pytest de agregação; partida real de bots reflete no ranking.
 - **T-061** 〔M〕 ✅ (2026-07-06) **Auditoria + fechamento do admin**: passar o pente em `GameEvent`/`RoomConfig`/contas/nicks — o que falta pra operar eventos, salas, moderação de nick e métricas 100% pelo admin, sem deploy; endpoint de settings do player (usado pela T-058). **Contexto:** `backend/` · `packages/server/src/platform/platformClient.ts`. **Aceite:** checklist da SPEC-0008 todo verde; criar evento novo pelo admin muda sala ao vivo. · depende: T-060 ✅
-- **T-029** (já listado acima, F4) entra nesta frente. · depende: T-028 ✅
+- **T-029** ✅ (2026-07-06, ver acima F4) entra nesta frente. · depende: T-028 ✅
 
 **Frente L — Lobby pré-sala (SPEC-0015) — client(+auth)**
 - **T-057** 〔G〕 **Janela pré-sala**: card único antes do join evoluindo `#profile-selector` + pill da T-028 (nunca cadeia de modais): identidade (guest/conta, nick), seleção de classe com preview 3D girando (`createCharacterVisual`), settings (perfil de controle, volumes, fullscreen T-048), botão **Jogar**. **Regra: 1 clique com defaults.** **Contexto:** `packages/client/src/{auth,main,characters,immersion}.ts` · `index.html`. **Aceite:** jogador novo entra com 1 clique; tudo configurável sem sair do card; mobile ok. · depende: T-053, T-052

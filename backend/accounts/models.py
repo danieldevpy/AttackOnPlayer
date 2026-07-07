@@ -69,7 +69,10 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
 
 class PlayerStats(models.Model):
-    """Scaffold do acumulador de estatística. Migração real do ADR-012 é a T-029."""
+    """Acumulador de estatística da conta. `forca`/`agilidade`/`vitalidade` são a migração real
+    do scaffold ADR-012 (T-029) — o acumulador da box (`PersistentProgress` em
+    `packages/server/src/rooms/ArenaRoom.ts`) passa a persistir aqui de verdade, além da memória
+    volátil de sempre. Guardrail inalterado: só estatística, NUNCA poder in-round."""
 
     account = models.OneToOneField(
         Account, on_delete=models.CASCADE, primary_key=True, related_name="stats"
@@ -78,6 +81,9 @@ class PlayerStats(models.Model):
     deaths = models.PositiveIntegerField(default=0)
     matches_played = models.PositiveIntegerField(default=0)
     xp_total = models.PositiveBigIntegerField(default=0)
+    forca = models.PositiveIntegerField(default=0)
+    agilidade = models.PositiveIntegerField(default=0)
+    vitalidade = models.PositiveIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -2,7 +2,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
-from accounts.views import player_settings, ranking, stats_me
+from accounts.views import player_settings, ranking, report_progress, stats_me
 from common.health import healthz
 from common.views import ping
 
@@ -20,4 +20,6 @@ urlpatterns = [
     path("api/v1/ranking", ranking, name="ranking"),
     # T-061 (SPEC-0008, Frente B): settings do player (consumido pela T-058 quando o lobby existir).
     path("api/v1/accounts/settings", player_settings, name="player-settings"),
+    # T-029 (ADR-012 → conta): deltas do acumulador persistente da box, via service token.
+    path("api/v1/accounts/progress", report_progress, name="player-progress"),
 ]

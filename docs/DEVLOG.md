@@ -1,5 +1,26 @@
 # Devlog
 
+## 2026-07-06 — Sessão 39 (agente worker, Frente B): T-029 — ADR-012 liga na conta
+- **Frente B fechada** (T-060 ✅ → T-061 ✅ → T-029 ✅, série completa no mesmo pedido do CD).
+- **Aditivo, não substitutivo:** o scaffold ADR-012 (`memDB` em memória, painel dev F3) continua
+  intacto — T-029 SOMA a persistência real por cima. `PlayerStats` ganha `forca`/`agilidade`/
+  `vitalidade` (migração `0004`); pickup de "box" em `ArenaRoom.ts` reporta o mesmo delta
+  (`BOX_ATTR_BONUS_EACH`) pro Django via `platformClient.reportProgress()` novo, só quando
+  `PLATFORM_ENABLED=1` e o player tem `accountId` (JWT verificado, T-028b) — guardrail "nunca
+  poder in-round" inalterado (zero mudança em `addAttrPoints`/gameplay).
+- **Endpoint novo:** `POST /api/v1/accounts/progress` (service token, delta incremental via
+  `F()`, conta/stats inexistente devolve 204 sem quebrar o pickup).
+- **Gates:** pytest 112/112 (+7) · vitest server 89/89 (+6, incluindo teste que insere um
+  `Collectible` real de kind "box" e roda `room.update()` de verdade) · tsc ×3 limpo ·
+  `makemigrations --check` limpo · `ruff` limpo.
+- **Achado real durante a verificação viva:** `POST /auth/guest` quebrou contra o Postgres de
+  DEV real (`ProgrammingError: column "forca" ... does not exist`) — as migrações `0003`/`0004`
+  só tinham sido testadas contra a DB efêmera do pytest, nunca aplicadas na de desenvolvimento.
+  `python manage.py migrate` resolveu; smoke real refeito com sucesso (`/stats/me` refletiu
+  forca/agilidade/vitalidade=3 depois do `/accounts/progress`). **Regra nova:** pytest verde não
+  implica banco de dev migrado — rodar `migrate` antes de testar contra o Django "de verdade".
+- `npm run aci -- index` rodado ao final. Ver `docs/prompts/PROMPT-0056.md`.
+
 ## 2026-07-06 — Sessão 38 (agente worker, Frente B): T-061 — Auditoria + fechamento do admin
 - **Config ao vivo:** `ArenaRoom.updateInner` passa a reconsultar `platformClient.getConfig()`
   periodicamente (`PLATFORM_SYNC_INTERVAL_MS=5s`, aproveitando o TTL de 30s já existente do

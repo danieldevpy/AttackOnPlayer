@@ -67,17 +67,25 @@ público), `PlayerStatsAdmin` (busca). pytest backend 88/88 (+9) · `makemigrati
 · `ruff` limpo · smoke fim a fim com Django+Colyseus reais (porta 2604, isolada da sessão dev em
 :2567) confirmando o pipeline e a atribuição de kill em tempo real. Ver `docs/DEVLOG.md` (Sessão
 37) e `docs/prompts/PROMPT-0054.md`.
-**Sessão 38 (agente worker, Frente B, em andamento): T-061 — Auditoria + fechamento do admin**
-entregue: `ArenaRoom` reconsulta `platformClient.getConfig()` periodicamente (5s) e aplica
-xp/coin/flag na sala JÁ ABERTA (antes só valia na criação); `sanitize_display_name()` (nick
-malicioso → fallback) aplicado em `register()` + `PUT /accounts/settings` novo; ação de admin
-`reset_nick`; `PlayerSettings` novo (control_profile/volumes/fullscreen, os campos que a
-PROPOSAL-0004 já promete pro lobby) + `GET/PUT /api/v1/accounts/settings` (migração `0003`).
-SPEC-0008 checklist revisado (4/5; Google OAuth documentado como pendência formal ADR-020).
-pytest 105/105 (+17) · vitest server 83/83 (+3) · tsc ×3 limpo · `effective_config()` confirmado
-mudando ao vivo via shell do Django real. Ver `docs/DEVLOG.md` (Sessão 38) e
-`docs/prompts/PROMPT-0055.md`. **Frente B em andamento:** falta T-029, mesma sessão, gate/commit
-próprio.
+**Sessão 38 (agente worker, Frente B): T-061 — Auditoria + fechamento do admin** entregue:
+`ArenaRoom` reconsulta `platformClient.getConfig()` periodicamente (5s) e aplica xp/coin/flag na
+sala JÁ ABERTA (antes só valia na criação); `sanitize_display_name()` (nick malicioso →
+fallback) aplicado em `register()` + `PUT /accounts/settings` novo; ação de admin `reset_nick`;
+`PlayerSettings` novo (control_profile/volumes/fullscreen, os campos que a PROPOSAL-0004 já
+promete pro lobby) + `GET/PUT /api/v1/accounts/settings` (migração `0003`). SPEC-0008 checklist
+revisado (4/5; Google OAuth documentado como pendência formal ADR-020). pytest 105/105 (+17) ·
+vitest server 83/83 (+3) · tsc ×3 limpo · `effective_config()` confirmado mudando ao vivo via
+shell do Django real. Ver `docs/DEVLOG.md` (Sessão 38) e `docs/prompts/PROMPT-0055.md`.
+**Sessão 39 (agente worker, Frente B): T-029 — ADR-012 liga na conta** entregue: `PlayerStats`
+ganha `forca`/`agilidade`/`vitalidade` (migração `0004`); pickup de "box" em `ArenaRoom.ts`
+reporta o delta pro Django (`platformClient.reportProgress()` novo, `POST /api/v1/accounts/
+progress`, service token) quando `PLATFORM_ENABLED=1` e o player tem `accountId` — aditivo, o
+`memDB`/painel dev F3 (scaffold ADR-012) continua intacto. pytest 112/112 (+7) · vitest server
+89/89 (+6, incluindo teste que insere um `Collectible` real de "box" e roda `room.update()` de
+verdade) · tsc ×3 limpo. **Achado real:** as migrações `0003`/`0004` não estavam aplicadas no
+Postgres de DEV (só testadas contra a DB efêmera do pytest) — `python manage.py migrate` + smoke
+real refeito com sucesso. Ver `docs/DEVLOG.md` (Sessão 39) e `docs/prompts/PROMPT-0056.md`.
+**Frente B fechada** (T-060 ✅ T-061 ✅ T-029 ✅).
 
 ---
 
@@ -167,15 +175,18 @@ ver `docs/proposals/PROPOSAL-0003-aci-infra-contexto-ia.md` §6.
 3. **Frente C (Personagens):** T-052 ✅ (Sessão 30 — contrato) · T-053 ✅ (Sessão 31 — visual
    procedural do arqueiro em F2) · T-054 ✅ (Sessão 32 — animação procedural idle/walk/shoot/
    spawn em `characters.ts`) · T-055 ✅ (Sessão 33 — flecha orientada + trail no heavy) · T-056 ✅
-   (Sessão 36 — skins por paleta). **Frente C fechada.** **T-060** (KDA/ranking) paralelizável.
-   Lobby (T-057+, reusa `createCharacterVisual` no preview) só depois de T-053 ✅ e T-061.
+   (Sessão 36 — skins por paleta). **Frente C fechada.**
+4. **Frente B (Fechamento backend/painel):** T-060 ✅ (Sessão 37 — KDA/ranking) · T-061 ✅
+   (Sessão 38 — config ao vivo/nick/settings do player) · T-029 ✅ (Sessão 39 — ADR-012 na
+   conta). **Frente B fechada.**
+5. **Frente L (Lobby, SPEC-0015) — próxima a abrir:** T-057 (janela pré-sala, depende de
+   T-052 ✅/T-053 ✅) → T-058 (persistência settings+nick, consome o `GET/PUT /api/v1/accounts/
+   settings` da T-061) → T-059 (seleção no join, schema) → T-062 (ranking/stats no lobby,
+   consome `GET /ranking`/`GET /stats/me` da T-060). Frentes S/C/B todas fechadas — só falta
+   Lobby antes de F5/F6 (T-030..T-032, go-live).
 
 **F4 — Plataforma (SPEC-0008), continuação:**
-1. **T-029** 〔P〕 — ADR-012 liga na conta: a progressão persistente (acumulador da box, hoje
-   scaffold dev-mode) passa a alimentar `PlayerStats` de verdade — só estatística, nunca poder
-   in-round. Só agora faz sentido testar o `/auth/link` com dados reais (hoje ele migra um
-   scaffold vazio). · depende: T-028 ✅
-2. **T-028-google** 〔M〕 — Google OAuth, opcional/fora de fase, quando o CD pedir.
+1. **T-028-google** 〔M〕 — Google OAuth, opcional/fora de fase, quando o CD pedir.
 
 ## Pendências reais do lado do CD (não bloqueiam a esteira)
 
@@ -218,6 +229,6 @@ curl -s -X POST http://localhost:8000/api/v1/auth/register -H "Content-Type: app
 - Sessão anterior (T-048) → `docs/DEVLOG.md` (Sessão 25) e `docs/prompts/PROMPT-0043.md`
 - Backend Django (T-027) → `docs/DEVLOG.md` (Sessão 24) e ADR-019
 - Escopo por task + dials da SPEC-0011 → `docs/BACKLOG.md` seção F2.6
-- Fila V1 → `docs/BACKLOG.md` (T-028 ✅; próxima: T-029 — ADR-012 liga na conta)
+- Fila V1 → `docs/BACKLOG.md` (Frentes S/C/B fechadas; próxima: Frente L — Lobby, T-057)
 - F4 em detalhe → `specs/SPEC-0008-plataforma-django-auth.md`
 - Backend → `backend/README.md` (como rodar, chaves JWT, gates)

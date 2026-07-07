@@ -7,7 +7,24 @@ from .models import Account, PlayerSettings, PlayerStats
 class PlayerStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlayerStats
-        fields = ["kills", "deaths", "matches_played", "xp_total"]
+        fields = [
+            "kills",
+            "deaths",
+            "matches_played",
+            "xp_total",
+            "forca",
+            "agilidade",
+            "vitalidade",
+        ]
+
+
+class ProgressReportSerializer(serializers.Serializer):
+    """`POST /api/v1/accounts/progress` (T-029) — deltas do acumulador ADR-012, service token."""
+
+    account_id = serializers.UUIDField()
+    forca = serializers.IntegerField(required=False, default=0, min_value=0)
+    agilidade = serializers.IntegerField(required=False, default=0, min_value=0)
+    vitalidade = serializers.IntegerField(required=False, default=0, min_value=0)
 
 
 class RankingEntrySerializer(serializers.ModelSerializer):

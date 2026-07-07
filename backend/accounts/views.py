@@ -2,6 +2,7 @@
 exigem JWT de conta — isso sobrescreve os defaults de service-token do REST_FRAMEWORK (ver
 settings/base.py). Google OAuth fica fora de escopo por ora (T-028)."""
 from django.db import transaction
+from django.db.models import F
 from rest_framework.decorators import (
     api_view,
     authentication_classes,
@@ -21,6 +22,7 @@ from .serializers import (
     LoginSerializer,
     PlayerSettingsSerializer,
     PlayerStatsSerializer,
+    ProgressReportSerializer,
     RankingEntrySerializer,
     RegisterSerializer,
 )
@@ -143,6 +145,9 @@ def link(request):
             target_stats.deaths += guest_stats.deaths
             target_stats.matches_played += guest_stats.matches_played
             target_stats.xp_total += guest_stats.xp_total
+            target_stats.forca += guest_stats.forca
+            target_stats.agilidade += guest_stats.agilidade
+            target_stats.vitalidade += guest_stats.vitalidade
             target_stats.save()
         guest_account.delete()
 
@@ -194,3 +199,23 @@ def player_settings(request):
     data = PlayerSettingsSerializer(settings_obj).data
     data["display_name"] = request.user.display_name
     return Response(data)
+
+
+@api_view(["POST"])
+def report_progress(request):
+    """`POST /api/v1/accounts/progress` (T-029/ADR-012) — deltas do acumulador persistente da
+    box, enviados pelo Colyseus (service token, mesma fronteira de `gameops`/`telemetry`).
+    Conta inexistente é ignorada (204) — nunca derruba a sala por causa de uma conta apagada
+    entre o join e o pickup."""
+    body = ProgressReportSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    data = body.validated_data
+
+    updated = PlayerStats.objects.filter(account_id=data["account_id"]).update(
+        forca=F("forca") + data["forca"],
+        agilidade=F("agilidade") + data["agilidade"],
+        vitalidade=F("vitalidade") + data["vitalidade"],
+    )
+    if not updated:
+        return Response(status=204)
+    return Response(status=200)
