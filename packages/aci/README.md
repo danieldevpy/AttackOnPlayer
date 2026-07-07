@@ -20,7 +20,9 @@ npm install
 npm run aci -- doctor           # diagnóstico do ambiente
 npm run aci -- index            # (re)indexa código + docs/specs/ADRs/prompts/proposals (só reparseia o que mudou)
 npm run aci -- index --force    # ignora o cache e reparseia tudo
-npm run aci -- search <query>   # busca símbolo (código) e seção (docs) — ex.: EffectKind, ArenaRoom, facing, skills
+npm run aci -- search <query>   # busca símbolo (código) e seção (docs) — ex.: EffectKind, ArenaRoom, facing
+                                # Múltiplos termos = OR implícito (ex.: KDA ranking, T-060 stats)
+                                # Tokenização: por espaço apenas. Pipes (|), regex e AND não são suportados.
 npm run aci -- search <query> --kind=interface   # kinds de código: function|class|interface|type|enum|const
 npm run aci -- search <query> --kind=adr         # kinds de doc: doc|spec|adr|prompt|proposal
 npm run aci -- related <símbolo|arquivo|docId>   # "quem governa X?" — ex.: ProjectileSystem, ADR-009

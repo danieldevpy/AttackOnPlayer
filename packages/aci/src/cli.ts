@@ -33,9 +33,12 @@ Comandos:
   stats               Estado do índice e cache
   index [--force]     Reindexa símbolos de código (F1); --force ignora cache
   search <query>      Busca símbolo (F1) e/ou seção de doc/spec/ADR (F2) por
-                       nome/assinatura/heading/conteúdo
+                       nome/assinatura/heading/conteúdo.
+                       Múltiplos termos separados por espaço = OR implícito.
+                       Exemplos: KDA, "guest link auth", T-060 KDA ranking
                        [--kind=function|class|interface|type|enum|const
                                |doc|spec|adr|prompt|proposal]
+                       Nota: pipes (|), regex e AND lógico NÃO são suportados
   related <alvo>      (F3) Grafo de relações — símbolo/arquivo → docs que o
                        mencionam (ex.: ProjectileSystem), ou docId → docs que
                        o referenciam (ex.: ADR-009)

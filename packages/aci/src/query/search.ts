@@ -12,7 +12,14 @@ export interface DocSearchOptions {
   limit?: number;
 }
 
-/** Divide a query em palavras (só por espaço) — mantém identificadores com hífen/número intactos (ex.: "ADR-014", "RS256"). */
+/**
+ * Divide a query em palavras (só por espaço) — mantém identificadores com
+ * hífen/número intactos (ex.: "ADR-014", "RS256").
+ *
+ * Nota agentic: múltiplos termos separados por espaço são tokenizados como
+ * OR implícito. Ex.: "KDA ranking" acha seções/símbolos com qualquer um dos
+ * termos. Pipes (|), regex, AND lógico e aspas NÃO são suportados.
+ */
 function tokenize(query: string): string[] {
   return query
     .split(/\s+/)
