@@ -201,7 +201,7 @@
 - **T-062** 〔P〕 **Ranking/stats no lobby**: consumir `GET /stats/me` + `GET /ranking` no card (aba discreta). **Contexto:** `packages/client/src/auth.ts` · endpoints T-060. · depende: T-057, T-060
 
 **Docs (gerar antes de cada frente — tasks baratas)**
-- **T-D13** 〔docs〕 SPEC-0013 (som) a partir do §3 da PROPOSAL-0004 + tabela evento→som · **T-D14** 〔docs〕 SPEC-0014 (personagens) a partir do §4 + esqueleto de partes/animações · **T-D15** 〔docs〕 SPEC-0015 (lobby) a partir do §5 + wireframe texto do card. Usar `specs/TEMPLATE.md`.
+- **T-D13** 〔docs〕 SPEC-0013 (som) a partir do §3 da PROPOSAL-0004 + tabela evento→som · **T-D14** 〔docs〕 SPEC-0014 (personagens) a partir do §4 + esqueleto de partes/animações · **T-D15** ✅ 〔docs〕 SPEC-0015 (lobby) a partir do §5 + wireframe texto do card. Usar `specs/TEMPLATE.md`.
 
 **Frente X — Console staff (OPCIONAL, pós-V1, não bloqueia T-032)**
 - **T-063** 〔M〕 **Console staff**: claim `role=staff` no JWT (Django admin marca a conta); console in-game (tecla dedicada) com **whitelist server-side** de comandos (toggles de room, spawn rates, kick, flag on/off), audit log na telemetria; GUI fica pra V1.x. **Contexto:** `backend/accounts` · `packages/server/src/platform/authVerifier.ts` · `ArenaRoom.ts`. **Aceite:** comando fora da whitelist ignorado; não-staff não abre console; toda execução logada. · depende: T-028 ✅
