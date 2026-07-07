@@ -13,15 +13,15 @@ O jogo não tem identidade de jogador (só token local), nenhum painel de opera�
 - **Guardrail:** conta = identidade/estatística/mapas — **nunca poder in-round**. Acumulador da box (ADR-012) migra para a conta como estatística.
 
 ## Fora de escopo
-Skins/cosméticos comprados, ranking público, matchmaking por nível, e-mail transacional além do necessário para registro.
+Skins/cosméticos comprados, matchmaking por nível, e-mail transacional além do necessário para registro. **Ranking público saiu do "fora de escopo" na extensão da Frente B (PROPOSAL-0004 §6, aprovada 2026-07-06) — ver T-060.**
 
 ## Critérios de aceite
-- [ ] 1 partida de bots → `npm run analyze` produz resumo que uma IA usa para responder "onde as mortes se concentram?" e "qual card é mais recusado?".
-- [ ] Admin cria um evento "XP ×2 fim de semana" e a próxima room respeita, sem deploy.
-- [ ] Derrubar o Django com o jogo aberto: partidas seguem; novas rooms usam config cacheada.
-- [ ] Entrar anônimo continua 1 clique; login com Google no meio da sessão não derruba a partida; JWT inválido cai para guest.
-- [ ] Guest joga, loga, e as estatísticas do guest aparecem na conta.
-- [ ] Nenhum segredo commitado; envs documentadas.
+- [x] 1 partida de bots → `npm run analyze` produz resumo que uma IA usa para responder "onde as mortes se concentram?" e "qual card é mais recusado?". (verificado de novo na T-061, sem regressão)
+- [x] Admin cria um evento "XP ×2 fim de semana" e a **room respeita sem deploy — inclusive uma sala já aberta**, não só a próxima (T-061 estende o T-027g original: `ArenaRoom` reconsulta `platformClient.getConfig()` periodicamente, não só no `onCreate`).
+- [x] Derrubar o Django com o jogo aberto: partidas seguem; novas rooms usam config cacheada. (`platformClient` degrada pro cache/defaults; sem crash em smoke real da T-060/T-061)
+- [ ] Entrar anônimo continua 1 clique; ~~login com Google~~ no meio da sessão não derruba a partida; JWT inválido cai para guest. **Google OAuth segue adiado (ADR-020, `T-028-google`, decisão do CD) — este item só fecha 100% quando essa task entrar; o restante (guest 1 clique, JWT inválido → guest) já está coberto pela T-028.**
+- [x] Guest joga, loga, e as estatísticas do guest aparecem na conta. (`link()`, T-027c/T-028)
+- [x] Nenhum segredo commitado; envs documentadas. (`.env`/`secrets/` no `.gitignore`; `.env.example` completo)
 
 ## Decisão do Creative Director
 Aprovada via PROPOSAL-0002 (2026-07-05). Confirmado Django na V1 (§7 Q4).

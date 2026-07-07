@@ -97,6 +97,11 @@ import { verifyAccountToken } from "../platform/authVerifier";
 // por isso não vive em shared/constants.ts junto dos números que afetam sensação/balance.
 const TICK_WATCHDOG_MS = 100;
 
+// T-061 (SPEC-0008): checagem periódica pra config de plataforma valer NA SALA JÁ ABERTA (não
+// só na próxima) — `platformClient.getConfig()` já tem TTL de 30s próprio, então esta checagem
+// só decide COM QUE FREQUÊNCIA perguntamos (barato: normalmente devolve o cache em memória).
+const PLATFORM_SYNC_INTERVAL_MS = 5_000;
+
 export const activeRooms = new Map<string, ArenaRoom>();
 
 export class ArenaRoom extends Room<ArenaState> {
@@ -151,6 +156,8 @@ export class ArenaRoom extends Room<ArenaState> {
   // `PLATFORM_ENABLED` está off, então o comportamento de sempre não muda.
   private xpMultiplier = 1;
   private coinMultiplier = 1;
+  // T-061: próxima checagem de config ao vivo (ver PLATFORM_SYNC_INTERVAL_MS).
+  private nextPlatformSyncAt = 0;
 
   private telemetryBase() {
     return {
@@ -436,6 +443,18 @@ export class ArenaRoom extends Room<ArenaState> {
 
   private updateInner(dt: number) {
     const now = Date.now();
+
+    // T-061 (SPEC-0008): evento/config de gameops criado no admin passa a valer NA SALA JÁ
+    // ABERTA, não só na próxima — `getConfig()` já degrada sozinho (cache/defaults) se o
+    // Django estiver fora do ar, então isto nunca pode travar nem quebrar o tick.
+    if (process.env.PLATFORM_ENABLED === "1" && now >= this.nextPlatformSyncAt) {
+      this.nextPlatformSyncAt = now + PLATFORM_SYNC_INTERVAL_MS;
+      void platformClient.getConfig(now).then((cfg) => {
+        this.xpMultiplier = cfg.xpMultiplier;
+        this.coinMultiplier = cfg.coinMultiplier;
+        this.state.flagEnabled = cfg.flagEnabled;
+      });
+    }
 
     // efeitos expiram antes do movimento (velocidade correta no tick)
     this.effects.tick(this.state.players, now);

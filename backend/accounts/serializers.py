@@ -1,7 +1,7 @@
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import Account, PlayerStats
+from .models import Account, PlayerSettings, PlayerStats
 
 
 class PlayerStatsSerializer(serializers.ModelSerializer):
@@ -57,3 +57,12 @@ class RegisterSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+
+
+class PlayerSettingsSerializer(serializers.ModelSerializer):
+    """`GET/PUT /api/v1/accounts/settings` (T-061, consumido pela T-058). `display_name` não é
+    campo do model (é da `Account`) — a view injeta no dict de saída depois de serializar."""
+
+    class Meta:
+        model = PlayerSettings
+        fields = ["control_profile", "volume_master", "volume_sfx", "fullscreen_pref"]

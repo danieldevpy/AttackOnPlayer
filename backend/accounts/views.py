@@ -13,16 +13,18 @@ from rest_framework.response import Response
 
 from . import jwt as jwt_lib
 from .authentication import JWTAuthentication
-from .models import Account, GuestLink, PlayerStats
+from .models import Account, GuestLink, PlayerSettings, PlayerStats
 from .serializers import (
     AccountSerializer,
     GuestRequestSerializer,
     LinkRequestSerializer,
     LoginSerializer,
+    PlayerSettingsSerializer,
     PlayerStatsSerializer,
     RankingEntrySerializer,
     RegisterSerializer,
 )
+from .services import sanitize_display_name
 
 
 class RankingPagination(PageNumberPagination):
@@ -69,11 +71,14 @@ def register(request):
     body.is_valid(raise_exception=True)
     email = body.validated_data["email"]
     password = body.validated_data["password"]
-    display_name = body.validated_data.get("display_name") or email.split("@")[0]
+    email_prefix = email.split("@")[0][:32]
+    raw_name = body.validated_data.get("display_name") or email_prefix
+    # T-061: nick malicioso (fora do charset/tamanho) cai pro prefixo do email, nunca rejeita.
+    display_name = sanitize_display_name(raw_name, fallback=email_prefix)
 
     with transaction.atomic():
         account = Account.objects.create_user(
-            email=email, password=password, display_name=display_name[:32]
+            email=email, password=password, display_name=display_name
         )
         PlayerStats.objects.create(account=account)
 
@@ -164,3 +169,28 @@ def ranking(request):
     page = paginator.paginate_queryset(qs, request)
     data = RankingEntrySerializer(page, many=True).data
     return paginator.get_paginated_response(data)
+
+
+@api_view(["GET", "PUT"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def player_settings(request):
+    """`GET/PUT /api/v1/accounts/settings` (T-061) — perfil de controle/volumes/fullscreen +
+    nick, usado pela persistência do lobby (T-058) quando logado. `PUT` é parcial (só os campos
+    enviados mudam); nick malicioso cai pro nick atual (nunca rejeita a request toda)."""
+    settings_obj, _ = PlayerSettings.objects.get_or_create(account=request.user)
+
+    if request.method == "PUT":
+        body = PlayerSettingsSerializer(settings_obj, data=request.data, partial=True)
+        body.is_valid(raise_exception=True)
+        body.save()
+
+        if "display_name" in request.data:
+            request.user.display_name = sanitize_display_name(
+                request.data["display_name"], fallback=request.user.display_name
+            )
+            request.user.save(update_fields=["display_name"])
+
+    data = PlayerSettingsSerializer(settings_obj).data
+    data["display_name"] = request.user.display_name
+    return Response(data)

@@ -15,6 +15,7 @@ from django.contrib.auth.models import (
     BaseUserManager,
     PermissionsMixin,
 )
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -84,6 +85,36 @@ class PlayerStats(models.Model):
 
     def __str__(self):
         return f"stats({self.account.display_name})"
+
+
+class PlayerSettings(models.Model):
+    """Preferências do jogador persistidas na conta (T-061) — perfil de controle (ADR-015),
+    volumes (T-051) e preferência de tela cheia (T-048). Consumido pelo lobby (T-058) via
+    `GET/PUT /api/v1/accounts/settings`; enquanto o lobby não existe, localStorage é a única
+    fonte no client (sem regressão)."""
+
+    CONTROL_PROFILES = [("mouse", "mouse"), ("keyboard", "keyboard"), ("touch", "touch")]
+
+    account = models.OneToOneField(
+        Account, on_delete=models.CASCADE, primary_key=True, related_name="settings"
+    )
+    control_profile = models.CharField(
+        max_length=16, choices=CONTROL_PROFILES, blank=True, default=""
+    )
+    volume_master = models.FloatField(
+        default=1.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
+    )
+    volume_sfx = models.FloatField(
+        default=1.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
+    )
+    fullscreen_pref = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "accounts_player_settings"
+
+    def __str__(self):
+        return f"settings({self.account.display_name})"
 
 
 class GuestLink(models.Model):

@@ -40,6 +40,20 @@ def test_register_defaults_display_name_from_email():
     assert response.json()["account"]["display_name"] == "semnome"
 
 
+def test_register_sanitizes_malicious_display_name_to_email_prefix():
+    response = APIClient().post(
+        "/api/v1/auth/register",
+        {
+            "email": "malicioso@aop.dev",
+            "password": STRONG_PASSWORD,
+            "display_name": "<script>alert(1)</script>",
+        },
+        format="json",
+    )
+    assert response.status_code == 201
+    assert response.json()["account"]["display_name"] == "malicioso"
+
+
 def test_register_rejects_duplicate_email():
     Account.objects.create_user(email="dup@aop.dev", password=STRONG_PASSWORD)
     response = APIClient().post(

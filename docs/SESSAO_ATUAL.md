@@ -60,14 +60,24 @@ de `default`); `paletteFor` em `characters.ts` passa a ler o tint da skin (antes
 parâmetro). Gancho pronto pra guerreiro/mago = nova entrada no registry. tsc ×3 limpo · shared
 39/39 (+1) · server 80/80 · bots 35/35 · smoke com 3 bots reais sem regressão. Ver `docs/DEVLOG.md`
 (Sessão 36) e `docs/prompts/PROMPT-0053.md`.
-**Sessão 37 (agente worker, Frente B, em andamento): T-060 — KDA + ranking** entregue:
+**Sessão 37 (agente worker, Frente B): T-060 — KDA + ranking** entregue:
 `accounts/services.py` novo (agregação de kills/deaths/matches_played na ingestão do batch de
 telemetria, `telemetry/views.py`), `GET /api/v1/stats/me` + `GET /api/v1/ranking` (paginado,
 público), `PlayerStatsAdmin` (busca). pytest backend 88/88 (+9) · `makemigrations --check` limpo
 · `ruff` limpo · smoke fim a fim com Django+Colyseus reais (porta 2604, isolada da sessão dev em
 :2567) confirmando o pipeline e a atribuição de kill em tempo real. Ver `docs/DEVLOG.md` (Sessão
-37) e `docs/prompts/PROMPT-0054.md`. **Frente B em andamento:** próximas T-061 e T-029, mesma
-sessão, cada uma com gate/commit próprio.
+37) e `docs/prompts/PROMPT-0054.md`.
+**Sessão 38 (agente worker, Frente B, em andamento): T-061 — Auditoria + fechamento do admin**
+entregue: `ArenaRoom` reconsulta `platformClient.getConfig()` periodicamente (5s) e aplica
+xp/coin/flag na sala JÁ ABERTA (antes só valia na criação); `sanitize_display_name()` (nick
+malicioso → fallback) aplicado em `register()` + `PUT /accounts/settings` novo; ação de admin
+`reset_nick`; `PlayerSettings` novo (control_profile/volumes/fullscreen, os campos que a
+PROPOSAL-0004 já promete pro lobby) + `GET/PUT /api/v1/accounts/settings` (migração `0003`).
+SPEC-0008 checklist revisado (4/5; Google OAuth documentado como pendência formal ADR-020).
+pytest 105/105 (+17) · vitest server 83/83 (+3) · tsc ×3 limpo · `effective_config()` confirmado
+mudando ao vivo via shell do Django real. Ver `docs/DEVLOG.md` (Sessão 38) e
+`docs/prompts/PROMPT-0055.md`. **Frente B em andamento:** falta T-029, mesma sessão, gate/commit
+próprio.
 
 ---
 

@@ -111,6 +111,64 @@ def test_stats_me_returns_own_stats():
     assert response.json() == {"kills": 4, "deaths": 1, "matches_played": 2, "xp_total": 50}
 
 
+def test_player_settings_requires_authentication():
+    response = APIClient().get("/api/v1/accounts/settings")
+    assert response.status_code == 401
+
+
+def test_player_settings_get_creates_defaults_lazily():
+    account = Account.objects.create_user(
+        email="settings@aop.dev", password="secret123", display_name="settings"
+    )
+    response = APIClient().get("/api/v1/accounts/settings", **auth_header(account))
+    assert response.status_code == 200
+    assert response.json() == {
+        "control_profile": "",
+        "volume_master": 1.0,
+        "volume_sfx": 1.0,
+        "fullscreen_pref": True,
+        "display_name": "settings",
+    }
+
+
+def test_player_settings_put_updates_prefs_and_nick():
+    account = Account.objects.create_user(email="prefs@aop.dev", password="secret123")
+    response = APIClient().put(
+        "/api/v1/accounts/settings",
+        {"control_profile": "touch", "volume_master": 0.4, "display_name": "NovoNick"},
+        format="json",
+        **auth_header(account),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["control_profile"] == "touch"
+    assert body["volume_master"] == 0.4
+    assert body["volume_sfx"] == 1.0  # não enviado, mantém default
+    assert body["display_name"] == "NovoNick"
+
+
+def test_player_settings_put_rejects_out_of_range_volume():
+    account = Account.objects.create_user(email="vol@aop.dev", password="secret123")
+    response = APIClient().put(
+        "/api/v1/accounts/settings", {"volume_master": 2.0}, format="json", **auth_header(account)
+    )
+    assert response.status_code == 400
+
+
+def test_player_settings_put_malicious_nick_keeps_current_name():
+    account = Account.objects.create_user(
+        email="malnick@aop.dev", password="secret123", display_name="Original"
+    )
+    response = APIClient().put(
+        "/api/v1/accounts/settings",
+        {"display_name": "<script>x</script>"},
+        format="json",
+        **auth_header(account),
+    )
+    assert response.status_code == 200
+    assert response.json()["display_name"] == "Original"
+
+
 def test_ranking_is_public_ordered_by_kills_and_paginated():
     for i, kills in enumerate([10, 30, 20]):
         account = Account.objects.create_guest(display_name=f"player{i}")

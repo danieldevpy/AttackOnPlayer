@@ -1,12 +1,29 @@
 from django.contrib import admin
 
-from .models import Account, GuestLink, PlayerStats
+from .models import Account, GuestLink, PlayerSettings, PlayerStats
+from .services import sanitize_display_name
 
 
 class PlayerStatsInline(admin.StackedInline):
     model = PlayerStats
     can_delete = False
     extra = 0
+
+
+class PlayerSettingsInline(admin.StackedInline):
+    model = PlayerSettings
+    can_delete = False
+    extra = 0
+
+
+@admin.action(description="Moderação: resetar nick para o padrão")
+def reset_nick(modeladmin, request, queryset):
+    """T-061: staff pode zerar um nick abusivo sem deploy — cai no mesmo fallback que a
+    sanitização de registro usa (prefixo do email pra conta registrada, "guest" pra guest)."""
+    for account in queryset:
+        fallback = "guest" if account.is_guest else (account.email or "guest").split("@")[0][:32]
+        account.display_name = sanitize_display_name(fallback, fallback=fallback)
+        account.save(update_fields=["display_name"])
 
 
 @admin.register(Account)
@@ -16,7 +33,8 @@ class AccountAdmin(admin.ModelAdmin):
     search_fields = ("display_name", "email", "id")
     readonly_fields = ("id", "date_joined", "last_login", "password")
     ordering = ("-date_joined",)
-    inlines = [PlayerStatsInline]
+    inlines = [PlayerStatsInline, PlayerSettingsInline]
+    actions = [reset_nick]
 
 
 @admin.register(GuestLink)

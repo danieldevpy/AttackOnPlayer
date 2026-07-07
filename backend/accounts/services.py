@@ -1,10 +1,25 @@
-"""Agregação de estatística a partir da telemetria (T-060). Best-effort e nunca lança: um
-`playerToken`/`killerToken`/`victimToken` sem `GuestLink` (bot sem conta, guest nunca
-registrado) é ignorado — o batch de telemetria (T-026/T-027f) continua sendo ingerido por
-completo mesmo quando nenhum evento é atribuível a uma conta."""
+"""Agregação de estatística a partir da telemetria (T-060) e moderação de nick (T-061)."""
+import re
+
 from django.db.models import F
 
 from .models import GuestLink, PlayerStats
+
+# T-061: nick malicioso vira fallback (nunca erro 400) — mesmo aceite previsto pro lobby T-058.
+# Unicode \w cobre letras acentuadas/dígitos/underscore; espaço/hífen/ponto liberados à parte.
+# Bloqueia: HTML/script, caracteres de controle, emoji, RTL override, etc.
+_NICK_RE = re.compile(r"^[\w \-.]{1,32}$", re.UNICODE)
+
+
+def sanitize_display_name(raw, fallback="guest"):
+    """Sanitiza um nick vindo do cliente. Fora do charset/tamanho permitido (ou vazio) => cai
+    pro `fallback` inteiro (nunca trunca/edita um nick malicioso — aceite explícito da T-058)."""
+    if not isinstance(raw, str):
+        return fallback
+    candidate = raw.strip()
+    if not candidate or not _NICK_RE.match(candidate):
+        return fallback
+    return candidate
 
 
 def _stats_for_token(token):

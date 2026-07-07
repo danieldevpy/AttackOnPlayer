@@ -1,5 +1,29 @@
 # Devlog
 
+## 2026-07-06 — Sessão 38 (agente worker, Frente B): T-061 — Auditoria + fechamento do admin
+- **Config ao vivo:** `ArenaRoom.updateInner` passa a reconsultar `platformClient.getConfig()`
+  periodicamente (`PLATFORM_SYNC_INTERVAL_MS=5s`, aproveitando o TTL de 30s já existente do
+  T-027g) e aplica `xpMultiplier`/`coinMultiplier`/`flagEnabled` na sala JÁ ABERTA — antes só
+  valia na criação. `mapRotation`/`expectedPlayers` continuam só-na-criação (não fazem sentido
+  ao vivo). Fire-and-forget, nunca bloqueia o tick, nunca lança.
+- **Moderação de nick:** `sanitize_display_name()` novo (`accounts/services.py`) — whitelist de
+  charset, nick malicioso cai pro fallback inteiro (nunca tenta "limpar" caractere a caractere).
+  Aplicado em `register()` e no `PUT /accounts/settings` novo. Ação de admin `reset_nick` em
+  `AccountAdmin` — staff modera um nick abusivo sem deploy.
+- **Endpoint de settings do player:** `PlayerSettings` novo (`control_profile`/`volume_master`/
+  `volume_sfx`/`fullscreen_pref` — os mesmos 4 campos que a PROPOSAL-0004 §5 já promete pro
+  lobby, não um blob inventado) + `GET/PUT /api/v1/accounts/settings` (JWT). Migração `0003`.
+- **SPEC-0008:** checklist revisado — 4/5 bullets fecham; "ranking público" saiu do fora-de-
+  escopo (T-060 já entrega, extensão aprovada via PROPOSAL-0004); "login com Google" documentado
+  como pendência formal (ADR-020/T-028-google), não gap desta task.
+- **Gates:** pytest 105/105 (+17) · `makemigrations --check` limpo · `ruff` limpo · vitest server
+  83/83 (+3, `platformSync.test.ts`) · `tsc` ×3 limpo.
+- **Verificação viva:** `effective_config()` confirmado mudando na hora ao criar `GameEvent` via
+  shell do Django real (mesma sessão da T-060) — lado Django do "sem deploy" provado ao vivo; o
+  lado Node (sala já aberta aplicando o novo config) fica coberto pelos 3 testes novos com
+  `platformClient` mockado (a sala de smoke da T-060 já tinha sido descartada por inatividade).
+- `npm run aci -- index` rodado ao final. Ver `docs/prompts/PROMPT-0055.md`.
+
 ## 2026-07-06 — Sessão 37 (agente worker, Frente B): T-060 — KDA + ranking
 - **Pedido do CD:** implementar a Frente B (T-060 → T-061 → T-029) por completo. Este prompt =
   T-060 apenas (as próximas duas seguem em série, cada uma com gate e commit próprio).

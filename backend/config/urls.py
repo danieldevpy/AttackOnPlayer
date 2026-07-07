@@ -2,7 +2,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
-from accounts.views import ranking, stats_me
+from accounts.views import player_settings, ranking, stats_me
 from common.health import healthz
 from common.views import ping
 
@@ -18,4 +18,6 @@ urlpatterns = [
     # rotas de identidade, são leitura de estatística/ranking público+próprio).
     path("api/v1/stats/me", stats_me, name="stats-me"),
     path("api/v1/ranking", ranking, name="ranking"),
+    # T-061 (SPEC-0008, Frente B): settings do player (consumido pela T-058 quando o lobby existir).
+    path("api/v1/accounts/settings", player_settings, name="player-settings"),
 ]
