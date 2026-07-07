@@ -9,6 +9,7 @@
   "scripts": {
     "aci": "tsx src/cli.ts",
     "doctor": "tsx src/cli.ts doctor",
+    "mcp": "tsx src/mcp/server.ts",
     "test": "vitest run"
   },
   "devDependencies": {
@@ -16,5 +17,9 @@
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
   }
 }

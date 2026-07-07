@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { loadConfig } from "./config.js";
 import { JsonStore } from "./store/store.js";
+import { codeStore, docsStore } from "./store/stores.js";
 import { resolveGlobs } from "./util/glob.js";
 import { Timer, queryMetrics } from "./metrics/metrics.js";
 import { indexCode, type SymbolKind } from "./index/code.js";
@@ -86,14 +87,6 @@ function doctor(): number {
 
   console.log("\nResumo:", ok ? "ambiente OK ✔" : "há pendências ✗");
   return ok ? 0 : 1;
-}
-
-function codeStore(cfg: ReturnType<typeof loadConfig>): JsonStore {
-  return new JsonStore(cfg.cacheAbs, "code.json");
-}
-
-function docsStore(cfg: ReturnType<typeof loadConfig>): JsonStore {
-  return new JsonStore(cfg.cacheAbs, "docs.json");
 }
 
 function stats(): number {

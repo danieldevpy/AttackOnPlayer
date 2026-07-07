@@ -26,7 +26,11 @@ Mapa completo: `docs/DOC_MAP.md`. Resumo:
 
 ## Camada de contexto para agentes (ACI) — use antes de abrir arquivos inteiros
 
-`packages/aci` (PROPOSAL-0003, ADR-018) indexa código e documentação do repo e devolve **trechos/resumos cirúrgicos** em vez do arquivo inteiro — economia medida de ~80–95% de tokens nas consultas típicas. Hoje é uma **CLI** (o servidor MCP é a F5, ainda não construída), então chame via `Bash`/terminal antes de ler um arquivo por inteiro:
+`packages/aci` (PROPOSAL-0003, ADR-018) indexa código e documentação do repo e devolve **trechos/resumos cirúrgicos** em vez do arquivo inteiro — economia medida de ~80–95% de tokens nas consultas típicas.
+
+**Servidor MCP (F5, preferencial):** registrado em `.mcp.json` na raiz — se seu cliente suporta MCP (Claude Code suporta), as tools `aci_search`, `aci_find_symbol`, `aci_related`, `aci_summary`, `aci_stats`, `aci_index` já aparecem nativamente, sem precisar de `Bash`. Use-as diretamente em vez da CLI abaixo.
+
+**CLI (fallback, sempre funciona):** qualquer agente sem MCP chama via `Bash`/terminal antes de ler um arquivo por inteiro:
 
 ```bash
 npm run aci -- summary <SPEC-NNNN|ADR-NNN|PROMPT-NNNN|PROPOSAL-NNNN|caminho/do/arquivo.md>
@@ -36,7 +40,7 @@ npm run aci -- index [--force]                                # reindexa (cache 
 npm run aci -- doctor                                          # diagnóstico se a busca parecer desatualizada
 ```
 
-**Fluxo recomendado:** `summary`/`related`/`search` primeiro → só abre o arquivo inteiro (`Read`) se o trecho devolvido não bastar. Cobre `packages/*/src` (símbolos exportados) e docs/specs/ADRs/prompts/proposals (por seção de heading). Isolado do jogo — `packages/aci` não é importado por nenhum outro pacote, fora dos gates do jogo, remoção trivial.
+**Fluxo recomendado:** `summary`/`related`/`search` (tool MCP ou CLI) primeiro → só abre o arquivo inteiro (`Read`) se o trecho devolvido não bastar. Cobre `packages/*/src` (símbolos exportados) e docs/specs/ADRs/prompts/proposals (por seção de heading). Isolado do jogo — `packages/aci` não é importado por nenhum outro pacote, fora dos gates do jogo, remoção trivial (deletar a pasta + a entrada em `.mcp.json`).
 
 ## Agentes especialistas (contexto mínimo por papel)
 

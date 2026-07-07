@@ -10,7 +10,8 @@
     "analyze": "tsx packages/server/src/cli/analyze.ts",
     "test": "npm run test -w @aop/shared",
     "aci": "npm run aci -w @aop/aci --",
-    "aci:test": "npm run test -w @aop/aci"
+    "aci:test": "npm run test -w @aop/aci",
+    "aci:mcp": "npm run mcp -w @aop/aci"
   },
   "engines": { "node": ">=20" }
 }

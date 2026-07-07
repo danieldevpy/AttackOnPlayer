@@ -11,6 +11,22 @@ Em construção por fases (PROPOSAL-0003).
 - **F1 (índice de código):** símbolos (`function`/`class`/`interface`/`type`/`enum`/`const` exportados) de todo `packages/*/src`, com cache incremental por hash e busca por nome/assinatura.
 - **F2 (índice de docs/corpus):** seções por heading de `docs/**` (inclui `AGENTS.md`, `instrucoes/**`, `docs/DECISION_LOG.md`), `specs/SPEC-*`, `docs/prompts/PROMPT-*`, `docs/proposals/PROPOSAL-*`. `docs/DECISION_LOG.md` vira uma entrada `adr` por `## ADR-NNN`. Cache incremental por hash; busca por docId/heading/conteúdo com filtro por kind.
 - **F3 (grafo de relações + resumos):** `relatedDocs`/`docsReferencing` (menção lexical de símbolo/docId nas seções da F2, sem armazenamento novo) + `summarize` (reaproveita a seção de nível 1 da F2 como resumo). CLI `related`/`summary`.
+- **F5 (servidor MCP):** `src/mcp/server.ts` expõe search/find_symbol/related/summary/stats/index como tools MCP nativas (stdio), pra qualquer agente compatível (Claude Code, Codex, Cursor…) usar sem passar por `Bash`. A CLI continua existindo e funcionando igual — o MCP é uma segunda porta de entrada pros mesmos handlers (`src/mcp/handlers.ts`), não uma reimplementação.
+
+## MCP (F5) — uso recomendado por agentes
+
+Registrado no `.mcp.json` da raiz do monorepo (`command: npx tsx packages/aci/src/mcp/server.ts`) — Claude Code carrega automaticamente ao abrir o projeto. Tools disponíveis:
+
+| Tool | Equivalente CLI | Uso |
+|---|---|---|
+| `aci_search` | `aci search` | símbolo de código e/ou seção de doc/spec/ADR por palavra-chave |
+| `aci_find_symbol` | — (subconjunto de `search --kind`) | busca por NOME de símbolo (exato > prefixo > substring), mais preciso que `aci_search` |
+| `aci_related` | `aci related` | "quem governa/menciona X" — símbolo/arquivo/docId → docs relacionados |
+| `aci_summary` | `aci summary` | resumo de spec/ADR/prompt/proposal/doc antes de abrir o arquivo inteiro |
+| `aci_stats` | `aci stats` | estado do índice (nº arquivos/símbolos/seções) |
+| `aci_index` | `aci index [--force]` | reindexa após editar código/docs (cache incremental por hash) |
+
+Rodar manualmente fora do Claude Code: `npm run aci:mcp` (ou `npm run mcp -w @aop/aci`) sobe o servidor stdio — útil pra testar com outro cliente MCP (Codex, Cursor, Gemini CLI) apontando pro mesmo comando.
 
 ## Uso
 
@@ -31,7 +47,7 @@ npm run aci -- stats            # estado do índice
 npm test -w @aop/aci            # suíte de testes
 ```
 
-Comando `context` chega na fase F4 (stub hoje).
+Comando `context` chega na fase F4 (stub hoje) — a F5 (MCP) foi antecipada porque não depende da F4, ver nota de execução na PROPOSAL-0003.
 
 ## Arquitetura (alvo)
 
@@ -46,8 +62,9 @@ src/
   graph/links.ts   (F3) arestas doc↔código↔spec↔ADR por menção lexical, sob demanda
   summarize/       (F3) resumos de spec/ADR/prompt/proposal/doc (reaproveita seção nível 1 da F2)
   query/search.ts  (F1/F2) busca por símbolo/nome/assinatura e por doc/heading/conteúdo
-  query/context.ts (F4) context_for_feature
-  mcp/             (F5) servidor MCP stdio
+  query/context.ts (F4) context_for_feature — ainda não implementado
+  mcp/handlers.ts  (F5) mesma lógica de cli.ts, devolvendo dados estruturados (não texto de terminal)
+  mcp/server.ts    (F5) servidor MCP stdio — embrulha handlers.ts em tools
   cli.ts           entrada de linha de comando
 ```
 

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "aci": {
+      "command": "npx",
+      "args": ["tsx", "packages/aci/src/mcp/server.ts"]
+    }
+  }
+}
