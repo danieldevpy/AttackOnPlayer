@@ -1,5 +1,47 @@
 # Devlog
 
+## 2026-07-07 — Sessão 47 (agente worker): PROMPT-0064 — Mobile: HUD compacto + tela cheia paisagem
+
+- **Pedido do CD:** ajuste pro ambiente mobile via navegador — tela cheia, jogar com o
+  celular deitado, roster mostrando só a contagem de players (não a lista cheia), e os
+  componentes de UI responsivos no mobile sem afetar a jogabilidade.
+- **Já existia:** tela cheia (T-048/SPEC-0012) e auto-detecção de dispositivo touch
+  (`detectDefaultProfile`, ADR-015, `packages/client/src/input/manager.ts`) — reusada em
+  vez de reinventar detecção por `max-width`.
+- **Mudança:** `isCoarsePointerDevice()` extraído em `manager.ts` (mesmo heurístico, agora
+  exportado); `immersion.ts` liga `body.mobile-layout` no boot e tenta
+  `screen.orientation.lock("landscape")` (best-effort, `.catch()` silencioso) ao entrar em
+  tela cheia num device touch, com unlock ao sair; `hud.ts` troca a lista completa do
+  roster por só a contagem (`👥 N`) quando `mobile-layout` está ativo; `index.html` ganhou
+  CSS compacto pro HUD/roster/auth-widget sob essa classe; `main.ts` ganhou
+  `screen.orientation` "change" como reforço do `resize` do canvas na rotação.
+- **Decisão consciente:** sem overlay bloqueante de "gire o celular" em retrato — o pedido
+  foi viabilizar paisagem, não proibir retrato.
+- **Gates:** `tsc --noEmit` (client + server) limpo; `shared` 49/49; `vite build` OK.
+  Preview headless: classe `mobile-layout` aplicada manualmente (sandbox não emula
+  `pointer: coarse`) confirma via estilos computados HUD 244px→168px e roster
+  lista→pill 54×30px. Screenshot do preview travou (parece limitação do Electron do
+  sandbox, não regressão) — accessibility snapshot + estilos computados usados como prova.
+  **Não testado em device físico real** — pendência, principalmente pro
+  `screen.orientation.lock` (suporte inconsistente entre navegadores).
+- **Arquivos:** `packages/client/src/{immersion,hud,input/manager,main}.ts`,
+  `packages/client/index.html`. Ver `docs/prompts/PROMPT-0064.md`.
+- **Follow-up mesmo dia (CD testou num iPhone real):** dois problemas reportados —
+  (1) tocar em tela cheia desligava os analógicos touch: causa era um bug pré-existente do
+  T-048 (`#fullscreen-toggle` sendo pego junto pelo `querySelectorAll("#profile-selector
+  button")` de `main.ts`, disparando `profileManager.select(undefined)` → cai no default
+  `mouse`); fix: seletor virou `button[data-profile]`. (2) tela cheia não escondia a barra de
+  URL: **não é bug, é limitação do iOS Safari** — nunca implementou Fullscreen API pra
+  elemento genérico, em nenhuma versão; único jeito real é abrir via ícone na Tela de Início.
+  `immersion.ts` agora detecta isso (`hasFullscreenApi`/`navigator.standalone`) e orienta via
+  toast em vez de falhar em silêncio; `index.html` ganhou as meta tags
+  `apple-mobile-web-app-*` (ativam modo standalone quando instalado) + `viewport-fit=cover`
+  (habilita `env(safe-area-inset-*)`, também usado pra afastar os analógicos do notch/home
+  indicator em paisagem). Bônus: corrigido o mesmo padrão de bug (`?.catch()` fora da cadeia
+  opcional, lançava `TypeError` se a API não existisse) em `tryLockLandscape` (meu código
+  desta sessão) e no `toggleFullscreen` original (T-048). `tsc`/build limpos; preview
+  confirma que ⛶ não troca mais de perfil.
+
 ## 2026-07-07 — Sessão 46 (agente worker): PROMPT-0063 — Deploy simples passa a subir Django + Postgres
 
 - **Pedido do CD:** o script de produção (`script/deploy-vps-sem-dominio.sh`) também

@@ -12,11 +12,17 @@ export interface ProfileManagerDeps {
   onChange(id: ProfileId): void;
 }
 
-/** Auto-detecção (ADR-015): dispositivo majoritariamente touch vira perfil `touch`; o resto, `mouse`. */
-function detectDefaultProfile(): ProfileId {
+/** Heurística de dispositivo touch (ADR-015) — reusada pelo layout mobile compacto do HUD
+ * (immersion.ts), já que é o mesmo "isto é um celular/tablet?" que decide o perfil padrão. */
+export function isCoarsePointerDevice(): boolean {
   const coarsePointer = matchMedia("(pointer: coarse)").matches;
   const hasTouch = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
-  return coarsePointer && hasTouch ? "touch" : "mouse";
+  return coarsePointer && hasTouch;
+}
+
+/** Auto-detecção (ADR-015): dispositivo majoritariamente touch vira perfil `touch`; o resto, `mouse`. */
+function detectDefaultProfile(): ProfileId {
+  return isCoarsePointerDevice() ? "touch" : "mouse";
 }
 
 export class ProfileManager {

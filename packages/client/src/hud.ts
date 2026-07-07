@@ -287,6 +287,14 @@ export function updateHud(now: number) {
 
   if (now < rosterNext || !st?.players) return;
   rosterNext = now + 250;
+
+  // Mobile (heurística de dispositivo touch, ADR-015): a lista completa (nome/HP/nível de
+  // cada player) ocuparia espaço demais numa tela pequena — só a contagem.
+  if (document.body.classList.contains("mobile-layout")) {
+    rosterEl.innerHTML = `<div class="roster-count">👥 ${st.players.size}</div>`;
+    return;
+  }
+
   let html = `<div class="title">PLAYERS</div>`;
   st.players.forEach((p: any, id: string) => {
     const self = id === ctx.getSessionId();

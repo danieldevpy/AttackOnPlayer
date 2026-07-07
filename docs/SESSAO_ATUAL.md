@@ -6,6 +6,34 @@
 **Atualizado em:** 2026-07-07
 **Branch:** `main`. **Marco:** V1.
 
+**Sessão 47 (agente worker): PROMPT-0064 — Mobile: HUD compacto + tela cheia paisagem**
+Pedido direto do CD (fora de fase, T-064): tela cheia mobile, jogar com o celular deitado,
+roster só com a contagem de players (não a lista cheia) e componentes responsivos no mobile
+sem afetar a jogabilidade. Tela cheia já existia (T-048); reusei a heurística de dispositivo
+touch do perfil de controle (`isCoarsePointerDevice`, ADR-015, `input/manager.ts`, agora
+exportada) pra ligar `body.mobile-layout` no boot (`immersion.ts`). Roster (`hud.ts`) troca a
+lista completa por `👥 N` quando essa classe está ativa; HUD/roster/auth-widget encolhem via
+CSS em `index.html`. Tela cheia num device touch tenta `screen.orientation.lock("landscape")`
+(best-effort, silencioso se o navegador recusar/não suportar — iOS Safari e desktop, por
+exemplo); `main.ts` ganhou reforço de resize no evento `orientationchange`. Decisão consciente:
+**sem** overlay bloqueante de "gire o celular" em retrato — não foi pedido proibir retrato, só
+viabilizar paisagem. `tsc` (client+server) limpo, shared 49/49, `vite build` OK. Verificado via
+preview headless com estilos computados (HUD 244px→168px, roster→pill 54×30px) — screenshot do
+preview travou nesse sandbox (parece limitação do Electron local, não regressão).
+**Follow-up mesmo dia** (CD testou num iPhone real, achou 2 problemas): (1) tocar em tela
+cheia desligava os analógicos — bug pré-existente do T-048 (`#fullscreen-toggle` sendo pego
+pelo seletor de botões de perfil em `main.ts`, disparava troca pra perfil `mouse`); corrigido
+restringindo o seletor a `button[data-profile]`. (2) tela cheia não escondia a barra de URL —
+**não é bug**, iOS Safari nunca suportou Fullscreen API pra elemento genérico; único jeito real
+é instalar via Tela de Início. `immersion.ts` agora detecta isso e orienta por toast em vez de
+falhar em silêncio; `index.html` ganhou meta tags `apple-mobile-web-app-*` +
+`viewport-fit=cover` (+ safe-area nos analógicos pro notch em paisagem). Corrigido também um
+bug de `.catch()` fora de optional chaining (lançava TypeError) em dois lugares. `tsc`/build
+limpos; preview confirma o fix do bug (1). **Pendência: bug (2) é limitação de plataforma —
+sem "teste que passa" além de confirmar visualmente instalado num iPhone real**; `screen.
+orientation.lock` também segue não testado em device físico. Ver `docs/DEVLOG.md`
+(Sessão 47) e `docs/prompts/PROMPT-0064.md`.
+
 **Sessão 46 (agente worker): PROMPT-0063 — Deploy simples passa a subir Django + Postgres**
 Pedido do CD: `script/deploy-vps-sem-dominio.sh` também inicializar Django e banco, ambiente
 de produção já funcionando com o backend. Mudanças: instala Docker (só pro Postgres do

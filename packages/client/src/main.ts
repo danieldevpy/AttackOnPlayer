@@ -62,11 +62,15 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
-addEventListener("resize", () => {
+function resizeRenderer() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-});
+}
+addEventListener("resize", resizeRenderer);
+// Mobile: girar o celular já dispara "resize" na maioria dos navegadores, mas alguns
+// atrasam até o fim da animação do SO — reforço explícito pra não ficar um frame esticado.
+screen.orientation?.addEventListener?.("change", () => setTimeout(resizeRenderer, 50));
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 const sun = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -710,7 +714,11 @@ function updateDebugState() {
 // aimX/aimZ opcional desde SPEC-0003). Mira/rotação é atributo do PERFIL, não uma regra
 // global — perfil novo é só uma classe nova em input/, zero mudança de rede.
 const crosshairEl = document.getElementById("crosshair")!;
-const profileButtons = document.querySelectorAll<HTMLButtonElement>("#profile-selector button");
+// `[data-profile]` exclui #fullscreen-toggle (mesmo container #profile-selector, T-048):
+// sem o filtro, clicar em tela cheia disparava profileManager.select(undefined) — cai no
+// default "mouse" em ProfileManager.build() e desligava o joystick touch (bug real do
+// T-064, achado em device físico).
+const profileButtons = document.querySelectorAll<HTMLButtonElement>("#profile-selector button[data-profile]");
 
 const profileManager = new ProfileManager({
   mouse: {
