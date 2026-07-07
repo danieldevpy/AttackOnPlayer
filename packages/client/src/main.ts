@@ -25,6 +25,7 @@ import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
 import { initImmersion, setUnloadGuard } from "./immersion";
 import { initAuth, getAuthToken } from "./auth";
+import { showLobby } from "./lobby";
 
 // T-048 (SPEC-0012): blindagem contra ações do navegador (menu de contexto, zoom, seleção
 // de texto, etc.) — sempre ativa, independente de perfil de controle ou conexão.
@@ -350,10 +351,17 @@ if (!playerToken) {
 // depois do token local existir, pra poder registrar o guest no Django (best-effort).
 initAuth();
 
+// T-057 (SPEC-0015): seleção do lobby é preenchida quando o card resolve (ver abaixo,
+// após criação do profileManager). Declaramos aqui para que connect() feche sobre ela.
+let lobbySelection: import("./lobby").LobbySelection | null = null;
+
 async function connect() {
   try {
     room = await client.joinOrCreate(ROOM_NAME, {
-      name: `web-${Math.floor(Math.random() * 999)}`,
+      // T-059 (próxima task): join envia nick/classId/skinId/profile.
+      // Por ora, usa o nome do lobby como identificador e mantém os demais campos
+      // para a task seguinte que integra o protocolo de join.
+      name: lobbySelection?.nick ?? `web-${Math.floor(Math.random() * 999)}`,
       token: playerToken,
       authToken: getAuthToken() ?? undefined
     });
@@ -388,7 +396,7 @@ async function connect() {
     hud.textContent = `erro ao conectar em ${url}\n${e}`;
   }
 }
-connect();
+// connect() é chamado após o lobby resolver (ver bloco T-057 abaixo, após profileManager)
 
 // ---------- Debug (T-007) ----------
 // Também capturamos eventos localmente (independente de DEBUG=1 no server)
@@ -1070,3 +1078,25 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
+
+// ---------- T-057 (SPEC-0015): Lobby pré-sala ----------
+// Deve ser invocado APÓS toda a inicialização (renderer, profileManager, audio) para que
+// o card possa referenciar esses objetos via closures. A Promise bloqueia o connect() —
+// o loop de render e o input já rodam mas a sala não está conectada até o clique em Jogar.
+{
+  const profileSelectorEl = document.getElementById("profile-selector");
+  // Esconde o #profile-selector antigo enquanto o lobby está visível
+  if (profileSelectorEl) profileSelectorEl.style.display = "none";
+
+  showLobby({
+    audio,
+    getCurrentProfile: () => profileManager.id,
+    setProfile: (id) => profileManager.select(id),
+    onPlay: () => {},
+  }).then((selection) => {
+    lobbySelection = selection;
+    // Reexibe o seletor de perfil (estado já sincronizado via setProfile acima)
+    if (profileSelectorEl) profileSelectorEl.style.display = "";
+    void connect();
+  });
+}

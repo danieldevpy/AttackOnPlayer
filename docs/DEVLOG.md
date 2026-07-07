@@ -1,5 +1,38 @@
 # Devlog
 
+## 2026-07-06 — Sessão 40 (agente worker, Frente L): T-057 (SPEC-0015) — Janela pré-sala (lobby)
+
+- **Novo arquivo:** `packages/client/src/lobby.ts` — card único pré-sala com 4 seções
+  (identidade, classe+preview, settings, botão Jogar). CSS injetado dinamicamente via
+  `injectLobbyStyles()` (sem arquivo .css avulso). `showLobby()` retorna uma `Promise<LobbySelection>`
+  que resolve no clique em Jogar.
+- **Integração em `main.ts`:** `showLobby` chamado após toda inicialização (renderer,
+  profileManager, audio já criados) via `.then()`. O `connect()` aguarda a resolução do lobby —
+  nick do card passa como `name` no joinOrCreate (campo completo em T-059). `#profile-selector`
+  escondido enquanto o lobby está visível, reexibido após o clique.
+- **Preview 3D:** renderer Three.js dedicado (canvas 100%×100% no wrap, `alpha:true`,
+  pixel-ratio limitado a 2), iluminação própria, `createCharacterVisual` da T-053 reutilizado,
+  rotação por `requestAnimationFrame` (~2s/volta), `updateCharacterAnimation` chamado para idle.
+- **Identidade:** nick padrão `Guest#NNNNN` gerado (ou nome da conta se logado), persistido em
+  `aop_lobby_nick` no localStorage ao digitar. Badge de auth no header (logado/anônimo) com botão
+  de logout. Sanitização de nick (sem `<>` nem controles, max 20 chars, mín 1 char não-espaço).
+- **Settings:** perfil de controle (radio, sincroniza com `ProfileManager`), sliders Master/SFX
+  (refletem em `AudioSystem` ao vivo), toggle fullscreen (Fullscreen API).
+- **Seleção de classe/skin:** cards de classe (V1 só archer) + `<select>` de skin. Troca de
+  classe atualiza skins disponíveis e o preview 3D. Persistência em `aop_lobby_class`/`aop_lobby_skin`.
+- **1 clique:** defaults sensatos (nick gerado, archer, skin default, perfil detectado, volumes 100%).
+  Clique em Jogar destrava AudioContext (`audio.unlock()`), remove overlay, resolve Promise.
+- **Mobile:** layout flex-wrap (<= 599px vira coluna única via media query), botão full-width.
+- **Gates:** tsc ×3 limpo · vite build OK · shared 39/39 · server 89/89 · bots 35/35.
+- **Verificação funcional:** card exibido ao abrir (snapshot DOM confirmou todas seções), 1 clique
+  em Jogar removeu o overlay e exibiu o HUD de jogo. Screenshot timeout (esperado — WebGL+rAF
+  bloqueiam captura, como documentado nos avisos da SESSAO_ATUAL).
+- **Fora do escopo (pendências explícitas):**
+  - T-058: persistência Django (sync de nick, settings na conta).
+  - T-059: join enviando `{nick, classId, skinId, profile}` ao servidor.
+  - T-062: aba de ranking no card.
+- `npm run aci -- index` rodado ao final. Ver `docs/prompts/PROMPT-0057.md`.
+
 ## 2026-07-06 — Sessão 39 (agente worker, Frente B): T-029 — ADR-012 liga na conta
 - **Frente B fechada** (T-060 ✅ → T-061 ✅ → T-029 ✅, série completa no mesmo pedido do CD).
 - **Aditivo, não substitutivo:** o scaffold ADR-012 (`memDB` em memória, painel dev F3) continua
