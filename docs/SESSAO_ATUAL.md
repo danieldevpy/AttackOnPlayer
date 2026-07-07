@@ -5,6 +5,11 @@
 
 **Atualizado em:** 2026-07-07
 **Branch:** `main`. **Marco:** V1.
+**Sessão 45 (agente worker): PROMPT-0062 — Hotfix lobby (NotFoundError insertBefore)**
+Regressão T-057×T-062: `card.insertBefore(tabs, body)` lançava NotFoundError porque `body` era neto
+de `card` (após T-062), não filho direto. Fix: montagem linear explícita `tabs → panels → footer`
+via `appendChild`. Console limpo, tabs funcionando, 182 testes sem regressão.
+
 **Sessão 44 (agente worker): PROMPT-0061 — Arqueiro: "pegada" do arco + animação de disparo**
 entregue (fora da numeração do BACKLOG, follow-up direto do CD em cima da PROMPT-0051):
 causa raiz achada por simulação headless — o arco (filho do cotovelo esquerdo) herdava a rotação

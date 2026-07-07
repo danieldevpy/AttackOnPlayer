@@ -1,5 +1,19 @@
 # Devlog
 
+## 2026-07-07 — Sessão 45 (agente worker): PROMPT-0062 — Hotfix: lobby não montava (insertBefore após reestrutura das tabs T-062)
+
+- **Bug:** `NotFoundError` em `lobby.ts:765` (`card.insertBefore(tabs, body)`) impedia `showLobby`
+  de resolver — jogo nunca conectava.
+- **Causa:** regressão de integração T-057×T-062. A T-062 moveu `body` para filho de `mainPanel`
+  (neto de `card`), mas o `insertBefore` da linha 765 assumia que `body` era filho direto de `card`.
+  Idem para `card.insertBefore(panels, card.lastElementChild)` na linha 818.
+- **Fix:** montagem linear explícita ao final da construção do DOM: `header` (já appendado) →
+  `tabs.appendChild` → `panels.appendChild` → `footer.appendChild`. Zero refatoração além disso.
+- **Gates:** `tsc --noEmit` (3 pacotes) limpo; `vite build` OK; 182 testes sem regressão.
+- **Validação funcional:** preview headless confirmou ausência de NotFoundError, DOM correto e
+  alternância de tabs Principal ↔ Ranking funcionando.
+- **Arquivos:** `packages/client/src/lobby.ts` (2 linhas alteradas, 3 adicionadas).
+
 ## 2026-07-07 — Sessão 44 (agente worker): PROMPT-0061 — Arqueiro: "pegada" do arco + animação de disparo
 
 - **Pedido do CD:** em cima da PROMPT-0051 (personagens procedurais V2), o arqueiro melhorou mas

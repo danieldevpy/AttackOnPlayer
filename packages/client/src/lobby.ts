@@ -762,7 +762,7 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
       <button type="button" class="lobby-tab active" id="lobby-tab-main">Principal</button>
       <button type="button" class="lobby-tab" id="lobby-tab-ranking">Ranking</button>
     `;
-    card.insertBefore(tabs, body);
+    // tabs será appendado ao card após panels ser montado
 
     // Classe
     const classNames = Object.keys(CLASS_REGISTRY);
@@ -815,7 +815,6 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
 
     panels.appendChild(mainPanel);
     panels.appendChild(rankingPanel);
-    card.insertBefore(panels, card.lastElementChild);
 
     // ── Footer: botão Jogar ──
     const footer = document.createElement("div");
@@ -824,6 +823,10 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
       <button id="lobby-play-btn" type="button">▶ JOGAR</button>
       <span id="lobby-connecting"></span>
     `;
+
+    // Montagem linear explícita: header → tabs → panels → footer
+    card.appendChild(tabs);
+    card.appendChild(panels);
     card.appendChild(footer);
 
     document.body.appendChild(overlay);
