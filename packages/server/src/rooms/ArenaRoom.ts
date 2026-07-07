@@ -990,8 +990,17 @@ export class ArenaRoom extends Room<ArenaState> {
     if (!pending || pending.levels.length === 0) return;
     const level = pending.levels[0];
     // T-017: valida contra a oferta REAL enviada (pending.cards) — nunca recomputa
+    // Bug corrigido: desde que a oferta passou a ser sorteada (constants.ts:149-153),
+    // "equilibrado" nem sempre está entre as 3 cartas oferecidas — usar UPGRADE_AUTO_PICK
+    // direto no timeout podia aplicar uma carta que o jogador nunca viu na tela. Auto-pick
+    // agora sempre resolve para uma carta que estava de fato na oferta: prefere "equilibrado"
+    // quando ele foi sorteado (mantém o preset de sempre) e cai pra uma sorteada entre as
+    // oferecidas quando não foi (continua "sem política" — nenhuma carta é favorecida).
     const card: UpgradeCard | undefined =
-      cardId === null ? UPGRADE_AUTO_PICK : pending.cards.find((c) => c.id === cardId);
+      cardId === null
+        ? pending.cards.find((c) => c.id === UPGRADE_AUTO_PICK.id) ??
+          pending.cards[Math.floor(Math.random() * pending.cards.length)]
+        : pending.cards.find((c) => c.id === cardId);
     if (!card) return;
 
     pending.levels.shift();
