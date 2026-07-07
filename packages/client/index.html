@@ -144,7 +144,6 @@
       body.mobile-layout #hud .hud-bar { height: 12px; }
       body.mobile-layout #hud .hud-details .hint { display: none; }
       body.mobile-layout #roster { min-width: 0; padding: 3px 0; }
-      body.mobile-layout #auth-widget { bottom: 172px; font-size: 10px; }
       /* Overlay de Debug (T-007) */
       #debug-overlay {
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -235,54 +234,6 @@
         transition: opacity .25s ease, transform .25s ease;
       }
       .toast.show { opacity: 1; transform: translateX(0); }
-      /* T-028c (SPEC-0008): janela discreta de conta — nunca modal, nunca sobre a área de
-         jogo; fica encolhida no canto até o jogador clicar. Guest (padrão) continua 1 clique. */
-      #auth-widget {
-        position: fixed; bottom: 150px; left: 10px; z-index: 22;
-        font-family: monospace; font-size: 11px; color: #ccc;
-      }
-      #auth-pill {
-        display: flex; align-items: center; gap: 6px;
-        background: rgba(12,12,16,.7); border: 1px solid #333; border-radius: 999px;
-        padding: 4px 10px; cursor: pointer; user-select: none;
-      }
-      #auth-pill:hover { border-color: #ffd54f66; }
-      #auth-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #7a7a7a; flex: none; }
-      #auth-pill.logged-in .dot { background: #7fffaa; }
-      #auth-pill .name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      #auth-logout {
-        pointer-events: auto; background: none; border: none; color: #ff8a80;
-        font-family: monospace; font-size: 11px; cursor: pointer; padding: 0; margin-left: 2px;
-      }
-      #auth-panel {
-        display: none; margin-bottom: 6px; width: 190px;
-        background: rgba(16,16,24,.94); border: 1px solid #ffd54f44; border-radius: 8px;
-        padding: 10px; flex-direction: column; gap: 6px;
-      }
-      #auth-panel.open { display: flex; }
-      #auth-widget.open #auth-pill { display: none; }
-      .auth-tabs { display: flex; gap: 4px; margin-bottom: 2px; }
-      .auth-tabs button {
-        flex: 1; background: transparent; border: 1px solid transparent; color: #999;
-        font-family: monospace; font-size: 11px; padding: 3px 0; border-radius: 4px; cursor: pointer;
-      }
-      .auth-tabs button.active { background: rgba(255,213,79,.14); border-color: #ffd54f55; color: #ffd54f; }
-      #auth-form { display: flex; flex-direction: column; gap: 5px; }
-      #auth-form input {
-        background: rgba(0,0,0,.35); border: 1px solid #444; border-radius: 4px;
-        color: #eee; font-family: monospace; font-size: 11px; padding: 4px 6px;
-      }
-      #auth-form input:focus { outline: none; border-color: #ffd54f88; }
-      .auth-form-row { display: flex; gap: 5px; }
-      #auth-submit {
-        flex: 1; background: #ffd54f; border: none; border-radius: 4px; color: #241a00;
-        font-weight: bold; font-family: monospace; font-size: 11px; padding: 4px 0; cursor: pointer;
-      }
-      #auth-cancel {
-        background: transparent; border: 1px solid #444; border-radius: 4px; color: #999;
-        font-family: monospace; font-size: 11px; padding: 4px 8px; cursor: pointer;
-      }
-      #auth-error { color: #ff8a80; font-size: 10px; min-height: 12px; }
     </style>
   </head>
   <body>
@@ -297,29 +248,6 @@
     <div id="touch-aim-base" class="touch-stick-base"><div id="touch-aim-knob" class="touch-stick-knob"></div></div>
     <div id="hud">conectando...</div>
     <div id="roster"></div>
-    <div id="auth-widget">
-      <div id="auth-panel">
-        <div class="auth-tabs">
-          <button type="button" id="auth-tab-login" class="active">Entrar</button>
-          <button type="button" id="auth-tab-register">Registrar</button>
-        </div>
-        <form id="auth-form">
-          <input id="auth-email" type="email" placeholder="email" autocomplete="email" required />
-          <input id="auth-password" type="password" placeholder="senha" autocomplete="current-password" required />
-          <input id="auth-display-name" type="text" placeholder="nome (opcional)" maxlength="32" style="display:none" />
-          <div id="auth-error"></div>
-          <div class="auth-form-row">
-            <button type="submit" id="auth-submit">Entrar</button>
-            <button type="button" id="auth-cancel">✕</button>
-          </div>
-        </form>
-      </div>
-      <div id="auth-pill">
-        <span class="dot"></span>
-        <span class="name" id="auth-pill-label">guest</span>
-        <button id="auth-logout" style="display:none" title="Sair">sair</button>
-      </div>
-    </div>
     <div id="upgrade-cards"></div>
     <div id="toast-stack"></div>
     <div id="debug-overlay">

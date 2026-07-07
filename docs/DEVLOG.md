@@ -1,5 +1,36 @@
 # Devlog
 
+## 2026-07-07 — Sessão 48 (agente worker): PROMPT-0065 — Login/registro migram pro lobby
+
+- **Pedido do CD:** fora do backlog formal — "agora que o jogo tem lobby ao entrar no site,
+  quero que o login/registro fiquem no lobby/menu" em vez do widget flutuante no canto.
+- **Contexto:** `auth.ts` (T-028c/SPEC-0008) mantinha o card de login/registro num widget
+  fixo no canto da tela, visível o tempo todo — inclusive durante a partida. `lobby.ts`
+  (T-057/SPEC-0015) já existia como card pré-sala e já tinha um badge discreto de
+  guest/conta (T-062) mas sem formulário embutido.
+- **Mudança:** `auth.ts` virou módulo DOM-free — só rede + persistência local (`login`,
+  `register`, `getAuthToken`, `getAccount`, `clearSession`, `updateAccountDisplayName`,
+  `ensureGuestRegistered`). Toda a UI (tabs Entrar/Registrar, form, badge, logout) passou a
+  morar em `lobby.ts`, dentro do card, colapsada atrás de um botão "entrar" no header — abre
+  inline, sem modal. `index.html` perdeu o `#auth-widget` inteiro (markup + CSS); `main.ts`
+  perdeu a chamada a `initAuth()` (a UI que ela inicializava não existe mais).
+- **Decisão:** login/registro bem-sucedido no meio da sessão do lobby atualiza o badge, fecha
+  o painel, adota o `display_name` da conta como nick se o nick ainda for o guest gerado
+  automaticamente (`Guest#NNNNN` não editado), e sincroniza settings remotas (perfil/volume/
+  fullscreen) via o mesmo `applyRemoteSettings` usado no carregamento inicial de conta já
+  logada — evita duplicar a lógica de merge servidor→UI.
+- **Estado do repo:** encontrei `main.ts`/`index.html` com mudanças não commitadas de uma
+  sessão anterior já concluída (PROMPT-0064, mobile HUD) entrelaçadas linha a linha com as
+  minhas. Separei em dois commits (reconstrução manual do estado intermediário) a pedido do
+  CD, em vez de misturar as duas tasks num commit só.
+- **Gates:** `tsc --noEmit` (client) limpo; `npm run build -w @aop/client` OK; `npm run test
+  -w @aop/shared` 49/49 (não afetado). Verificado em preview: painel abre/fecha, alterna
+  Entrar/Registrar, erro de rede exibido inline (`Failed to fetch` sem Django rodando), sem
+  erros de console.
+- **Não testado:** fluxo real de login/registro contra o Django (backend não estava rodando
+  no preview) — testado apenas o caminho de erro e a UI. Recomendo o CD confirmar contra o
+  backend real antes do próximo deploy.
+
 ## 2026-07-07 — Sessão 47 (agente worker): PROMPT-0064 — Mobile: HUD compacto + tela cheia paisagem
 
 - **Pedido do CD:** ajuste pro ambiente mobile via navegador — tela cheia, jogar com o

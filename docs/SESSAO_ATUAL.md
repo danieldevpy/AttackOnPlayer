@@ -6,6 +6,27 @@
 **Atualizado em:** 2026-07-07
 **Branch:** `main`. **Marco:** V1.
 
+**Sessão 48 (agente worker): PROMPT-0065 — Login/registro migram pro lobby**
+Pedido direto do CD, fora do backlog formal: "agora que o jogo tem lobby ao entrar no site,
+quero que o login/registro fiquem no lobby/menu". Antes, `auth.ts` (T-028c/SPEC-0008) mantinha
+um widget flutuante fixo no canto da tela, visível o tempo todo — inclusive durante a partida.
+Mudança: `auth.ts` virou módulo DOM-free (só rede + persistência: `login`, `register`,
+`getAuthToken`, `getAccount`, `clearSession`, `updateAccountDisplayName`,
+`ensureGuestRegistered`); toda a UI de conta (badge, tabs Entrar/Registrar, form) passou a
+morar dentro do card do lobby (`lobby.ts`), colapsada atrás de um botão "entrar" no header —
+abre inline, sem modal. `index.html` perdeu o `#auth-widget` inteiro; `main.ts` perdeu a
+chamada a `initAuth()`. Login/registro bem-sucedido no meio da sessão do lobby atualiza o
+badge, adota o `display_name` como nick se ainda for o guest gerado automaticamente, e
+sincroniza settings remotas (perfil/volume/fullscreen) reusando o mesmo merge servidor→UI do
+carregamento inicial. `tsc --noEmit` (client) limpo, `vite build` OK, shared 49/49 (não
+afetado). Verificado em preview: painel abre/fecha, alterna Entrar/Registrar, erro de rede
+exibido inline sem Django rodando, sem erros de console. **Não testado:** login/registro real
+contra o Django (backend fora do ar no preview) — só o caminho de erro foi exercitado.
+**Nota de processo:** encontrei `main.ts`/`index.html` com mudanças não commitadas de uma
+sessão já concluída (PROMPT-0064, mobile HUD) entrelaçadas linha a linha com as minhas;
+separei em dois commits a pedido do CD em vez de misturar as tasks. Ver `docs/DEVLOG.md`
+(Sessão 48) e `docs/prompts/PROMPT-0065.md`.
+
 **Sessão 47 (agente worker): PROMPT-0064 — Mobile: HUD compacto + tela cheia paisagem**
 Pedido direto do CD (fora de fase, T-064): tela cheia mobile, jogar com o celular deitado,
 roster só com a contagem de players (não a lista cheia) e componentes responsivos no mobile

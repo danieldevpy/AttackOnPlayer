@@ -24,7 +24,7 @@ import { createAudioSystem } from "./audio";
 import { ProfileManager, ProfileId } from "./input/manager";
 import type { Intent } from "./input/types";
 import { initImmersion, setUnloadGuard } from "./immersion";
-import { initAuth, getAuthToken, ensureGuestRegistered } from "./auth";
+import { getAuthToken, ensureGuestRegistered } from "./auth";
 import { showLobby } from "./lobby";
 
 // T-048 (SPEC-0012): blindagem contra ações do navegador (menu de contexto, zoom, seleção
@@ -350,10 +350,6 @@ if (!playerToken) {
   playerToken = "tok_" + Math.random().toString(36).substring(2, 10);
   localStorage.setItem("aop_token", playerToken);
 }
-
-// T-028c (SPEC-0008): janela discreta de login/registro — guest continua o default. Só
-// depois do token local existir, pra poder registrar o guest no Django (best-effort).
-initAuth();
 
 // T-057 (SPEC-0015): seleção do lobby é preenchida quando o card resolve (ver abaixo,
 // após criação do profileManager). Declaramos aqui para que connect() feche sobre ela.

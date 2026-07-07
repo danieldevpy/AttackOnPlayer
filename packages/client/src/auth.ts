@@ -1,33 +1,21 @@
 /**
- * T-028c (SPEC-0008): janela discreta de conta no canto — nunca modal, nunca some com o
- * jogo em andamento. Guest continua o default de 1 clique (ADR-016: conta é só identidade/
- * estatística, nunca poder in-round). Login/registro são por email+senha; Google fica fora
- * de escopo por ora (a pedido do CD). Ao logar/registrar, tenta herdar as estatísticas do
- * guest local via `/auth/link` (T-027c) — falha aí é best-effort, nunca trava a UI.
+ * T-028c (SPEC-0008) → ajuste posterior (a pedido do CD): login/registro por email+senha.
+ * Guest continua o default de 1 clique (ADR-016: conta é só identidade/estatística, nunca
+ * poder in-round). Google fica fora de escopo por ora. Ao logar/registrar, tenta herdar as
+ * estatísticas do guest local via `/auth/link` (T-027c) — falha aí é best-effort, nunca trava.
+ *
+ * Este módulo é DOM-free: apenas lógica de rede + persistência local. A UI de login/registro
+ * mora no lobby (`lobby.ts`), montada dentro do card pré-sala — não existe mais widget flutuante
+ * no canto da tela durante a partida.
  */
 
 const JWT_KEY = "aop_jwt";
 const ACCOUNT_KEY = "aop_account";
 const PLAYER_TOKEN_KEY = "aop_token";
 
-type Mode = "login" | "register";
-
-const widget = document.getElementById("auth-widget")!;
-const panel = document.getElementById("auth-panel")!;
-const pill = document.getElementById("auth-pill")!;
-const pillLabel = document.getElementById("auth-pill-label")!;
-const logoutBtn = document.getElementById("auth-logout") as HTMLButtonElement;
-const tabLogin = document.getElementById("auth-tab-login") as HTMLButtonElement;
-const tabRegister = document.getElementById("auth-tab-register") as HTMLButtonElement;
-const form = document.getElementById("auth-form") as HTMLFormElement;
-const emailInput = document.getElementById("auth-email") as HTMLInputElement;
-const passwordInput = document.getElementById("auth-password") as HTMLInputElement;
-const displayNameInput = document.getElementById("auth-display-name") as HTMLInputElement;
-const submitBtn = document.getElementById("auth-submit") as HTMLButtonElement;
-const cancelBtn = document.getElementById("auth-cancel") as HTMLButtonElement;
-const errorEl = document.getElementById("auth-error")!;
-
-let mode: Mode = "login";
+export interface Account {
+  display_name: string;
+}
 
 function authBaseUrl(): string {
   const override = new URLSearchParams(location.search).get("authPort");
@@ -87,12 +75,12 @@ async function tryLinkGuestStats(token: string): Promise<void> {
   }
 }
 
-function persistSession(token: string, account: { display_name: string }): void {
+function persistSession(token: string, account: Account): void {
   localStorage.setItem(JWT_KEY, token);
   localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
 }
 
-function clearSession(): void {
+export function clearSession(): void {
   localStorage.removeItem(JWT_KEY);
   localStorage.removeItem(ACCOUNT_KEY);
 }
@@ -101,79 +89,45 @@ export function getAuthToken(): string | null {
   return localStorage.getItem(JWT_KEY);
 }
 
-function renderSessionState(): void {
+export function getAccount(): Account | null {
   const raw = localStorage.getItem(ACCOUNT_KEY);
-  const account = raw ? (JSON.parse(raw) as { display_name: string }) : null;
-  pill.classList.toggle("logged-in", account != null);
-  pillLabel.textContent = account?.display_name ?? "guest";
-  logoutBtn.style.display = account ? "inline" : "none";
-}
-
-function openPanel(): void {
-  if (getAuthToken()) return; // logado: nada pra abrir, só o botão de sair
-  widget.classList.add("open");
-  panel.classList.add("open");
-  errorEl.textContent = "";
-  emailInput.focus();
-}
-
-function closePanel(): void {
-  widget.classList.remove("open");
-  panel.classList.remove("open");
-  form.reset();
-}
-
-function setMode(next: Mode): void {
-  mode = next;
-  tabLogin.classList.toggle("active", mode === "login");
-  tabRegister.classList.toggle("active", mode === "register");
-  displayNameInput.style.display = mode === "register" ? "block" : "none";
-  submitBtn.textContent = mode === "login" ? "Entrar" : "Registrar";
-  passwordInput.autocomplete = mode === "login" ? "current-password" : "new-password";
-  errorEl.textContent = "";
-}
-
-async function handleSubmit(e: SubmitEvent): Promise<void> {
-  e.preventDefault();
-  errorEl.textContent = "";
-  submitBtn.disabled = true;
+  if (!raw) return null;
   try {
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-    const path = mode === "login" ? "/api/v1/auth/login" : "/api/v1/auth/register";
-    const body =
-      mode === "login"
-        ? { email, password }
-        : { email, password, display_name: displayNameInput.value.trim() };
-    const data = await apiPost(path, body);
-    persistSession(data.token, data.account);
-    await tryLinkGuestStats(data.token);
-    renderSessionState();
-    closePanel();
-  } catch (e) {
-    errorEl.textContent = (e as Error).message;
-  } finally {
-    submitBtn.disabled = false;
+    return JSON.parse(raw) as Account;
+  } catch {
+    return null;
   }
 }
 
-function handleLogout(): void {
-  clearSession();
-  renderSessionState();
+/** Atualiza só o display_name da conta persistida (ex.: valor sanitizado devolvido pelo
+ * servidor ao salvar settings) — não mexe no JWT. No-op se não houver conta logada. */
+export function updateAccountDisplayName(displayName: string): void {
+  const account = getAccount();
+  if (!account) return;
+  account.display_name = displayName;
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
 }
 
-export function initAuth(): void {
-  renderSessionState();
-  setMode("login");
-  void ensureGuestRegistered();
+/** Faz login por email+senha, persiste a sessão e tenta herdar stats do guest local. */
+export async function login(email: string, password: string): Promise<Account> {
+  const data = await apiPost("/api/v1/auth/login", { email, password });
+  persistSession(data.token, data.account);
+  await tryLinkGuestStats(data.token);
+  return data.account as Account;
+}
 
-  pill.addEventListener("click", (e) => {
-    if (e.target === logoutBtn) return;
-    openPanel();
+/** Registra conta nova por email+senha, persiste a sessão e tenta herdar stats do guest local. */
+export async function register(
+  email: string,
+  password: string,
+  displayName: string,
+): Promise<Account> {
+  const data = await apiPost("/api/v1/auth/register", {
+    email,
+    password,
+    display_name: displayName,
   });
-  tabLogin.addEventListener("click", () => setMode("login"));
-  tabRegister.addEventListener("click", () => setMode("register"));
-  cancelBtn.addEventListener("click", closePanel);
-  logoutBtn.addEventListener("click", handleLogout);
-  form.addEventListener("submit", (e) => void handleSubmit(e));
+  persistSession(data.token, data.account);
+  await tryLinkGuestStats(data.token);
+  return data.account as Account;
 }

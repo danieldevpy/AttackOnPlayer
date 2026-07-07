@@ -2,9 +2,11 @@
  * T-057 (SPEC-0015): Janela pré-sala — card único antes do join.
  * T-058 (SPEC-0015): Persistência de settings + nick.
  * T-062 (SPEC-0015): Ranking/stats em aba discreta.
+ * Ajuste posterior (a pedido do CD): login/registro passam a morar aqui — não existe mais
+ * widget flutuante de conta no canto da tela durante a partida.
  *
  * Seções:
- *   1. Identidade: guest/conta + nick editável
+ *   1. Identidade: guest/conta + nick editável + login/registro (email+senha)
  *   2. Seleção de classe + preview 3D girando (createCharacterVisual da T-053)
  *   3. Settings: perfil de controle, volumes, fullscreen
  *   4. Botão Jogar
@@ -25,6 +27,7 @@ import { CLASS_REGISTRY, DEFAULT_CLASS_ID } from "@aop/shared";
 import { createCharacterVisual, updateCharacterAnimation } from "./characters";
 import type { AudioSystem } from "./audio";
 import type { ProfileId } from "./input/manager";
+import { getAuthToken, getAccount, clearSession, updateAccountDisplayName, login, register } from "./auth";
 
 // ─────────────────────────────────────────────────────────
 // Tipos e constantes de persistência local
@@ -40,9 +43,6 @@ export interface LobbySelection {
 const NICK_KEY = "aop_lobby_nick";
 const CLASS_KEY = "aop_lobby_class";
 const SKIN_KEY = "aop_lobby_skin";
-
-const JWT_KEY = "aop_jwt";
-const ACCOUNT_KEY = "aop_account";
 
 // ─────────────────────────────────────────────────────────
 // Utilitários
@@ -60,21 +60,6 @@ function sanitizeNick(raw: string): string {
 
 function isValidNick(s: string): boolean {
   return s.replace(/\s/g, "").length >= 1;
-}
-
-function getAccountName(): string | null {
-  const raw = localStorage.getItem(ACCOUNT_KEY);
-  if (!raw) return null;
-  try {
-    const account = JSON.parse(raw) as { display_name?: string };
-    return account.display_name ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function isLoggedIn(): boolean {
-  return localStorage.getItem(JWT_KEY) !== null;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -127,7 +112,7 @@ function djangoBaseUrl(): string {
  * token inválido, servidor fora do ar) — caller trata como best-effort.
  */
 async function fetchDjangoSettings(): Promise<DjangoSettings | null> {
-  const token = localStorage.getItem(JWT_KEY);
+  const token = getAuthToken();
   if (!token) return null;
   try {
     const res = await fetch(`${djangoBaseUrl()}/api/v1/accounts/settings`, {
@@ -147,7 +132,7 @@ async function fetchDjangoSettings(): Promise<DjangoSettings | null> {
  * O display_name retornado pelo servidor é usado para atualizar o localStorage.
  */
 async function saveDjangoSettings(payload: Partial<DjangoSettings>): Promise<string | null> {
-  const token = localStorage.getItem(JWT_KEY);
+  const token = getAuthToken();
   if (!token) return null;
   try {
     const res = await fetch(`${djangoBaseUrl()}/api/v1/accounts/settings`, {
@@ -163,18 +148,9 @@ async function saveDjangoSettings(payload: Partial<DjangoSettings>): Promise<str
       return null;
     }
     const data = (await res.json()) as DjangoSettings;
-    // Atualiza o display_name no localStorage com o valor sanitizado pelo servidor
+    // Atualiza o display_name na conta persistida com o valor sanitizado pelo servidor
     if (data.display_name) {
-      const raw = localStorage.getItem(ACCOUNT_KEY);
-      if (raw) {
-        try {
-          const account = JSON.parse(raw) as { display_name?: string };
-          account.display_name = data.display_name;
-          localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
-        } catch {
-          // ignora
-        }
-      }
+      updateAccountDisplayName(data.display_name);
       localStorage.setItem(NICK_KEY, data.display_name);
     }
     return data.display_name ?? null;
@@ -193,7 +169,7 @@ async function saveDjangoSettings(payload: Partial<DjangoSettings>): Promise<str
  * Timeout: 3s (como na spec T-062).
  */
 async function fetchPlayerStats(): Promise<PlayerStats | null> {
-  const token = localStorage.getItem(JWT_KEY);
+  const token = getAuthToken();
   if (!token) return null;
 
   try {
@@ -296,6 +272,44 @@ function injectLobbyStyles(): void {
       background: none; border: none; color: #ff8a80; font-family: monospace;
       font-size: 11px; cursor: pointer; padding: 0 0 0 6px; user-select: none;
     }
+    #lobby-auth-toggle-btn {
+      background: none; border: none; color: #ffd54f; font-family: monospace;
+      font-size: 11px; cursor: pointer; padding: 0 0 0 6px; user-select: none;
+    }
+    #lobby-auth-panel {
+      display: none; padding: 12px 20px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    #lobby-auth-panel.open { display: block; }
+    .lobby-auth-tabs { display: flex; gap: 4px; margin-bottom: 8px; max-width: 320px; }
+    .lobby-auth-tabs button {
+      flex: 1; padding: 6px 10px;
+      background: rgba(255,255,255,0.04); border: 1px solid #333; border-radius: 6px;
+      color: #999; font-family: monospace; font-size: 11px; cursor: pointer;
+    }
+    .lobby-auth-tabs button.active {
+      background: rgba(255,213,79,.14); border-color: #ffd54f55; color: #ffd54f;
+    }
+    #lobby-auth-form { display: flex; flex-direction: column; gap: 6px; max-width: 320px; }
+    #lobby-auth-form input {
+      background: rgba(0,0,0,0.35); border: 1px solid #444; border-radius: 6px;
+      color: #eee; font-family: monospace; font-size: 12px; padding: 6px 8px;
+      outline: none; touch-action: auto;
+    }
+    #lobby-auth-form input:focus { border-color: #ffd54f88; }
+    .lobby-auth-form-row { display: flex; gap: 6px; }
+    #lobby-auth-submit {
+      flex: 1; padding: 6px 14px;
+      background: #2e7d32; border: none; border-radius: 6px;
+      color: #fff; font-family: monospace; font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    #lobby-auth-submit:hover:not(:disabled) { background: #388e3c; }
+    #lobby-auth-submit:disabled { background: #333; color: #888; cursor: default; }
+    #lobby-auth-cancel {
+      background: transparent; border: 1px solid #444; border-radius: 6px; color: #999;
+      font-family: monospace; font-size: 12px; padding: 6px 10px; cursor: pointer;
+    }
+    #lobby-auth-error { color: #ff8a80; font-size: 10px; min-height: 12px; }
     #lobby-body {
       display: flex; gap: 0; flex-wrap: wrap;
     }
@@ -576,8 +590,8 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
 
   return new Promise<LobbySelection>((resolve) => {
     // ── Estado inicial lido do localStorage ──
-    const accountName = getAccountName();
-    const loggedInNow = isLoggedIn();
+    const accountName = getAccount()?.display_name ?? null;
+    const loggedInNow = getAuthToken() !== null;
 
     const storedNick = localStorage.getItem(NICK_KEY);
     let nick: string;
@@ -598,51 +612,55 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
 
     let profile = opts.getCurrentProfile();
 
+    // Aplica settings vindas do Django (merge servidor→UI), usada tanto no carregamento
+    // inicial (jogador já logado) quanto logo após um login/registro bem-sucedido nesta sessão.
+    function applyRemoteSettings(remote: DjangoSettings): void {
+      // Nick: se servidor tiver valor não-vazio, usa (já sanitizado)
+      if (remote.display_name) {
+        nick = remote.display_name;
+        localStorage.setItem(NICK_KEY, nick);
+        const nickInputEl = document.getElementById("lobby-nick-input") as HTMLInputElement | null;
+        if (nickInputEl) nickInputEl.value = nick;
+      }
+
+      // Perfil de controle
+      if (remote.control_profile && ["mouse", "keyboard", "touch"].includes(remote.control_profile)) {
+        profile = remote.control_profile as typeof profile;
+        opts.setProfile(profile);
+        const radios = document.querySelectorAll<HTMLInputElement>('input[name="lobby-profile"]');
+        radios.forEach((r) => { r.checked = r.value === profile; });
+      }
+
+      // Volume master
+      if (typeof remote.volume_master === "number") {
+        opts.audio.setMasterVolume(remote.volume_master);
+        const sliderEl = document.getElementById("lobby-master-slider") as HTMLInputElement | null;
+        const valEl = document.getElementById("lobby-master-val");
+        if (sliderEl) sliderEl.value = String(Math.round(remote.volume_master * 100));
+        if (valEl) valEl.textContent = `${Math.round(remote.volume_master * 100)}%`;
+      }
+
+      // Volume SFX
+      if (typeof remote.volume_sfx === "number") {
+        opts.audio.setSfxVolume(remote.volume_sfx);
+        const sliderEl = document.getElementById("lobby-sfx-slider") as HTMLInputElement | null;
+        const valEl = document.getElementById("lobby-sfx-val");
+        if (sliderEl) sliderEl.value = String(Math.round(remote.volume_sfx * 100));
+        if (valEl) valEl.textContent = `${Math.round(remote.volume_sfx * 100)}%`;
+      }
+
+      // Fullscreen pref
+      if (typeof remote.fullscreen_pref === "boolean") {
+        const fsEl = document.getElementById("lobby-fs-check") as HTMLInputElement | null;
+        if (fsEl) fsEl.checked = remote.fullscreen_pref;
+      }
+    }
+
     // T-058: carrega settings Django em background ao abrir o card (best-effort)
     // Faz merge sensato: servidor vence localStorage para jogador logado.
     if (loggedInNow) {
       fetchDjangoSettings().then((remote) => {
-        if (!remote) return;
-
-        // Nick: se servidor tiver valor não-vazio, usa (já sanitizado)
-        if (remote.display_name) {
-          nick = remote.display_name;
-          localStorage.setItem(NICK_KEY, nick);
-          const nickInputEl = document.getElementById("lobby-nick-input") as HTMLInputElement | null;
-          if (nickInputEl) nickInputEl.value = nick;
-        }
-
-        // Perfil de controle
-        if (remote.control_profile && ["mouse", "keyboard", "touch"].includes(remote.control_profile)) {
-          profile = remote.control_profile as typeof profile;
-          opts.setProfile(profile);
-          const radios = document.querySelectorAll<HTMLInputElement>('input[name="lobby-profile"]');
-          radios.forEach((r) => { r.checked = r.value === profile; });
-        }
-
-        // Volume master
-        if (typeof remote.volume_master === "number") {
-          opts.audio.setMasterVolume(remote.volume_master);
-          const sliderEl = document.getElementById("lobby-master-slider") as HTMLInputElement | null;
-          const valEl = document.getElementById("lobby-master-val");
-          if (sliderEl) sliderEl.value = String(Math.round(remote.volume_master * 100));
-          if (valEl) valEl.textContent = `${Math.round(remote.volume_master * 100)}%`;
-        }
-
-        // Volume SFX
-        if (typeof remote.volume_sfx === "number") {
-          opts.audio.setSfxVolume(remote.volume_sfx);
-          const sliderEl = document.getElementById("lobby-sfx-slider") as HTMLInputElement | null;
-          const valEl = document.getElementById("lobby-sfx-val");
-          if (sliderEl) sliderEl.value = String(Math.round(remote.volume_sfx * 100));
-          if (valEl) valEl.textContent = `${Math.round(remote.volume_sfx * 100)}%`;
-        }
-
-        // Fullscreen pref
-        if (typeof remote.fullscreen_pref === "boolean") {
-          const fsEl = document.getElementById("lobby-fs-check") as HTMLInputElement | null;
-          if (fsEl) fsEl.checked = remote.fullscreen_pref;
-        }
+        if (remote) applyRemoteSettings(remote);
       });
     }
 
@@ -660,13 +678,34 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
     header.id = "lobby-header";
     header.innerHTML = `
       <h1>Attack on Player — Lobby</h1>
-      <div id="lobby-auth-badge" class="${loggedInNow ? "logged-in" : ""}">
+      <div id="lobby-auth-badge">
         <span class="dot"></span>
-        <span class="name">${loggedInNow ? (accountName ?? "logado") : "anônimo"}</span>
-        ${loggedInNow ? `<button id="lobby-logout-btn" type="button">sair</button>` : ""}
+        <span class="name"></span>
       </div>
     `;
     card.appendChild(header);
+
+    // ── Painel de login/registro (a pedido do CD: mora no lobby, não mais num widget
+    // flutuante visível durante a partida) — colapsado, abre ao clicar em "entrar" no badge ──
+    const authPanel = document.createElement("div");
+    authPanel.id = "lobby-auth-panel";
+    authPanel.innerHTML = `
+      <div class="lobby-auth-tabs">
+        <button type="button" class="active" id="lobby-auth-tab-login">Entrar</button>
+        <button type="button" id="lobby-auth-tab-register">Registrar</button>
+      </div>
+      <form id="lobby-auth-form">
+        <input id="lobby-auth-email" type="email" placeholder="email" autocomplete="email" required />
+        <input id="lobby-auth-password" type="password" placeholder="senha" autocomplete="current-password" required />
+        <input id="lobby-auth-display-name" type="text" placeholder="nome (opcional)" maxlength="32" style="display:none" />
+        <div id="lobby-auth-error"></div>
+        <div class="lobby-auth-form-row">
+          <button type="submit" id="lobby-auth-submit">Entrar</button>
+          <button type="button" id="lobby-auth-cancel">✕</button>
+        </div>
+      </form>
+    `;
+    card.appendChild(authPanel);
 
     // ── Painéis (tabs) ──
     const panels = document.createElement("div");
@@ -844,7 +883,18 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
     const skinSelect = document.getElementById("lobby-skin-select") as HTMLSelectElement;
     const playBtn = document.getElementById("lobby-play-btn") as HTMLButtonElement;
     const connectingEl = document.getElementById("lobby-connecting")!;
-    const logoutBtn = document.getElementById("lobby-logout-btn") as HTMLButtonElement | null;
+    const authBadge = document.getElementById("lobby-auth-badge") as HTMLDivElement;
+    const authBadgeName = authBadge.querySelector(".name") as HTMLSpanElement;
+    const authPanelEl = document.getElementById("lobby-auth-panel") as HTMLDivElement;
+    const authTabLogin = document.getElementById("lobby-auth-tab-login") as HTMLButtonElement;
+    const authTabRegister = document.getElementById("lobby-auth-tab-register") as HTMLButtonElement;
+    const authForm = document.getElementById("lobby-auth-form") as HTMLFormElement;
+    const authEmail = document.getElementById("lobby-auth-email") as HTMLInputElement;
+    const authPassword = document.getElementById("lobby-auth-password") as HTMLInputElement;
+    const authDisplayName = document.getElementById("lobby-auth-display-name") as HTMLInputElement;
+    const authSubmit = document.getElementById("lobby-auth-submit") as HTMLButtonElement;
+    const authCancel = document.getElementById("lobby-auth-cancel") as HTMLButtonElement;
+    const authError = document.getElementById("lobby-auth-error")!;
 
     // T-062: Ranking tab
     const tabMain = document.getElementById("lobby-tab-main") as HTMLButtonElement;
@@ -970,18 +1020,100 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
     tabMain.addEventListener("click", () => switchTab("main"));
     tabRanking.addEventListener("click", () => switchTab("ranking"));
 
-    // Logout da conta
-    logoutBtn?.addEventListener("click", () => {
-      localStorage.removeItem(JWT_KEY);
-      localStorage.removeItem(ACCOUNT_KEY);
-      // Atualiza badge
-      const badge = document.getElementById("lobby-auth-badge");
-      if (badge) {
-        badge.classList.remove("logged-in");
-        badge.querySelector(".name")!.textContent = "anônimo";
-        logoutBtn.remove();
+    // ── Identidade: badge (guest/conta) + painel de login/registro ──
+
+    function renderAuthBadge(): void {
+      const account = getAccount();
+      authBadge.classList.toggle("logged-in", account != null);
+      authBadgeName.textContent = account ? account.display_name : "anônimo";
+      authBadge.querySelector("#lobby-logout-btn")?.remove();
+      authBadge.querySelector("#lobby-auth-toggle-btn")?.remove();
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      if (account) {
+        btn.id = "lobby-logout-btn";
+        btn.textContent = "sair";
+        btn.addEventListener("click", handleLogout);
+      } else {
+        btn.id = "lobby-auth-toggle-btn";
+        btn.textContent = "entrar";
+        btn.addEventListener("click", toggleAuthPanel);
       }
-    });
+      authBadge.appendChild(btn);
+    }
+
+    function handleLogout(): void {
+      clearSession();
+      renderAuthBadge();
+    }
+
+    function setAuthMode(next: "login" | "register"): void {
+      authTabLogin.classList.toggle("active", next === "login");
+      authTabRegister.classList.toggle("active", next === "register");
+      authDisplayName.style.display = next === "register" ? "block" : "none";
+      authSubmit.textContent = next === "login" ? "Entrar" : "Registrar";
+      authPassword.autocomplete = next === "login" ? "current-password" : "new-password";
+      authError.textContent = "";
+    }
+
+    function openAuthPanel(): void {
+      authPanelEl.classList.add("open");
+      authError.textContent = "";
+      authEmail.focus();
+    }
+
+    function closeAuthPanel(): void {
+      authPanelEl.classList.remove("open");
+      authForm.reset();
+    }
+
+    function toggleAuthPanel(): void {
+      if (authPanelEl.classList.contains("open")) closeAuthPanel();
+      else openAuthPanel();
+    }
+
+    authTabLogin.addEventListener("click", () => setAuthMode("login"));
+    authTabRegister.addEventListener("click", () => setAuthMode("register"));
+    authCancel.addEventListener("click", closeAuthPanel);
+
+    async function handleAuthSubmit(e: SubmitEvent): Promise<void> {
+      e.preventDefault();
+      authError.textContent = "";
+      authSubmit.disabled = true;
+      try {
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+        const isRegister = authTabRegister.classList.contains("active");
+        const account = isRegister
+          ? await register(email, password, authDisplayName.value.trim())
+          : await login(email, password);
+
+        renderAuthBadge();
+        closeAuthPanel();
+
+        // Se o nick ainda for o guest gerado automaticamente e não foi customizado, adota
+        // o nome da conta recém-logada.
+        if (nick.startsWith("Guest#")) {
+          nick = account.display_name;
+          localStorage.setItem(NICK_KEY, nick);
+          nickInput.value = nick;
+        }
+
+        // Sincroniza settings remotas (perfil/volume/fullscreen) da conta recém-logada.
+        const remote = await fetchDjangoSettings();
+        if (remote) applyRemoteSettings(remote);
+      } catch (err) {
+        authError.textContent = (err as Error).message;
+      } finally {
+        authSubmit.disabled = false;
+      }
+    }
+
+    authForm.addEventListener("submit", (e) => void handleAuthSubmit(e));
+
+    renderAuthBadge();
+    setAuthMode("login");
 
     // Nick
     nickInput.addEventListener("input", () => {
@@ -1091,7 +1223,7 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
       const selection: LobbySelection = { nick, classId, skinId, profile };
 
       // T-058: sync settings para Django quando logado (best-effort, não bloqueia join)
-      if (isLoggedIn()) {
+      if (getAuthToken() !== null) {
         const payload: Partial<DjangoSettings> = {
           display_name: nick,
           control_profile: profile,
