@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
-# deploy-vps-sem-dominio.sh — sobe o AttackOnPlayer numa VPS usando só o IP público,
-# sem domínio e sem TLS. Uso pra jogar com amigos, não é o fluxo oficial de lançamento
-# (esse é SPEC-0009 / M5, com domínio + Caddy/TLS). Idempotente: rodar de novo atualiza
-# tudo (git pull + rebuild + restart dos processos pm2).
+# deploy-vps-sem-dominio.sh — PRIMEIRO deploy do AttackOnPlayer numa VPS usando só o IP
+# público, sem domínio e sem TLS. Uso pra jogar com amigos, não é o fluxo oficial de
+# lançamento (esse é SPEC-0009 / M5, com domínio + Caddy/TLS). Instala tudo que falta
+# (Node, pm2, Docker, Python/venv) e pede senha de sudo pra isso. É idempotente — rodar de
+# novo também funciona — mas pra atualizações do dia a dia (depois da 1ª vez) use
+# script/redeploy-vps.sh, que não instala nada e não pede sudo.
 #
 # Também sobe o backend Django (contas, mapas, gameops, telemetria) + Postgres, e liga o
 # game server nele (PLATFORM_ENABLED=1) — o ambiente sobe já integrado com o backend, sem
@@ -98,6 +100,16 @@ else
   log "Docker já presente: $(docker --version)"
 fi
 $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
+
+# Coloca o usuário atual no grupo docker pra rodar "docker compose" sem sudo depois —
+# necessário pro script/redeploy-vps.sh rodar sem pedir senha. Só faz efeito numa sessão
+# de shell nova (logout/login ou "newgrp docker"); nesta mesma execução continuamos
+# usando $SUDO pra garantir que funciona mesmo sem relogar.
+if [[ -n "$SUDO" ]] && ! id -nG "$USER" | grep -qw docker; then
+  log "Adicionando usuário '$USER' ao grupo docker (pra redeploy sem sudo)..."
+  $SUDO usermod -aG docker "$USER"
+  warn "Grupo docker adicionado — faça logout/login (ou rode 'newgrp docker') antes de usar script/redeploy-vps.sh."
+fi
 
 # ---------- 3c. Python (backend Django roda no host, fora do Docker) ----------
 # Checagem por "venv --help" não é confiável (o módulo responde --help mesmo sem
