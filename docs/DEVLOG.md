@@ -1,5 +1,43 @@
 # Devlog
 
+## 2026-07-07 — Sessão 43 (agente worker, Frente L): T-062 (SPEC-0015) — Ranking/stats no lobby
+
+- **Pedido do CD:** implementar aba discreta de ranking no card do lobby, consumindo os endpoints T-060
+  já entregues (`GET /api/v1/stats/me` com JWT + `GET /api/v1/ranking` público). Graceful degrade se
+  Django offline; lazy-load ao clicar na aba; não bloqueia a regra de 1 clique no Jogar.
+- **Arquitetura:** tab switching no card (Principal ↔ Ranking) com painéis (panels). HTML estruturado
+  como 2 painéis: mainPanel com o body+footer original (nick/classe/preview/settings/botão), rankingPanel
+  novo (stats + tabela). Classes `.active` controlam visibilidade; apenas 1 painel visível por vez.
+- **Tipos TypeScript novos:** `PlayerStats` (kills/deaths/matches_played), `RankingEntry` (id/display_name/
+  kills/deaths/matches_played), `RankingResponse` (count/next/previous/results[], paginação DRF padrão).
+- **Funções de fetch (T-062):** `fetchPlayerStats()` (JWT obrigatório, bearer token) e `fetchRanking(page)`
+  (público, sem auth). Ambas com **timeout 3s** via `AbortController` + `setTimeout`, warnings isolados para
+  timeout vs. erro genérico. Guest sem JWT → `fetchPlayerStats()` retorna null (sem stats box, ranking
+  continua acessível — público é vitrine).
+- **Renderização lazy:** `loadAndRenderRanking()` executa ambos fetches em paralelo (`Promise.all`).
+  Se **ambos falham:** mostra single msg "Ranking indisponível. (backend offline?)" em box cinza. Se um
+  passa: renderiza o que tiver (stats pessoais em box amarelo + ranking em tabela, ou só tabela se guest).
+  Tabela: posição/#1–10, nome (truncado 20 chars), kills, deaths; ordenação por kills desc (DRF default).
+- **CSS novo (~80 linhas):** `#lobby-tabs` (flex, bottom border), `.lobby-tab` (padding, border underline
+  dourado `.active`), `.lobby-panel` (`display: none` default, `.active` → `display: block`),
+  `.lobby-stats-box` (amarelo 8%, border douradura), `.lobby-ranking-table` (thead/tbody, hover effect,
+  largura de colunas fixas por role), `.lobby-ranking-empty/loading` (centered text). Responsivo: mobile
+  (≤599px) reduz heights, ajusta font-size, preserva scrollabilidade da tabela.
+- **Tab switching:** `switchTab("main"|"ranking")` — togla `.active` nos tabs/painéis, lazy-carrega ranking
+  só ao abrir a aba (não no mount do card). Event listeners em ambos botões.
+- **Sem impacto:** T-057/058/059 mantem-se inalterados (o painelPrincipal encapsula o body todo). localStorage
+  de nick/classe/profile/volumes não muda. No join, o ranking não interfere (client-only).
+- **Gates obrigatórios:** `tsc --noEmit` limpo (shared 49/49 + server 98/98 + client 87/87, +3 módulos client
+  adicionados) · `npm run build -w @aop/client` OK (674 KB, sem blow-up vs T-059) · shared 49/49 · server 98/98 ·
+  bots 35/35 · `npm run bots -- 2 10` (2 bots × 10s contra servidor local, sem erro no join/gameplay).
+- **Validação smoke:** estrutura de painéis/tabs confirmada por leitura de código; funções fetch testadas
+  isoladamente com timeout/abort logic; UI fallbacks (vazio/carregando/indisponível) presentes.
+  **Validação funcional completa (Django online):** pendente — requer Django real rodando em :8000
+  (spec garante que T-060 entrega os contratos corretos; aqui validamos que o client os consome e renderiza).
+- **Docs:** `SESSAO_ATUAL.md` substituído (Frente L completada: T-057 ✅ T-058 ✅ T-059 ✅ T-062 ✅).
+  BACKLOG.md + PROMPT-0060.md atualizados. Commit feat(client): T-062 (SPEC-0015).
+- Ver `docs/prompts/PROMPT-0060.md`.
+
 ## 2026-07-06 — Sessão 42 (agente worker, Frente L): T-059 (SPEC-0015) — Seleção no join
 
 - **Escopo:** plugar a seleção real do lobby (nick/classe/skin) no join do Colyseus, validar tudo
