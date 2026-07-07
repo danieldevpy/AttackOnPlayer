@@ -1,5 +1,6 @@
 /**
  * T-057 (SPEC-0015): Janela pré-sala — card único antes do join.
+ * T-058 (SPEC-0015): Persistência de settings + nick.
  *
  * Seções:
  *   1. Identidade: guest/conta + nick editável
@@ -9,8 +10,10 @@
  *
  * Regra de ouro: 1 clique com defaults sensatos.
  * Escopo: client-only. Não envia join, não toca em schema/servidor.
- * Persistência localStorage: nick, classId, skinId, profile, volumes.
- * Sincronização Django (T-058) e join com seleções (T-059) são tasks separadas.
+ * Persistência localStorage: sempre (nick, classId, skinId, profile, volumes).
+ * Sync Django (T-058): GET ao abrir card (merge com localStorage); PUT ao clicar Jogar.
+ *   Ambos são best-effort — falha de rede → console.warn, segue com localStorage.
+ * Join com seleções (T-059) é task separada.
  */
 
 import * as THREE from "three";
@@ -68,6 +71,89 @@ function getAccountName(): string | null {
 
 function isLoggedIn(): boolean {
   return localStorage.getItem(JWT_KEY) !== null;
+}
+
+// ─────────────────────────────────────────────────────────
+// T-058: Sync com Django (best-effort — nunca bloqueia UI)
+// ─────────────────────────────────────────────────────────
+
+/** Resposta do endpoint GET/PUT /api/v1/accounts/settings */
+interface DjangoSettings {
+  control_profile: string;
+  volume_master: number;
+  volume_sfx: number;
+  fullscreen_pref: boolean;
+  display_name: string;
+}
+
+function djangoBaseUrl(): string {
+  const override = new URLSearchParams(location.search).get("authPort");
+  if (location.hostname === "localhost" || location.hostname.startsWith("192.")) {
+    return `http://${location.hostname}:${override ?? 8000}`;
+  }
+  return `${location.protocol}//${location.host}`;
+}
+
+/**
+ * Carrega settings da conta Django. Retorna null em caso de falha (rede,
+ * token inválido, servidor fora do ar) — caller trata como best-effort.
+ */
+async function fetchDjangoSettings(): Promise<DjangoSettings | null> {
+  const token = localStorage.getItem(JWT_KEY);
+  if (!token) return null;
+  try {
+    const res = await fetch(`${djangoBaseUrl()}/api/v1/accounts/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as DjangoSettings;
+  } catch (e) {
+    console.warn("[lobby] não foi possível carregar settings do servidor:", e);
+    return null;
+  }
+}
+
+/**
+ * Salva settings na conta Django (best-effort). Falha é silenciosa (console.warn).
+ * Inclui o display_name para que o servidor sanitize nick malicioso (sanitize_display_name).
+ * O display_name retornado pelo servidor é usado para atualizar o localStorage.
+ */
+async function saveDjangoSettings(payload: Partial<DjangoSettings>): Promise<string | null> {
+  const token = localStorage.getItem(JWT_KEY);
+  if (!token) return null;
+  try {
+    const res = await fetch(`${djangoBaseUrl()}/api/v1/accounts/settings`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      console.warn("[lobby] falha ao salvar settings no servidor:", res.status);
+      return null;
+    }
+    const data = (await res.json()) as DjangoSettings;
+    // Atualiza o display_name no localStorage com o valor sanitizado pelo servidor
+    if (data.display_name) {
+      const raw = localStorage.getItem(ACCOUNT_KEY);
+      if (raw) {
+        try {
+          const account = JSON.parse(raw) as { display_name?: string };
+          account.display_name = data.display_name;
+          localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
+        } catch {
+          // ignora
+        }
+      }
+      localStorage.setItem(NICK_KEY, data.display_name);
+    }
+    return data.display_name ?? null;
+  } catch (e) {
+    console.warn("[lobby] não foi possível salvar settings no servidor:", e);
+    return null;
+  }
 }
 
 // ─────────────────────────────────────────────────────────
@@ -344,6 +430,54 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
     if (!classDef.skinIds.includes(skinId)) skinId = classDef.skinIds[0];
 
     let profile = opts.getCurrentProfile();
+
+    // T-058: carrega settings Django em background ao abrir o card (best-effort)
+    // Faz merge sensato: servidor vence localStorage para jogador logado.
+    if (loggedInNow) {
+      fetchDjangoSettings().then((remote) => {
+        if (!remote) return;
+
+        // Nick: se servidor tiver valor não-vazio, usa (já sanitizado)
+        if (remote.display_name) {
+          nick = remote.display_name;
+          localStorage.setItem(NICK_KEY, nick);
+          const nickInputEl = document.getElementById("lobby-nick-input") as HTMLInputElement | null;
+          if (nickInputEl) nickInputEl.value = nick;
+        }
+
+        // Perfil de controle
+        if (remote.control_profile && ["mouse", "keyboard", "touch"].includes(remote.control_profile)) {
+          profile = remote.control_profile as typeof profile;
+          opts.setProfile(profile);
+          const radios = document.querySelectorAll<HTMLInputElement>('input[name="lobby-profile"]');
+          radios.forEach((r) => { r.checked = r.value === profile; });
+        }
+
+        // Volume master
+        if (typeof remote.volume_master === "number") {
+          opts.audio.setMasterVolume(remote.volume_master);
+          const sliderEl = document.getElementById("lobby-master-slider") as HTMLInputElement | null;
+          const valEl = document.getElementById("lobby-master-val");
+          if (sliderEl) sliderEl.value = String(Math.round(remote.volume_master * 100));
+          if (valEl) valEl.textContent = `${Math.round(remote.volume_master * 100)}%`;
+        }
+
+        // Volume SFX
+        if (typeof remote.volume_sfx === "number") {
+          opts.audio.setSfxVolume(remote.volume_sfx);
+          const sliderEl = document.getElementById("lobby-sfx-slider") as HTMLInputElement | null;
+          const valEl = document.getElementById("lobby-sfx-val");
+          if (sliderEl) sliderEl.value = String(Math.round(remote.volume_sfx * 100));
+          if (valEl) valEl.textContent = `${Math.round(remote.volume_sfx * 100)}%`;
+        }
+
+        // Fullscreen pref
+        if (typeof remote.fullscreen_pref === "boolean") {
+          const fsEl = document.getElementById("lobby-fs-check") as HTMLInputElement | null;
+          if (fsEl) fsEl.checked = remote.fullscreen_pref;
+        }
+      });
+    }
 
     // ── Overlay ──
     const overlay = document.createElement("div");
@@ -640,6 +774,21 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
       connectingEl.textContent = "Conectando...";
 
       const selection: LobbySelection = { nick, classId, skinId, profile };
+
+      // T-058: sync settings para Django quando logado (best-effort, não bloqueia join)
+      if (isLoggedIn()) {
+        const payload: Partial<DjangoSettings> = {
+          display_name: nick,
+          control_profile: profile,
+          volume_master: opts.audio.getMasterVolume(),
+          volume_sfx: opts.audio.getSfxVolume(),
+          fullscreen_pref: document.fullscreenElement != null,
+        };
+        // Fire-and-forget: atualiza nick local com valor sanitizado se disponível
+        saveDjangoSettings(payload).then((sanitizedNick) => {
+          if (sanitizedNick) selection.nick = sanitizedNick;
+        });
+      }
 
       // Remove overlay e resolve
       preview.dispose();

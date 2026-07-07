@@ -1,5 +1,24 @@
 # Devlog
 
+## 2026-07-06 — Sessão 41 (agente worker, Frente L): T-058 (SPEC-0015) — Persistência de settings + nick
+
+- **Arquivo modificado:** `packages/client/src/lobby.ts` — adicionado bloco T-058 com sync Django.
+- **Novo bloco em `lobby.ts`:** funções `fetchDjangoSettings()` e `saveDjangoSettings()` (best-effort,
+  nunca bloqueiam UI). `DjangoSettings` interface alinhada com o serializer do backend (`control_profile`,
+  `volume_master`, `volume_sfx`, `fullscreen_pref`, `display_name`).
+- **GET ao abrir card:** quando logado, dispara `fetchDjangoSettings()` em background. Se responder,
+  faz merge sensato: nick → atualiza `#lobby-nick-input` + localStorage; perfil → `setProfile()` +
+  radio buttons; volumes → `setMasterVolume/setSfxVolume` + sliders; fullscreen → checkbox.
+  Falha de rede = console.warn + continua com localStorage (sem modal, sem travamento).
+- **PUT ao clicar Jogar:** quando logado, dispara `saveDjangoSettings()` fire-and-forget com payload
+  completo. O servidor sanitiza o `display_name` via `sanitize_display_name()` (nick malicioso vira
+  fallback server-side). O nick sanitizado retornado atualiza `localStorage` e o objeto `selection`.
+- **Validação funcional via curl:** GET/PUT `/api/v1/accounts/settings` confirmados — settings
+  persistem entre requisições; nick `<script>alert(1)</script>` retornou fallback "NormalNick";
+  nick vazio `"   "` também usou fallback. Backend inalterado (endpoint já estava completo pela T-061).
+- **Gates:** tsc ×3 limpo · vite build OK · shared 39/39 · server 89/89 · bots 35/35 ·
+  pytest 112/112 (backend) · ruff OK · makemigrations --check OK.
+
 ## 2026-07-06 — Sessão 40 (agente worker, Frente L): T-057 (SPEC-0015) — Janela pré-sala (lobby)
 
 - **Novo arquivo:** `packages/client/src/lobby.ts` — card único pré-sala com 4 seções

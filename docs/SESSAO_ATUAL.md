@@ -5,28 +5,22 @@
 
 **Atualizado em:** 2026-07-06
 **Branch:** `evolução`. **Marco:** V1.
-**Sessão 40 (agente worker, Frente L): T-057 (SPEC-0015) — Janela pré-sala (lobby)** entregue:
-`packages/client/src/lobby.ts` novo (`showLobby()` → `Promise<LobbySelection>`), integrado em
-`main.ts` antes do `connect()`. Card completo: identidade (guest/conta, nick editável), seleção
-de classe (archer) + preview 3D girando (`createCharacterVisual`), settings (perfil, volumes,
-fullscreen), botão Jogar (1 clique). tsc ×3 limpo · vite build OK · shared 39/39 · server 89/89
-· bots 35/35 · verificação funcional: card apareceu, 1 clique removeu overlay e iniciou o jogo.
+**Sessão 41 (agente worker, Frente L): T-058 (SPEC-0015) — Persistência de settings + nick** entregue:
+`packages/client/src/lobby.ts` recebeu bloco T-058: `fetchDjangoSettings()` / `saveDjangoSettings()` (best-effort).
+GET ao abrir card sincroniza nick/perfil/volumes/fullscreen do Django com o card aberto.
+PUT ao clicar Jogar envia payload completo; servidor sanitiza nick malicioso (fallback server-side).
+tsc ×3 limpo · vite build OK · shared 39/39 · server 89/89 · bots 35/35 · pytest 112/112 · ruff OK.
+Validação funcional curl: settings persistem; nick XSS → fallback confirmado.
+Ver `docs/DEVLOG.md` (Sessão 41) e `docs/prompts/PROMPT-0058.md`.
+
+**Sessão 40 (agente worker, Frente L): T-057 (SPEC-0015) — Janela pré-sala (lobby)** entregue.
 Ver `docs/DEVLOG.md` (Sessão 40) e `docs/prompts/PROMPT-0057.md`.
 
-**Sessão 39 (agente worker, Frente B): T-029 — ADR-012 liga na conta** entregue:
-`PlayerStats` ganha `forca`/`agilidade`/`vitalidade` (migração `0004`); pickup de "box" em
-`ArenaRoom.ts` reporta o delta pro Django via `platformClient.reportProgress()` quando
-`PLATFORM_ENABLED=1` e o player tem `accountId`. Ver `docs/DEVLOG.md` (Sessão 39) e
-`docs/prompts/PROMPT-0056.md`.
+**Sessão 39 (agente worker, Frente B): T-029 — ADR-012 liga na conta** entregue.
+Ver `docs/DEVLOG.md` (Sessão 39) e `docs/prompts/PROMPT-0056.md`.
 
 **Sessão 38 (agente worker, Frente B): T-061 — Auditoria + fechamento do admin** entregue.
 Ver `docs/DEVLOG.md` (Sessão 38) e `docs/prompts/PROMPT-0055.md`.
-
-**Sessão 37 (agente worker, Frente B): T-060 — KDA + ranking** entregue.
-Ver `docs/DEVLOG.md` (Sessão 37) e `docs/prompts/PROMPT-0054.md`.
-
-**Sessão 36 (agente worker, Frente C): T-056 — Skins por paleta** entregue.
-Ver `docs/DEVLOG.md` (Sessão 36) e `docs/prompts/PROMPT-0053.md`.
 
 ---
 
@@ -37,16 +31,15 @@ Ver `docs/DEVLOG.md` (Sessão 36) e `docs/prompts/PROMPT-0053.md`.
 | S — Som (SPEC-0013) | T-049 ✅ T-050 ✅ T-051 ✅ | **Fechada** |
 | C — Personagem (SPEC-0014) | T-052 ✅ T-053 ✅ T-054 ✅ T-055 ✅ T-056 ✅ | **Fechada** |
 | B — Backend/Admin (SPEC-0008) | T-060 ✅ T-061 ✅ T-029 ✅ | **Fechada** |
-| L — Lobby (SPEC-0015) | T-057 ✅ T-058 🔜 T-059 🔜 T-062 🔜 | **Em progresso** |
+| L — Lobby (SPEC-0015) | T-057 ✅ T-058 ✅ T-059 🔜 T-062 🔜 | **Em progresso** |
 
 ---
 
 ## Próximas tasks (Frente L)
 
-- **T-058** 〔M〕 — Persistência de settings + nick: localStorage completo + sync Django
-  (endpoint `PUT /api/v1/accounts/settings` da T-061). Depende de T-057 ✅.
 - **T-059** 〔M〕⚠schema — Seleção no join: join envia `{nick, classId, skinId, profile}`;
-  servidor valida e reflete; bots ganham classe default. Depende de T-057 ✅, T-052 ✅.
+  servidor valida contra `CLASS_REGISTRY` e reflete no estado; bots ganham classe default.
+  Depende de T-057 ✅, T-058 ✅.
 - **T-062** 〔P〕 — Aba ranking no card. Depende de T-057 ✅, T-060 ✅.
 
 ---
@@ -62,6 +55,13 @@ Ver `docs/DEVLOG.md` (Sessão 36) e `docs/prompts/PROMPT-0053.md`.
 
 > **Google OAuth:** adiado pós-V1 (ADR-020). Plugar no mesmo endpoint de JWT (T-028a).
 
+> **T-058 sync timing:** o GET Django ao abrir o card é async/best-effort — os elementos
+> DOM já existem quando a promise resolve (card foi appended antes de disparar o fetch).
+> O PUT ao clicar Jogar é fire-and-forget; selection.nick pode ser atualizado pela promise
+> após o overlay ser removido — o join (T-059) usa o objeto `selection` que pode ter o nick
+> sanitizado chegando depois. Mitigação em T-059: aguardar a promise antes do join, ou usar
+> o nick do localStorage (que é atualizado pelo `saveDjangoSettings`).
+
 ---
 
 ## Comandos úteis agora
@@ -75,15 +75,14 @@ npm run aci -- search <query>
 
 # Backend Django
 cd backend && ./dev.sh
-python -m pytest
+source .venv/bin/activate && python -m pytest
 python manage.py makemigrations --check --dry-run
 ruff check .
 ```
 
 ## Leituras se a sessão nova for só conversa
 
-- Sessão atual → `docs/DEVLOG.md` (Sessão 40) e `docs/prompts/PROMPT-0057.md`
+- Sessão atual → `docs/DEVLOG.md` (Sessão 41) e `docs/prompts/PROMPT-0058.md`
 - Lobby spec → `specs/SPEC-0015-lobby-pre-sala.md`
-- Próxima task T-058 → `docs/BACKLOG.md` linha T-058
+- Próxima task T-059 → `docs/BACKLOG.md` linha T-059
 - Backend Django → `backend/README.md`
-- Frente C encerrada → `docs/DEVLOG.md` Sessões 30–36
