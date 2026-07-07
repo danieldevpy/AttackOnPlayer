@@ -59,8 +59,15 @@ call/char: SkinnedMesh. Ver `docs/DEVLOG.md` (Sessão 34) e `docs/prompts/PROMPT
 de `default`); `paletteFor` em `characters.ts` passa a ler o tint da skin (antes ignorava o
 parâmetro). Gancho pronto pra guerreiro/mago = nova entrada no registry. tsc ×3 limpo · shared
 39/39 (+1) · server 80/80 · bots 35/35 · smoke com 3 bots reais sem regressão. Ver `docs/DEVLOG.md`
-(Sessão 36) e `docs/prompts/PROMPT-0053.md`. Outras frentes (T-060 Backend, Lobby T-057+) podem
-estar em paralelo — conferir BACKLOG antes de assumir.
+(Sessão 36) e `docs/prompts/PROMPT-0053.md`.
+**Sessão 37 (agente worker, Frente B, em andamento): T-060 — KDA + ranking** entregue:
+`accounts/services.py` novo (agregação de kills/deaths/matches_played na ingestão do batch de
+telemetria, `telemetry/views.py`), `GET /api/v1/stats/me` + `GET /api/v1/ranking` (paginado,
+público), `PlayerStatsAdmin` (busca). pytest backend 88/88 (+9) · `makemigrations --check` limpo
+· `ruff` limpo · smoke fim a fim com Django+Colyseus reais (porta 2604, isolada da sessão dev em
+:2567) confirmando o pipeline e a atribuição de kill em tempo real. Ver `docs/DEVLOG.md` (Sessão
+37) e `docs/prompts/PROMPT-0054.md`. **Frente B em andamento:** próximas T-061 e T-029, mesma
+sessão, cada uma com gate/commit próprio.
 
 ---
 

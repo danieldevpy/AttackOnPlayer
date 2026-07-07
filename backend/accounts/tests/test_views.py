@@ -95,3 +95,30 @@ def test_link_rejects_self_token():
         "/api/v1/auth/link", {"player_token": "tok-self"}, format="json", **auth_header(real)
     )
     assert response.status_code == 400
+
+
+def test_stats_me_requires_authentication():
+    response = APIClient().get("/api/v1/stats/me")
+    assert response.status_code == 401
+
+
+def test_stats_me_returns_own_stats():
+    account = Account.objects.create_user(email="stats@aop.dev", password="secret123")
+    PlayerStats.objects.create(account=account, kills=4, deaths=1, matches_played=2, xp_total=50)
+
+    response = APIClient().get("/api/v1/stats/me", **auth_header(account))
+    assert response.status_code == 200
+    assert response.json() == {"kills": 4, "deaths": 1, "matches_played": 2, "xp_total": 50}
+
+
+def test_ranking_is_public_ordered_by_kills_and_paginated():
+    for i, kills in enumerate([10, 30, 20]):
+        account = Account.objects.create_guest(display_name=f"player{i}")
+        PlayerStats.objects.create(account=account, kills=kills)
+
+    response = APIClient().get("/api/v1/ranking?page_size=2")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 3
+    assert [row["kills"] for row in body["results"]] == [30, 20]
+    assert body["results"][0]["display_name"] == "player1"

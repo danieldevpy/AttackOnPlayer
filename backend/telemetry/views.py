@@ -4,6 +4,8 @@ from django.db import transaction
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from accounts.services import apply_telemetry_stats
+
 from .models import TelemetryEvent
 from .validators import validate_batch
 
@@ -28,5 +30,7 @@ def ingest_batch(request):
             )
             for event in events
         )
+        # T-060: KDA/ranking agregados no momento da ingestão (best-effort, ver accounts.services).
+        apply_telemetry_stats(events)
 
     return Response({"ingested": len(events)}, status=201)

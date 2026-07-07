@@ -190,7 +190,7 @@
 - **T-056** 〔P〕 ✅ (2026-07-06) **Skins por paleta**: variações de cor por `skinId` (tabela em `classes.ts`), aplicadas na fábrica; gancho pronto pra classes futuras (guerreiro/mago = nova entrada no registry). **Contexto:** `packages/shared/src/classes.ts` · `packages/client/src/characters.ts`. · depende: T-053 ✅
 
 **Frente B — Fechamento backend/painel (extensão SPEC-0008) — Django+platform**
-- **T-060** 〔M〕 **KDA + ranking**: agregar kills/deaths da telemetria (T-026/T-027) em `PlayerStats`; endpoints `GET /stats/me` e `GET /ranking` (paginado); admin list com busca. **Contexto:** `backend/` (apps `telemetry`, `accounts`) · schema NDJSON da T-026. **Aceite:** pytest de agregação; partida real de bots reflete no ranking.
+- **T-060** 〔M〕 ✅ (2026-07-06) **KDA + ranking**: agregar kills/deaths da telemetria (T-026/T-027) em `PlayerStats`; endpoints `GET /stats/me` e `GET /ranking` (paginado); admin list com busca. **Contexto:** `backend/` (apps `telemetry`, `accounts`) · schema NDJSON da T-026. **Aceite:** pytest de agregação; partida real de bots reflete no ranking.
 - **T-061** 〔M〕 **Auditoria + fechamento do admin**: passar o pente em `GameEvent`/`RoomConfig`/contas/nicks — o que falta pra operar eventos, salas, moderação de nick e métricas 100% pelo admin, sem deploy; endpoint de settings do player (usado pela T-058). **Contexto:** `backend/` · `packages/server/src/platform/platformClient.ts`. **Aceite:** checklist da SPEC-0008 todo verde; criar evento novo pelo admin muda sala ao vivo. · depende: T-060
 - **T-029** (já listado acima, F4) entra nesta frente. · depende: T-028 ✅
 

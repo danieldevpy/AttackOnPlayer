@@ -10,6 +10,16 @@ class PlayerStatsSerializer(serializers.ModelSerializer):
         fields = ["kills", "deaths", "matches_played", "xp_total"]
 
 
+class RankingEntrySerializer(serializers.ModelSerializer):
+    """Linha do `GET /ranking` (T-060) — nome vem da conta, não do PlayerStats."""
+
+    display_name = serializers.CharField(source="account.display_name")
+
+    class Meta:
+        model = PlayerStats
+        fields = ["display_name", "kills", "deaths", "matches_played", "xp_total"]
+
+
 class AccountSerializer(serializers.ModelSerializer):
     stats = PlayerStatsSerializer(read_only=True)
 

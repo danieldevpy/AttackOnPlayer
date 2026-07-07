@@ -26,3 +26,14 @@ class GuestLinkAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at",)
     autocomplete_fields = ["account"]
     ordering = ("-created_at",)
+
+
+@admin.register(PlayerStats)
+class PlayerStatsAdmin(admin.ModelAdmin):
+    """T-060: view de ranking/busca dedicada (a inline em `AccountAdmin` continua existindo
+    pra edição no contexto da conta; esta é pra operar/consultar direto, com busca por nick)."""
+
+    list_display = ("account", "kills", "deaths", "matches_played", "xp_total", "updated_at")
+    search_fields = ("account__display_name", "account__email")
+    ordering = ("-kills",)
+    autocomplete_fields = ["account"]

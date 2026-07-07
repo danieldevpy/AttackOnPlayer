@@ -2,6 +2,7 @@ import pytest
 from django.test import override_settings
 from rest_framework.test import APIClient
 
+from accounts.models import Account, GuestLink, PlayerStats
 from telemetry.models import TelemetryEvent
 
 pytestmark = pytest.mark.django_db
@@ -74,3 +75,27 @@ def test_batch_rejects_missing_events_key():
     response = _service_client().post("/api/v1/telemetry/batch/", {}, format="json")
     assert response.status_code == 400
     assert TelemetryEvent.objects.count() == 0
+
+
+@override_settings(SERVICE_TOKEN="svc-token")
+def test_batch_of_kill_updates_playerstats_and_ranking(client=None):
+    """T-060 fim a fim: exatamente o payload que o ArenaRoom real envia (killerToken/
+    victimToken) — batch ingerido reflete em PlayerStats e no /api/v1/ranking."""
+    killer = Account.objects.create_guest(display_name="killer")
+    victim = Account.objects.create_guest(display_name="victim")
+    PlayerStats.objects.create(account=killer)
+    PlayerStats.objects.create(account=victim)
+    GuestLink.objects.create(player_token="tok-a", account=killer)
+    GuestLink.objects.create(player_token="tok-b", account=victim)
+
+    response = _service_client().post(
+        "/api/v1/telemetry/batch/", {"events": [KILL_EVENT]}, format="json"
+    )
+    assert response.status_code == 201
+
+    assert PlayerStats.objects.get(account=killer).kills == 1
+    assert PlayerStats.objects.get(account=victim).deaths == 1
+
+    ranking = APIClient().get("/api/v1/ranking").json()
+    assert ranking["results"][0]["display_name"] == "killer"
+    assert ranking["results"][0]["kills"] == 1

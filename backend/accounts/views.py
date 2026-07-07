@@ -7,6 +7,7 @@ from rest_framework.decorators import (
     authentication_classes,
     permission_classes,
 )
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -18,8 +19,16 @@ from .serializers import (
     GuestRequestSerializer,
     LinkRequestSerializer,
     LoginSerializer,
+    PlayerStatsSerializer,
+    RankingEntrySerializer,
     RegisterSerializer,
 )
+
+
+class RankingPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
 
 
 @api_view(["POST"])
@@ -134,3 +143,24 @@ def link(request):
 
     account.refresh_from_db()
     return Response(AccountSerializer(account).data)
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def stats_me(request):
+    """`GET /stats/me` (T-060) — estatística da própria conta autenticada."""
+    stats, _ = PlayerStats.objects.get_or_create(account=request.user)
+    return Response(PlayerStatsSerializer(stats).data)
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def ranking(request):
+    """`GET /ranking` (T-060) — paginado, ordenado por kills (desempate: partidas jogadas)."""
+    qs = PlayerStats.objects.select_related("account").order_by("-kills", "-matches_played")
+    paginator = RankingPagination()
+    page = paginator.paginate_queryset(qs, request)
+    data = RankingEntrySerializer(page, many=True).data
+    return paginator.get_paginated_response(data)

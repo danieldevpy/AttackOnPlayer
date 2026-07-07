@@ -1,5 +1,33 @@
 # Devlog
 
+## 2026-07-06 — Sessão 37 (agente worker, Frente B): T-060 — KDA + ranking
+- **Pedido do CD:** implementar a Frente B (T-060 → T-061 → T-029) por completo. Este prompt =
+  T-060 apenas (as próximas duas seguem em série, cada uma com gate e commit próprio).
+- **Agregação na ingestão:** `accounts/services.py` novo (`apply_telemetry_stats`) — chamado
+  dentro da mesma transação de `telemetry/views.py:ingest_batch`. Evento `kill` soma 1 kill no
+  `killerToken` e 1 death no `victimToken`; evento `quit` soma 1 `matches_played` (única sombra
+  de "sessão encerrada" por jogador que o schema T-026 tem hoje — `match_end` é por room). Token
+  sem `GuestLink` (bot, guest nunca registrado) é ignorado sem derrubar o batch.
+- **Endpoints novos:** `GET /api/v1/stats/me` (JWT, própria conta) e `GET /api/v1/ranking`
+  (público, paginado — `PageNumberPagination`, ordenado por kills desc). `RankingEntrySerializer`
+  novo (inclui `display_name` da conta via join), desacoplado do `PlayerStatsSerializer` usado
+  pelos outros 4 endpoints de conta.
+- **Admin:** `PlayerStatsAdmin` registrado (além da inline já existente em `AccountAdmin`) —
+  `search_fields` por nick/email, ordenado por kills — "admin list com busca" da task.
+- **Gates:** pytest 88/88 (+9: `test_services.py` novo, +3 em `accounts/tests/test_views.py`,
+  +1 em `telemetry/tests/test_views.py`) · `makemigrations --check` limpo (sem mudança de schema)
+  · `ruff check .` limpo.
+- **Smoke fim a fim (fora do pytest):** Django real + Colyseus real (porta 2604, isolada da
+  sessão de dev paralela em :2567) + `PLATFORM_ENABLED=1` — pipeline completo sem erro
+  (`gameops/config`, `telemetry/batch` a cada ~5s). Bots reais (`6×40s`) não geraram kill (perfis
+  defensivos, sem regressão) e o framework de bots não aceita `token` customizado (sempre
+  `bot_<sessionId>`, sem `GuestLink`) — pra provar ATRIBUIÇÃO com o servidor real, registrei 2
+  contas via `/auth/guest` e postei 1 evento `kill` real (payload idêntico ao `KillEvent` do
+  Node) direto no Django rodando: `PlayerStats` e `/ranking` refletiram na hora.
+- **Fora de escopo:** nenhuma mudança em `packages/server`/protocolo — telemetria já emitia os
+  campos necessários desde T-026/T-027g.
+- `npm run aci -- index` rodado ao final. Ver `docs/prompts/PROMPT-0054.md`.
+
 ## 2026-07-06 — Sessão 36 (agente worker, Frente C): T-056 — Skins por paleta
 - **Task:** `packages/shared/src/classes.ts` ganha `ClassDef.skinTints: Record<string, number>` —
   cor (hex) por `skinId`, tabela separada de `skinIds` (que continua sendo só a lista de ids

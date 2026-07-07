@@ -2,6 +2,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
+from accounts.views import ranking, stats_me
 from common.health import healthz
 from common.views import ping
 
@@ -13,4 +14,8 @@ urlpatterns = [
     path("api/v1/maps/", include("maps.urls")),
     path("api/v1/gameops/", include("gameops.urls")),
     path("api/v1/telemetry/", include("telemetry.urls")),
+    # T-060 (SPEC-0008, Frente B): KDA/ranking — fora do prefixo /auth/ de propósito (não são
+    # rotas de identidade, são leitura de estatística/ranking público+próprio).
+    path("api/v1/stats/me", stats_me, name="stats-me"),
+    path("api/v1/ranking", ranking, name="ranking"),
 ]
