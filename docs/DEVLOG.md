@@ -1,5 +1,32 @@
 # Devlog
 
+## 2026-07-07 — Sessão 46 (agente worker): PROMPT-0063 — Deploy simples passa a subir Django + Postgres
+
+- **Pedido do CD:** o script de produção (`script/deploy-vps-sem-dominio.sh`) também
+  inicializar Django e banco, com o ambiente de produção já funcionando com o backend.
+- **Mudança:** script passou a instalar Docker (só pro Postgres)/Python3-venv, preparar
+  `backend/.venv` + `requirements.txt`, gerar `backend/.env` de produção na 1ª execução
+  (`DJANGO_SECRET_KEY`/`SERVICE_TOKEN` aleatórios via `openssl`, ajustando
+  `DJANGO_ALLOWED_HOSTS`/`CORS_ALLOWED_ORIGINS` com o IP público a cada execução), gerar
+  chaves JWT se faltarem, subir Postgres via `docker compose`, aplicar `migrate` +
+  `import_maps`, e subir o backend via `gunicorn` gerenciado por pm2 (`aop-backend`). O
+  game server (`aop-server`) passou a subir com `PLATFORM_ENABLED=1` +
+  `PLATFORM_URL`/`SERVICE_TOKEN` apontando pro backend local — sem isso o Django subiria
+  mas o jogo continuaria em modo guest.
+- **Fix de segurança encontrado no caminho:** `backend/docker-compose.yml` publicava
+  Postgres em `0.0.0.0:5432` — `ufw` não bloqueia portas publicadas pelo Docker (mexe
+  direto no iptables), então isso exporia o banco (credenciais padrão `aop`/`aop`) pra
+  internet. Corrigido pra `127.0.0.1:5432:5432` + `restart: unless-stopped`.
+- **Caveat documentado (não corrigido):** `/admin/` do Django não funciona bem sem TLS —
+  `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE` (`config/settings/prod.py`) exigem HTTPS.
+  Não afeta a integração jogo↔backend (service token/JWT, sem cookie de sessão). Relaxar
+  esses dois settings é decisão de segurança do CD, não tomada aqui.
+- **Gates:** `bash -n` no script alterado, limpo. Revisão manual linha a linha do diff
+  (script + `docker-compose.yml`). Não executado numa VPS real nesta sessão — pendente.
+- **Arquivos:** `script/deploy-vps-sem-dominio.sh`, `backend/docker-compose.yml`,
+  `docs/deploy/PLANO-VPS-SEM-DOMINIO.md`. Ver `docs/prompts/PROMPT-0063.md` para as
+  decisões completas e pendências.
+
 ## 2026-07-07 — Sessão 45 (agente worker): PROMPT-0062 — Hotfix: lobby não montava (insertBefore após reestrutura das tabs T-062)
 
 - **Bug:** `NotFoundError` em `lobby.ts:765` (`card.insertBefore(tabs, body)`) impedia `showLobby`

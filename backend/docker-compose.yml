@@ -1,5 +1,8 @@
-# T-027 (SPEC-0008): SÓ o Postgres de dev/test. O stack completo (nginx, TLS, backend, node)
-# é a T-030. Django/pytest rodam no host (venv) apontando DATABASE_URL para este db.
+# T-027 (SPEC-0008): SÓ o Postgres de dev/test/deploy-simples. O stack completo com Docker
+# pro backend + nginx/TLS é a T-030 (SPEC-0009, oficial). Django/pytest rodam no host (venv)
+# apontando DATABASE_URL para este db — inclusive no script/deploy-vps-sem-dominio.sh, que
+# também sobe backend+Postgres (fora do Docker) desde que o backend passou a ser obrigatório
+# nesse fluxo.
 #   docker compose -f backend/docker-compose.yml up -d db
 services:
   db:
@@ -9,7 +12,11 @@ services:
       POSTGRES_PASSWORD: aop
       POSTGRES_DB: aop_platform
     ports:
-      - "5432:5432"
+      # 127.0.0.1 só — ufw NÃO bloqueia portas publicadas pelo Docker (ele mexe direto no
+      # iptables), então "5432:5432" exporia o Postgres pra internet com credenciais padrão.
+      # Django (host) conecta em localhost:5432 normalmente.
+      - "127.0.0.1:5432:5432"
+    restart: unless-stopped
     volumes:
       - aop_pgdata:/var/lib/postgresql/data
     healthcheck:

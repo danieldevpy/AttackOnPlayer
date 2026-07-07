@@ -5,6 +5,25 @@
 
 **Atualizado em:** 2026-07-07
 **Branch:** `main`. **Marco:** V1.
+
+**Sessão 46 (agente worker): PROMPT-0063 — Deploy simples passa a subir Django + Postgres**
+Pedido do CD: `script/deploy-vps-sem-dominio.sh` também inicializar Django e banco, ambiente
+de produção já funcionando com o backend. Mudanças: instala Docker (só pro Postgres do
+backend, dev/test já usava)/Python3-venv; prepara `backend/.venv` + `requirements.txt`; gera
+`backend/.env` de produção na 1ª execução (secrets aleatórios via `openssl`, mantidos nas
+reexecuções; `DJANGO_ALLOWED_HOSTS`/`CORS_ALLOWED_ORIGINS` reajustados com o IP público a
+cada rodada); gera chaves JWT se faltarem; sobe Postgres via `docker compose` (bind
+`127.0.0.1` — fix de segurança, `ufw` não bloqueia porta publicada por Docker; antes ficava
+em `0.0.0.0`); aplica `migrate` + `import_maps`; sobe backend via `gunicorn`/pm2
+(`aop-backend`); game server sobe com `PLATFORM_ENABLED=1` + `PLATFORM_URL`/`SERVICE_TOKEN`
+apontando pro backend local (sem isso o Django subiria mas o jogo continuaria guest-only).
+Backend é sempre ligado agora (sem flag de opt-out, pedido explícito do CD) — diferente de
+`-b` (bots), que continua opcional. Caveat documentado (não corrigido): `/admin/` do Django
+não funciona bem sem TLS (`SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE` em `prod.py` exigem
+HTTPS); não afeta jogo↔backend (service token/JWT sem cookie). `bash -n` limpo; **não
+testado numa VPS real ainda** — pendência pro próximo prompt. Ver `docs/DEVLOG.md` (Sessão
+46) e `docs/prompts/PROMPT-0063.md` (decisões completas + pendências).
+
 **Sessão 45 (agente worker): PROMPT-0062 — Hotfix lobby (NotFoundError insertBefore)**
 Regressão T-057×T-062: `card.insertBefore(tabs, body)` lançava NotFoundError porque `body` era neto
 de `card` (após T-062), não filho direto. Fix: montagem linear explícita `tabs → panels → footer`
@@ -28,87 +47,3 @@ Graceful degrade: Django fora → aba mostra estado vazio/"indisponível". Stats
 (kills/deaths/K-D/partidas); ranking em tabela (posição, nome, kills, deaths). Tab switch lazy-loads o ranking.
 tsc ×3 limpo · shared 49/49 · server 98/98 · bots 35/35 · `build @aop/client` OK · `bots 2 10` sem erro.
 Ver `docs/DEVLOG.md` (Sessão 43) e `docs/prompts/PROMPT-0060.md`.
-**⚠ Frente L completa: T-057 ✅ T-058 ✅ T-059 ✅ T-062 ✅**
-
-**Sessão 42 (agente worker, Frente L): T-059 (SPEC-0015) — Seleção no join** entregue:
-join do Colyseus envia `{nick, classId, skinId}` com a seleção real do lobby; servidor valida
-`classId/skinId` contra `CLASS_REGISTRY` (T-052) e sanitiza o nick server-side.
-`profile` **NÃO** viaja no join (client-side puro, sem campo no schema) — decisão registrada.
-Sem campo novo no schema: `nick` reusa `Player.name`. Precedência: **conta > nick do lobby > fallback**.
-Novo `sanitizeDisplayName` em `@aop/shared` (espelha o `sanitize_display_name` do Django).
-Bots mandam `classId` default explícito. Outros players renderizam com a classe/skin sincronizada
-(`createPlayerVisual` lê `Player.classId/skinId`).
-tsc ×3 limpo · shared 49/49 · server 98/98 · bots 35/35 · `build @aop/client` OK · `bots 3 15` sem erro.
-Ver `docs/DEVLOG.md` (Sessão 42) e `docs/prompts/PROMPT-0059.md`.
-
-**Sessão 41 (agente worker, Frente L): T-058 (SPEC-0015) — Persistência de settings + nick** entregue.
-Ver `docs/DEVLOG.md` (Sessão 41) e `docs/prompts/PROMPT-0058.md`.
-
-**Sessão 40 (agente worker, Frente L): T-057 (SPEC-0015) — Janela pré-sala (lobby)** entregue.
-Ver `docs/DEVLOG.md` (Sessão 40) e `docs/prompts/PROMPT-0057.md`.
-
----
-
-## Estado das frentes V1
-
-| Frente | Tasks | Status |
-|---|---|---|
-| S — Som (SPEC-0013) | T-049 ✅ T-050 ✅ T-051 ✅ | **Fechada** |
-| C — Personagem (SPEC-0014) | T-052 ✅ T-053 ✅ T-054 ✅ T-055 ✅ T-056 ✅ | **Fechada** |
-| B — Backend/Admin (SPEC-0008) | T-060 ✅ T-061 ✅ T-029 ✅ | **Fechada** |
-| L — Lobby (SPEC-0015) | T-057 ✅ T-058 ✅ T-059 ✅ T-062 ✅ | **Fechada** |
-
----
-
-## Próximas tasks
-
-**Frente L completa.** Próxima frente: SPEC-0009 (Deploy / Produção) ou SPEC-0006 (Matchmaking) ou specs menores conforme CD.
-
----
-
-## Avisos operacionais
-
-> **Preview oculto / screenshot timeout:** o WebGL renderer (e o rAF do preview 3D do lobby)
-> bloqueiam a captura de screenshot via ferramenta de preview. Validar pelo DOM (snapshot) ou
-> console em vez de screenshot. Este aviso se aplica a todas as sessões com Three.js ativo.
-> **T-059:** a verificação "skin do outro aparece" foi validada por estado + caminho de código
-> (servidor reflete `classId/skinId`; cliente lê `p.classId/p.skinId` em `createPlayerVisual`).
-
-> **Banco de dev:** pytest verde não implica banco de dev migrado. Rodar
-> `python manage.py migrate` antes de testar contra o Django real.
-
-> **Google OAuth:** adiado pós-V1 (ADR-020). Plugar no mesmo endpoint de JWT (T-028a).
-
-> **Servidor de dev na :2567:** pode já haver um servidor rodando (preview). Se `dev:server`
-> der `EADDRINUSE`, o servidor já está de pé — rode bots contra ele direto.
-
-> **Identidade no join (T-059):** precedência **conta > nick do lobby > fallback "Guest"**.
-> Nick vem do localStorage `aop_lobby_nick` (síncrono), não do objeto selection (PUT Django é
-> fire-and-forget). Sanitização autoritativa dupla (`sanitizeDisplayName` ≙ Django). `profile`
-> é client-side e NÃO trafega no join.
-
----
-
-## Comandos úteis agora
-
-```bash
-npm run test -w @aop/shared && (cd packages/server && npx vitest run) && (cd packages/bots && npx vitest run)
-for p in server client bots; do (cd packages/$p && npx tsc --noEmit) && echo "$p ok"; done
-npm run build -w @aop/client
-npm run bots -- 3 15
-npm run aci -- doctor
-npm run aci -- search <query>
-
-# Backend Django
-cd backend && ./dev.sh
-source .venv/bin/activate && python -m pytest
-python manage.py makemigrations --check --dry-run
-ruff check .
-```
-
-## Leituras se a sessão nova for só conversa
-
-- Sessão atual → `docs/DEVLOG.md` (Sessão 42) e `docs/prompts/PROMPT-0059.md`
-- Lobby spec → `specs/SPEC-0015-lobby-pre-sala.md`
-- Próxima task T-062 → `docs/BACKLOG.md` linha T-062
-- Backend Django → `backend/README.md`

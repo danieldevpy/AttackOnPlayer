@@ -5,6 +5,11 @@
 # (esse é SPEC-0009 / M5, com domínio + Caddy/TLS). Idempotente: rodar de novo atualiza
 # tudo (git pull + rebuild + restart dos processos pm2).
 #
+# Também sobe o backend Django (contas, mapas, gameops, telemetria) + Postgres, e liga o
+# game server nele (PLATFORM_ENABLED=1) — o ambiente sobe já integrado com o backend, sem
+# passo manual. Backend roda fora do Docker (venv + gunicorn via pm2, igual ao Node); só o
+# Postgres usa Docker (backend/docker-compose.yml).
+#
 # Uso na VPS (Ubuntu/Debian, como root ou com sudo, a partir da raiz do repo clonado):
 #   ./script/deploy-vps-sem-dominio.sh [-b] [-c qtd_bots] [-t duracao_s] [IP_PUBLICO]
 #
@@ -14,12 +19,20 @@
 #   -t duracao_s  duração dos bots em segundos, 0 = para sempre (padrão: 0)
 #
 # Se IP_PUBLICO não for passado, o script tenta detectar automaticamente.
-# Portas (sobrescrevíveis por env): BACK_PORT=2567 FRONT_PORT=5173
+# Portas (sobrescrevíveis por env): BACK_PORT=2567 FRONT_PORT=5173 DJANGO_PORT=8000
+#
+# Aviso: sem TLS, o admin do Django (`/admin/`) não funciona direito no navegador —
+# `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE` (config/settings/prod.py) exigem HTTPS, então
+# o login por sessão não persiste em http://. A API do jogo (service token / JWT) não usa
+# cookie de sessão e funciona normalmente. `/admin/` fica disponível só quando migrar pro
+# fluxo oficial com domínio+TLS (SPEC-0009); até lá, use `manage.py shell`/`createsuperuser`
+# na própria VPS para operações administrativas.
 #
 set -euo pipefail
 
 BACK_PORT="${BACK_PORT:-2567}"
 FRONT_PORT="${FRONT_PORT:-5173}"
+DJANGO_PORT="${DJANGO_PORT:-8000}"
 NODE_VERSION="20"
 
 BOTS_ON=0
@@ -77,6 +90,27 @@ if ! command -v pm2 >/dev/null 2>&1; then
   npm install -g pm2
 fi
 
+# ---------- 3b. Docker (só pro Postgres do backend) ----------
+if ! command -v docker >/dev/null 2>&1; then
+  log "Instalando Docker..."
+  curl -fsSL https://get.docker.com | $SUDO sh
+else
+  log "Docker já presente: $(docker --version)"
+fi
+$SUDO systemctl enable --now docker >/dev/null 2>&1 || true
+
+# ---------- 3c. Python (backend Django roda no host, fora do Docker) ----------
+# Checagem por "venv --help" não é confiável (o módulo responde --help mesmo sem
+# ensurepip instalado) — testa criando um venv descartável de verdade.
+if command -v python3 >/dev/null 2>&1 && python3 -m venv "$(mktemp -d)/venv-check" >/dev/null 2>&1; then
+  log "Python3/venv já presentes: $(python3 --version)"
+  $SUDO apt-get install -y libpq5 >/dev/null 2>&1 || true
+else
+  log "Instalando Python3/venv/pip..."
+  $SUDO apt-get update -y
+  $SUDO apt-get install -y python3 python3-venv python3-pip libpq5
+fi
+
 # ---------- 4. Atualizar código (se for um clone git) ----------
 if [[ -d .git ]]; then
   log "git pull..."
@@ -89,14 +123,94 @@ fi
 log "npm install (workspaces)..."
 npm install
 
+# ---------- 5b. Backend Django: venv + dependências ----------
+BACKEND_DIR="$REPO_DIR/backend"
+log "Preparando venv do backend..."
+if [[ ! -d "$BACKEND_DIR/.venv" ]]; then
+  python3 -m venv "$BACKEND_DIR/.venv"
+fi
+"$BACKEND_DIR/.venv/bin/pip" install -q --upgrade pip
+log "Instalando dependências do backend (requirements.txt)..."
+"$BACKEND_DIR/.venv/bin/pip" install -q -r "$BACKEND_DIR/requirements.txt"
+
+# ---------- 5c. Backend: .env de produção (secrets gerados na 1ª execução) ----------
+BACKEND_ENV="$BACKEND_DIR/.env"
+if [[ ! -f "$BACKEND_ENV" ]]; then
+  log "Criando backend/.env de produção (1ª execução)..."
+  cp "$BACKEND_DIR/.env.example" "$BACKEND_ENV"
+  SECRET_KEY_VAL="$(openssl rand -hex 50)"
+  SERVICE_TOKEN_VAL="$(openssl rand -hex 32)"
+  sed -i \
+    -e "s#^DJANGO_SECRET_KEY=.*#DJANGO_SECRET_KEY=${SECRET_KEY_VAL}#" \
+    -e "s#^DJANGO_DEBUG=.*#DJANGO_DEBUG=false#" \
+    -e "s#^SERVICE_TOKEN=.*#SERVICE_TOKEN=${SERVICE_TOKEN_VAL}#" \
+    "$BACKEND_ENV"
+else
+  log "backend/.env já existe — mantendo secrets, só ajustando hosts/CORS se preciso."
+fi
+
+# Garante que o IP público atual está em ALLOWED_HOSTS/CORS (idempotente — sobrevive a troca
+# de IP se a VPS for recriada; não remove entradas antigas).
+CURRENT_HOSTS="$(grep '^DJANGO_ALLOWED_HOSTS=' "$BACKEND_ENV" | cut -d= -f2-)"
+if [[ "$CURRENT_HOSTS" != *"$PUBLIC_IP"* ]]; then
+  NEW_HOSTS="${CURRENT_HOSTS:+$CURRENT_HOSTS,}${PUBLIC_IP},localhost,127.0.0.1"
+  sed -i "s#^DJANGO_ALLOWED_HOSTS=.*#DJANGO_ALLOWED_HOSTS=${NEW_HOSTS}#" "$BACKEND_ENV"
+fi
+
+CLIENT_ORIGIN="http://${PUBLIC_IP}:${FRONT_PORT}"
+CURRENT_CORS="$(grep '^CORS_ALLOWED_ORIGINS=' "$BACKEND_ENV" | cut -d= -f2-)"
+if [[ "$CURRENT_CORS" != *"$CLIENT_ORIGIN"* ]]; then
+  NEW_CORS="${CURRENT_CORS:+$CURRENT_CORS,}${CLIENT_ORIGIN}"
+  sed -i "s#^CORS_ALLOWED_ORIGINS=.*#CORS_ALLOWED_ORIGINS=${NEW_CORS}#" "$BACKEND_ENV"
+fi
+
+SERVICE_TOKEN="$(grep '^SERVICE_TOKEN=' "$BACKEND_ENV" | cut -d= -f2-)"
+[[ -n "$SERVICE_TOKEN" ]] || die "SERVICE_TOKEN vazio em backend/.env — corrija antes de continuar."
+
+# ---------- 5d. Backend: chaves JWT RS256 (se faltarem) ----------
+if [[ ! -f "$BACKEND_DIR/secrets/jwt_private.pem" ]]; then
+  log "Gerando par de chaves JWT (RS256)..."
+  mkdir -p "$BACKEND_DIR/secrets"
+  openssl genpkey -algorithm RSA -out "$BACKEND_DIR/secrets/jwt_private.pem" -pkeyopt rsa_keygen_bits:2048
+  openssl rsa -in "$BACKEND_DIR/secrets/jwt_private.pem" -pubout -out "$BACKEND_DIR/secrets/jwt_public.pem"
+fi
+
+# ---------- 5e. Backend: Postgres (docker compose) ----------
+log "Subindo Postgres (docker compose)..."
+(cd "$BACKEND_DIR" && $SUDO docker compose up -d db)
+
+log "Aguardando Postgres ficar healthy..."
+db_ok=0
+for _ in $(seq 1 30); do
+  status="$(cd "$BACKEND_DIR" && $SUDO docker compose ps db --format '{{.Health}}' 2>/dev/null || true)"
+  if [[ "$status" == "healthy" ]]; then db_ok=1; break; fi
+  sleep 1
+done
+[[ "$db_ok" -eq 1 ]] || die "Postgres não ficou healthy em 30s — rode '(cd backend && docker compose logs db)'."
+
+# ---------- 5f. Backend: migrations + seed de mapas ----------
+log "Aplicando migrations do backend..."
+(cd "$BACKEND_DIR" && DJANGO_SETTINGS_MODULE=config.settings.prod "$BACKEND_DIR/.venv/bin/python" manage.py migrate --noinput)
+
+log "Importando mapas para o registry (import_maps)..."
+(cd "$BACKEND_DIR" && DJANGO_SETTINGS_MODULE=config.settings.prod "$BACKEND_DIR/.venv/bin/python" manage.py import_maps) \
+  || warn "import_maps falhou — confira maps/*.map.json na raiz do repo."
+
 # ---------- 6. Build do client com o IP fixo no bundle ----------
 log "Build do client (VITE_SERVER_URL=ws://$PUBLIC_IP:$BACK_PORT)..."
 VITE_SERVER_URL="ws://$PUBLIC_IP:$BACK_PORT" npm run build -w @aop/client
 
 # ---------- 7. Subir/atualizar processos via pm2 ----------
-log "Subindo game server (aop-server) na porta $BACK_PORT..."
+log "Subindo backend Django (aop-backend) na porta $DJANGO_PORT..."
+pm2 delete aop-backend >/dev/null 2>&1 || true
+DJANGO_SETTINGS_MODULE=config.settings.prod pm2 start "$BACKEND_DIR/.venv/bin/gunicorn" \
+  --name aop-backend --cwd "$BACKEND_DIR" \
+  -- config.wsgi:application --bind "0.0.0.0:$DJANGO_PORT" --workers 3
+
+log "Subindo game server (aop-server) na porta $BACK_PORT (integrado ao backend)..."
 pm2 delete aop-server >/dev/null 2>&1 || true
-PORT="$BACK_PORT" pm2 start npm --name aop-server --cwd "$REPO_DIR" -- run start -w @aop/server
+PORT="$BACK_PORT" PLATFORM_ENABLED=1 PLATFORM_URL="http://localhost:$DJANGO_PORT" SERVICE_TOKEN="$SERVICE_TOKEN" \
+  pm2 start npm --name aop-server --cwd "$REPO_DIR" -- run start -w @aop/server
 
 log "Servindo client estático (aop-client) na porta $FRONT_PORT..."
 pm2 delete aop-client >/dev/null 2>&1 || true
@@ -124,11 +238,13 @@ if command -v ufw >/dev/null 2>&1; then
   $SUDO ufw allow OpenSSH >/dev/null 2>&1 || true
   $SUDO ufw allow "$BACK_PORT"/tcp
   $SUDO ufw allow "$FRONT_PORT"/tcp
+  $SUDO ufw allow "$DJANGO_PORT"/tcp
   $SUDO ufw --force enable
 else
-  warn "ufw não encontrado — confirme manualmente que as portas $BACK_PORT e $FRONT_PORT estão liberadas"
+  warn "ufw não encontrado — confirme manualmente que as portas $BACK_PORT, $FRONT_PORT e $DJANGO_PORT estão liberadas"
 fi
 warn "Se a VPS for de nuvem (DigitalOcean/AWS/Vultr/etc.), confira também o firewall do PAINEL do provedor — o ufw sozinho não basta se o provedor bloquear antes."
+warn "Postgres (5432) fica só em 127.0.0.1 (backend/docker-compose.yml) — não precisa/deve abrir no firewall."
 
 # ---------- 9. Health check ----------
 log "Checando /health do server..."
@@ -139,16 +255,27 @@ for _ in $(seq 1 15); do
 done
 [[ "$ok" -eq 1 ]] && log "Server respondendo." || warn "Server não respondeu em 15s — rode 'pm2 logs aop-server'."
 
+log "Checando /healthz do backend..."
+ok_backend=0
+for _ in $(seq 1 15); do
+  if curl -fsS "http://127.0.0.1:$DJANGO_PORT/healthz" >/dev/null 2>&1; then ok_backend=1; break; fi
+  sleep 1
+done
+[[ "$ok_backend" -eq 1 ]] && log "Backend respondendo." || warn "Backend não respondeu em 15s — rode 'pm2 logs aop-backend'."
+
 echo
 echo "========================================================"
 echo " Jogo:    http://$PUBLIC_IP:$FRONT_PORT"
 echo " Server:  ws://$PUBLIC_IP:$BACK_PORT  (HTTP: /health, /metrics/summary)"
+echo " Backend: http://$PUBLIC_IP:$DJANGO_PORT  (/healthz, /api/v1/...)"
+echo "          admin/ sem TLS não mantém login por sessão (cookie secure) — use"
+echo "          '(cd backend && .venv/bin/python manage.py createsuperuser)' + shell na VPS"
 if [[ "$BOTS_ON" -eq 1 ]]; then
   echo " Bots:    ${BOT_COUNT} bot(s), duração ${BOT_DURATION}s (0 = para sempre) — pm2 logs aop-bots"
 else
   echo " Bots:    desativados (rodar de novo com -b pra ativar)"
 fi
-echo " Logs:    pm2 logs aop-server | pm2 logs aop-client | pm2 logs aop-bots"
+echo " Logs:    pm2 logs aop-server | pm2 logs aop-client | pm2 logs aop-backend | pm2 logs aop-bots"
 echo " Status:  pm2 status"
 echo " Atualizar depois: rodar este script de novo"
 echo "========================================================"
