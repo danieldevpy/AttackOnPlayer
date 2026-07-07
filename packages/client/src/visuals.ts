@@ -116,17 +116,26 @@ export function colorFor(id: string): number {
  * Visual do jogador + sinalização de aliado/inimigo (SPEC-0002):
  * anel discreto no chão — azul = você, vermelho = inimigo. Não invasivo.
  */
-export function createPlayerVisual(id: string, isSelf: boolean): THREE.Group {
+export function createPlayerVisual(
+  id: string,
+  isSelf: boolean,
+  classId?: string,
+  skinId?: string
+): THREE.Group {
   const group = new THREE.Group();
 
   // F2 (T-053): boneco procedural da classe. O ANEL (abaixo) continua sendo o sinal de
   // aliado/inimigo (SPEC-0002) e a leitura de facing vem do próprio modelo (arco à frente),
-  // então o "nariz" placeholder só existe na F1. Classe/skin default por enquanto — a
-  // seleção no join (T-059) passará os valores da rede quando chegar.
+  // então o "nariz" placeholder só existe na F1.
+  // T-059 (SPEC-0015): classId/skinId chegam sincronizados do estado (Player.classId/skinId).
+  // Ausentes (ou classe/skin desconhecida) caem pro default — o servidor já resolveu, mas o
+  // cliente também tolera para nunca quebrar a renderização.
   // (F3: THREE.Sprite. F4: GLTF.)
   if (VISUAL_PHASE >= 2) {
-    const skinId = CLASS_REGISTRY[DEFAULT_CLASS_ID].skinIds[0];
-    const char = createCharacterVisual(DEFAULT_CLASS_ID, skinId);
+    const resolvedClass = classId && CLASS_REGISTRY[classId] ? classId : DEFAULT_CLASS_ID;
+    const def = CLASS_REGISTRY[resolvedClass];
+    const resolvedSkin = skinId && def.skinIds.includes(skinId) ? skinId : def.skinIds[0];
+    const char = createCharacterVisual(resolvedClass, resolvedSkin);
     group.userData.character = char; // T-054: a animação procedural acha o boneco por aqui
     group.add(char);
   } else {

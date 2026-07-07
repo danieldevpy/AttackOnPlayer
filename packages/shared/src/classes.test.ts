@@ -5,6 +5,9 @@ import {
   isValidClassId,
   isValidSkinId,
   resolveClassSelection,
+  sanitizeDisplayName,
+  DEFAULT_NICK,
+  NICK_MAX_LEN,
 } from "./classes";
 
 describe("CLASS_REGISTRY (T-052)", () => {
@@ -69,5 +72,53 @@ describe("resolveClassSelection — join válido/inválido/ausente (T-052)", () 
       classId: "archer",
       skinId: CLASS_REGISTRY.archer.skinIds[0],
     });
+  });
+});
+
+describe("sanitizeDisplayName — nick no join (T-059, alinhado ao Django)", () => {
+  it("nick simples passa", () => {
+    expect(sanitizeDisplayName("Daniel")).toBe("Daniel");
+  });
+
+  it("nick com espaço/hífen/ponto/underscore passa", () => {
+    expect(sanitizeDisplayName("Ana Maria_2")).toBe("Ana Maria_2");
+    expect(sanitizeDisplayName("no-ob.1")).toBe("no-ob.1");
+  });
+
+  it("acentos (Unicode) preservados", () => {
+    expect(sanitizeDisplayName("João")).toBe("João");
+  });
+
+  it("faz trim das bordas", () => {
+    expect(sanitizeDisplayName("  Dan  ")).toBe("Dan");
+  });
+
+  it("vazio/só espaços => fallback", () => {
+    expect(sanitizeDisplayName("")).toBe(DEFAULT_NICK);
+    expect(sanitizeDisplayName("   ")).toBe(DEFAULT_NICK);
+  });
+
+  it("HTML/script => fallback INTEIRO (não sanitiza parcial)", () => {
+    expect(sanitizeDisplayName("<script>alert(1)</script>")).toBe(DEFAULT_NICK);
+    expect(sanitizeDisplayName("a<b")).toBe(DEFAULT_NICK);
+  });
+
+  it("caracteres de controle => fallback", () => {
+    expect(sanitizeDisplayName("nick\x00\x07")).toBe(DEFAULT_NICK);
+  });
+
+  it("não-string => fallback", () => {
+    expect(sanitizeDisplayName(undefined)).toBe(DEFAULT_NICK);
+    expect(sanitizeDisplayName(42)).toBe(DEFAULT_NICK);
+    expect(sanitizeDisplayName(null)).toBe(DEFAULT_NICK);
+  });
+
+  it("fallback custom é respeitado", () => {
+    expect(sanitizeDisplayName("<bad>", "Anon")).toBe("Anon");
+  });
+
+  it("nick válido longo é truncado em NICK_MAX_LEN", () => {
+    const long = "A".repeat(NICK_MAX_LEN + 10);
+    expect(sanitizeDisplayName(long)).toBe("A".repeat(NICK_MAX_LEN));
   });
 });

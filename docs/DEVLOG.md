@@ -1,5 +1,39 @@
 # Devlog
 
+## 2026-07-06 — Sessão 42 (agente worker, Frente L): T-059 (SPEC-0015) — Seleção no join
+
+- **Escopo:** plugar a seleção real do lobby (nick/classe/skin) no join do Colyseus, validar tudo
+  server-side, bots com classe default explícita e renderizar os outros players com a classe/skin
+  sincronizada. O lado servidor de `classId/skinId` já existia (T-052) — completei o que faltava.
+- **`packages/shared/src/classes.ts`:** novo `sanitizeDisplayName(raw, fallback="Guest")` + `NICK_MAX_LEN=20`
+  + `DEFAULT_NICK`. Espelha a política do `sanitize_display_name` do Django (backend/accounts/services.py):
+  charset `\p{L}\p{N}_ -.` (Unicode, acentos ok), bloqueia HTML/`<`/`>`/controle/emoji; fora do
+  charset ou vazio → fallback INTEIRO (nunca sanitiza parcial); nick válido só é truncado por comprimento.
+- **`packages/server/src/rooms/ArenaRoom.ts` (onJoin):** aceita `nick` no options; `p.name = sanitizeDisplayName(nick ?? name)`.
+  **Precedência de identidade documentada: conta (JWT válido) > nick do lobby / name (bots) > fallback "Guest".**
+  Nome da conta agora também re-sanitizado com o teto do jogo (antes só `slice(0,16)`).
+- **`packages/client/src/main.ts` (connect):** join envia `{nick, classId, skinId}`. Nick lido do
+  **localStorage `aop_lobby_nick`** (síncrono) e não de `lobbySelection.nick` — evita a corrida do PUT
+  Django fire-and-forget (aviso T-058). `createPlayerVisual` recebe `p.classId/p.skinId` do estado.
+- **`packages/client/src/visuals.ts`:** `createPlayerVisual(id, isSelf, classId?, skinId?)` — outros
+  players renderizam com a classe/skin sincronizada; ausente/inválido cai pro default (tolerância dupla).
+- **`packages/bots/src/bot.ts`:** join manda `classId: DEFAULT_CLASS_ID` explícito (contrato claro; o
+  servidor resolveria pro default de qualquer forma).
+- **Decisão — `profile` NÃO viaja no join.** É 100% client-side (perfil de controle mouse/kbd/touch),
+  não afeta nada server-authoritative e não tem campo no schema. Cortado do protocolo para evitar
+  campo inútil (risco §9 PROPOSAL-0004). Persiste só em localStorage/Django (T-058). Registrado.
+- **Sem campo novo no schema:** `nick` reusa `Player.name` (já sincronizado); `classId/skinId` já
+  existiam (T-052). Zero risco de replay/bots por schema novo.
+- **Testes:** `packages/shared/src/classes.test.ts` (+11 casos de `sanitizeDisplayName`) e
+  `packages/server/src/rooms/classes.test.ts` (+9 casos: nick válido/precedência sobre name/ausente/
+  malicioso HTML/controle/só-espaço/longo-truncado/acentos + bot com classId explícito).
+- **Gates:** tsc server/client/bots limpo · shared 49/49 · server 98/98 · bots 35/35 · `build @aop/client` OK
+  · `npm run bots -- 3 15` — 3 bots entraram e jogaram sem erro (join com `classId` novo compatível).
+- **Verificação funcional (classe/skin aparece pros outros):** validada pelo caminho de código +
+  teste de servidor (o estado reflete `classId/skinId` do join; o cliente lê `p.classId/p.skinId` no
+  `createPlayerVisual`). Screenshot WebGL não confiável com janela oculta (aviso operacional vigente).
+- Ver `docs/prompts/PROMPT-0059.md`.
+
 ## 2026-07-06 — Sessão 41 (agente worker, Frente L): T-058 (SPEC-0015) — Persistência de settings + nick
 
 - **Arquivo modificado:** `packages/client/src/lobby.ts` — adicionado bloco T-058 com sync Django.

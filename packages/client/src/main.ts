@@ -357,11 +357,18 @@ let lobbySelection: import("./lobby").LobbySelection | null = null;
 
 async function connect() {
   try {
+    // T-059 (SPEC-0015): join envia a seleção real do lobby — nick, classId, skinId.
+    // - `nick`: lido do localStorage (`aop_lobby_nick`, síncrono e já sanitizado localmente),
+    //   NÃO de `lobbySelection.nick`, porque o PUT do Django (T-058) é fire-and-forget e pode
+    //   atualizar o objeto selection depois do join. O servidor re-sanitiza autoritativamente.
+    // - `profile` NÃO viaja no join: é 100% client-side (perfil de controle mouse/kbd/touch),
+    //   não afeta nada server-authoritative e não tem campo no schema. Decisão T-059 (evita
+    //   campo/protocolo inútil — risco §9 PROPOSAL-0004). Persiste só em localStorage/Django.
+    const storedNick = localStorage.getItem("aop_lobby_nick");
     room = await client.joinOrCreate(ROOM_NAME, {
-      // T-059 (próxima task): join envia nick/classId/skinId/profile.
-      // Por ora, usa o nome do lobby como identificador e mantém os demais campos
-      // para a task seguinte que integra o protocolo de join.
-      name: lobbySelection?.nick ?? `web-${Math.floor(Math.random() * 999)}`,
+      nick: storedNick ?? lobbySelection?.nick ?? `web-${Math.floor(Math.random() * 999)}`,
+      classId: lobbySelection?.classId,
+      skinId: lobbySelection?.skinId,
       token: playerToken,
       authToken: getAuthToken() ?? undefined
     });
@@ -788,7 +795,9 @@ function syncWorld() {
     seenP.add(id);
     let vis = playerVisuals.get(id);
     if (!vis) {
-      vis = createPlayerVisual(id, id === mySessionId);
+      // T-059 (SPEC-0015): classe/skin vêm sincronizadas do estado (Player.classId/skinId) —
+      // outros players renderizam com a seleção que fizeram no lobby, não mais o default fixo.
+      vis = createPlayerVisual(id, id === mySessionId, p.classId, p.skinId);
       vis.position.set(p.x, 0, p.z);
       vis.rotation.y = -(p.dir ?? 0);
       scene.add(vis);

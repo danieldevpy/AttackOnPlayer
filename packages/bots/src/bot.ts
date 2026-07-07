@@ -6,7 +6,7 @@ import WebSocket from "ws";
 (globalThis as any).WebSocket = WebSocket; // polyfill p/ colyseus.js em Node
 
 const { Client } = await import("colyseus.js");
-const { ROOM_NAME, SERVER_PORT, buildMap, isWall, zoneAt, LAUNCHERS, mapFileToGameMap } = await import("@aop/shared");
+const { ROOM_NAME, SERVER_PORT, buildMap, isWall, zoneAt, LAUNCHERS, mapFileToGameMap, DEFAULT_CLASS_ID } = await import("@aop/shared");
 type GameMap = import("@aop/shared").GameMap;
 type MapFileV1 = import("@aop/shared").MapFileV1;
 
@@ -110,13 +110,16 @@ async function runBot(i: number) {
   let room;
   if (sharedRoomId) {
     try {
-      room = await client.joinById(sharedRoomId, { name, bot: true, boss: isBoss });
+      // T-059 (SPEC-0015): bot manda classe default explícita no join (o servidor resolveria
+      // pro default de qualquer jeito, mas mandar explícito documenta o contrato e evita
+      // depender do fallback). Sem skinId => servidor usa a skin default da classe.
+      room = await client.joinById(sharedRoomId, { name, bot: true, boss: isBoss, classId: DEFAULT_CLASS_ID });
     } catch (e: any) {
       console.error(`[${name}] NÃO entrou na sala ${sharedRoomId} (lotada? MAX_PLAYERS): ${e?.message ?? e}`);
       return;
     }
   } else {
-    room = await client.joinOrCreate(ROOM_NAME, { name, bot: true, boss: isBoss, mapId: BOT_MAP_ID });
+    room = await client.joinOrCreate(ROOM_NAME, { name, bot: true, boss: isBoss, mapId: BOT_MAP_ID, classId: DEFAULT_CLASS_ID });
     sharedRoomId = room.roomId;
   }
   room.onMessage("debug_event", () => {});

@@ -84,6 +84,8 @@ import {
   XP_COMBO_MULT,
   xpComboLimit,
   resolveClassSelection,
+  sanitizeDisplayName,
+  DEFAULT_NICK,
 } from "@aop/shared";
 import { ArraySchema } from "@colyseus/schema";
 import { loadMap } from "../mapLoader";
@@ -316,6 +318,7 @@ export class ArenaRoom extends Room<ArenaState> {
     client: Client,
     options: {
       name?: string;
+      nick?: string;
       bot?: boolean;
       token?: string;
       boss?: boolean;
@@ -325,7 +328,12 @@ export class ArenaRoom extends Room<ArenaState> {
     }
   ) {
     const p = new Player();
-    p.name = String(options?.name ?? "player").slice(0, 16);
+    // T-059 (SPEC-0015): nick do lobby entra como nome do player (NÃO há campo novo no schema —
+    // `name` já é sincronizado). Sanitização autoritativa server-side: charset/tamanho fora do
+    // permitido ou ausente cai pro fallback "Guest" (mesma política do `sanitize_display_name` do
+    // Django, agora dupla). Cliente pode mandar `nick` (lobby) ou `name` (bots/legado) — `nick`
+    // tem precedência. Precedência final de identidade é resolvida abaixo: conta > nick/name > fallback.
+    p.name = sanitizeDisplayName(options?.nick ?? options?.name, DEFAULT_NICK);
     p.isBot = Boolean(options?.bot);
     p.playerToken = options?.token || `bot_${client.sessionId}`;
     // T-052 (SPEC-0014): classId/skinId inválidos ou ausentes caem pro default — join
@@ -338,11 +346,14 @@ export class ArenaRoom extends Room<ArenaState> {
     // rejeitar o join (join nunca falha por causa de auth). Atrás de PLATFORM_ENABLED, como o
     // resto da integração com a plataforma (T-027g) — off por default, zero mudança de
     // comportamento nos testes/smoke atuais.
+    // Precedência de identidade (T-059): conta (JWT válido) > nick do lobby / name (bots) > fallback.
+    // O nome da conta já foi sanitizado pelo Django (`sanitize_display_name`), mas re-sanitizamos
+    // aqui para garantir o mesmo teto de comprimento do jogo e nunca confiar no valor recebido.
     if (process.env.PLATFORM_ENABLED === "1" && options?.authToken) {
       const claims = await verifyAccountToken(options.authToken);
       if (claims && !claims.isGuest) {
         p.accountId = claims.sub;
-        p.name = claims.displayName.slice(0, 16);
+        p.name = sanitizeDisplayName(claims.displayName, p.name);
       }
     }
     // T-024: mapa curado traz seus próprios spawns; sem mapId, mantém os 8 cantos/meios-de-borda de sempre.

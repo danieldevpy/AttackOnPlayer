@@ -51,3 +51,29 @@ export function resolveClassSelection(
   const resolvedSkinId = isValidSkinId(resolvedClassId, skinId) ? (skinId as string) : def.skinIds[0];
   return { classId: resolvedClassId, skinId: resolvedSkinId };
 }
+
+// T-059 (SPEC-0015): comprimento máximo do nick no join. Alinhado ao limite do lobby (20 chars
+// visíveis, SPEC §Identidade) e ao teto do `sanitize_display_name` do Django (32). Usamos 20
+// como corte autoritativo do servidor Colyseus.
+export const NICK_MAX_LEN = 20;
+
+/** Fallback usado quando o nick é ausente/malicioso — nunca rejeita o join, sempre entra. */
+export const DEFAULT_NICK = "Guest";
+
+// Charset permitido: letras (Unicode, inclui acentos), dígitos, underscore, espaço, hífen e ponto.
+// Bloqueia HTML/script (`<`, `>`), caracteres de controle, emoji, RTL override etc. — mesma
+// política do `sanitize_display_name` do Django (backend/accounts/services.py), agora aplicada
+// também no servidor de jogo (autoridade dupla: cliente pode ter sido burlado).
+const NICK_RE = /^[\p{L}\p{N}_ \-.]+$/u;
+
+/**
+ * Sanitiza um nick vindo do cliente no join. Fora do charset/tamanho permitido (ou vazio) => cai
+ * pro `fallback` INTEIRO (nunca trunca/edita um nick malicioso — mesmo aceite da T-058/Django).
+ * Nick válido só é truncado por comprimento (`NICK_MAX_LEN`). Servidor sempre vence o cliente.
+ */
+export function sanitizeDisplayName(raw?: unknown, fallback: string = DEFAULT_NICK): string {
+  if (typeof raw !== "string") return fallback;
+  const candidate = raw.trim();
+  if (!candidate || !NICK_RE.test(candidate)) return fallback;
+  return candidate.slice(0, NICK_MAX_LEN);
+}
