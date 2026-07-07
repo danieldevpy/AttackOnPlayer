@@ -201,7 +201,14 @@ function buildBow(p: Palette): THREE.BufferGeometry {
     new THREE.Vector3(0, 0.24, 0),
   ]);
   const tube = new THREE.TubeGeometry(curve, 14, 0.016, 4, false);
-  return mergeColored([{ g: tube, c: p.wood }]);
+  return mergeColored([
+    { g: tube, c: p.wood },
+    // grip escuro no centro (onde a mão do arqueiro segura) — reforça a leitura de "arco", não graveto
+    { g: box4(0.03, 0.03, 0.1), c: p.leatherDk, m: xf(0.16, 0, 0, 0, Math.PI / 4, 0) },
+    // encoches nas pontas (onde a corda prende)
+    { g: new THREE.ConeGeometry(0.024, 0.045, 4), c: p.leatherDk, m: xf(0.02, 0.25, 0, 0, 0, Math.PI * 0.92) },
+    { g: new THREE.ConeGeometry(0.024, 0.045, 4), c: p.leatherDk, m: xf(0.02, -0.25, 0, 0, 0, -Math.PI * 0.08) },
+  ]);
 }
 
 function buildArrow(p: Palette): THREE.BufferGeometry {
@@ -214,17 +221,16 @@ function buildArrow(p: Palette): THREE.BufferGeometry {
   ]);
 }
 
-// Corda: Line com geometria/material globais (não deforma — o "puxar" é a flecha/mão).
-let stringGeo: THREE.BufferGeometry | null = null;
-function getStringGeo(): THREE.BufferGeometry {
-  if (!stringGeo) {
-    stringGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0.24, 0),
-      new THREE.Vector3(-0.03, 0, 0),
-      new THREE.Vector3(0, -0.24, 0),
-    ]);
-  }
-  return stringGeo;
+// Corda: 3 pontos (nock superior / centro / nock inferior). Geometria PEQUENA e POR INSTÂNCIA
+// (exceção deliberada ao "tudo compartilhado" — são só 3 vértices, custo desprezível mesmo em
+// centenas de players) porque o ponto central precisa se mover por instância durante o puxar
+// (tensão real da corda), o que uma geometria singleton compartilhada não permitiria.
+function buildStringGeo(): THREE.BufferGeometry {
+  return new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0.24, 0),
+    new THREE.Vector3(-0.03, 0, 0),
+    new THREE.Vector3(0, -0.24, 0),
+  ]);
 }
 
 // ── Cache de geometrias de segmento por classe:skin (singleton) ──────────────────────────
@@ -268,6 +274,8 @@ const FORE_ARM_H = 0.19;
 const HEAD_Y = 0.44; // rel. ao chest
 const LEG_Z = 0.1;
 const THIGH_H = 0.24;
+const BOW_CANT_X = 0.14; // inclinação lateral fixa do arco (estilo/leitura de silhueta)
+const BOW_TILT_Z = 0.1; // leve caimento pra frente do arco em cima da contra-rotação (ver abaixo)
 
 interface Rig {
   hip: THREE.Group;
@@ -283,6 +291,7 @@ interface Rig {
   kneeR: THREE.Group;
   bow: THREE.Group;
   arrow: THREE.Mesh;
+  string: THREE.Line;
 }
 
 /**
@@ -323,10 +332,13 @@ export function createCharacterVisual(classId: string, skinId: string): THREE.Gr
   elL.add(mesh(g.foreArm, "foreArmL"));
   shL.add(elL);
   chest.add(shL);
-  // arco na mão esquerda
+  // arco na mão esquerda; leve inclinação lateral fixa (BOW_CANT_X) só por estilo/silhueta —
+  // a inclinação frente/trás (rotation.z) é recalculada por frame pra CONTRA-GIRAR o braço
+  // (ver updateCharacterAnimation) e manter o arco sempre ereto, como um arco de verdade.
   const bow = pivot("bow", 0, -FORE_ARM_H, 0);
+  bow.rotation.x = BOW_CANT_X;
   bow.add(mesh(g.bow, "bowMesh"));
-  const stringLine = new THREE.Line(getStringGeo(), STRING_MAT);
+  const stringLine = new THREE.Line(buildStringGeo(), STRING_MAT);
   stringLine.name = "string";
   bow.add(stringLine);
   const arrow = mesh(g.arrow, "arrow");
@@ -358,19 +370,31 @@ export function createCharacterVisual(classId: string, skinId: string): THREE.Gr
 
   root.add(hip);
 
-  const rig: Rig = { hip, chest, head, shL, elL, shR, elR, legL, kneeL, legR, kneeR, bow, arrow };
+  const rig: Rig = { hip, chest, head, shL, elL, shR, elR, legL, kneeL, legR, kneeR, bow, arrow, string: stringLine };
   root.userData.rig = rig;
   // pose de repouso dos braços: levemente pra fora/frente (arqueiro pronto)
   applyRestPose(rig);
+  // contra-rotação inicial do arco (mesma fórmula do updateCharacterAnimation) — evita 1
+  // frame com o arco na orientação padrão (0) antes do primeiro tick de animação.
+  bow.rotation.z = -(shL.rotation.z + elL.rotation.z) + BOW_TILT_Z;
   return root;
 }
 
+// Pose de repouso "pronto pra atirar" (não braços caídos): braço do arco já levantado com o
+// arco visível à frente do peito, mão da corda já próxima da corda (não totalmente puxada).
+// Silhueta reconhecível como arqueiro mesmo parado — inspirado em Archero/Kingshot, onde o
+// herói nunca larga a arma. Reusado tanto no rig inicial quanto no idle/walk da animação.
+const REST_SH_L = 0.95;
+const REST_EL_L = 0.05;
+const REST_SH_R = 0.55;
+const REST_EL_R = 0.75;
+
 /** Pose neutra de repouso (usada como base do idle). */
 function applyRestPose(r: Rig): void {
-  r.shL.rotation.z = 0.15;
-  r.shR.rotation.z = 0.15;
-  r.elL.rotation.z = 0.2;
-  r.elR.rotation.z = 0.2;
+  r.shL.rotation.z = REST_SH_L;
+  r.shR.rotation.z = REST_SH_R;
+  r.elL.rotation.z = REST_EL_L;
+  r.elR.rotation.z = REST_EL_R;
 }
 
 // ── Animação procedural ──────────────────────────────────────────────────────────────────
@@ -457,26 +481,43 @@ export function updateCharacterAnimation(playerGroup: THREE.Group, t: number, mo
     const draw = Math.sin(Math.min(1, prog / 0.6) * (Math.PI / 2)); // puxa (0→1) até 60% da janela
     const release = prog > 0.6 ? (prog - 0.6) / 0.4 : 0; // solta no fim
     const pull = draw * (1 - release);
-    // esquerdo estende o arco pra frente/mira; direito puxa a corda pra trás
-    r.shL.rotation.z = 1.15;
-    r.elL.rotation.z = 0.1;
-    r.shR.rotation.z = 0.8 + pull * 0.2;
-    r.elR.rotation.z = 0.5 + pull * 1.0; // cotovelo puxa
-    r.chest.rotation.y = -0.18 - pull * 0.12; // tronco gira alguns graus
-    r.head.rotation.y = 0.12; // cabeça acompanha a mira
+    // esquerdo trava mirando (arco já estava perto disso no repouso, só refina); direito
+    // puxa a corda a partir da pose de repouso até o ponto de ancoragem (perto da cabeça).
+    r.shL.rotation.z = 1.2;
+    r.elL.rotation.z = 0.0;
+    r.shR.rotation.z = REST_SH_R + pull * (1.15 - REST_SH_R);
+    r.elR.rotation.z = REST_EL_R + pull * (1.85 - REST_EL_R); // cotovelo puxa até perto da bochecha
+    r.chest.rotation.y = -0.15 - pull * 0.15; // tronco gira alguns graus
+    r.head.rotation.y = 0.14; // cabeça acompanha a mira
     r.bow.scale.set(1, 1 + pull * 0.06, 1); // arco flexiona levemente
     r.arrow.position.x = -pull * 0.14 * (1 - release); // flecha recua na puxada e dispara
     r.arrow.visible = release < 0.5;
   } else {
     if (shootAt > 0) char.userData.shootAt = 0;
-    // repouso + balanço de caminhada (contra-fase das pernas)
-    r.shL.rotation.z = 0.15 - gait * 0.35;
-    r.shR.rotation.z = 0.15 + gait * 0.35;
-    r.elL.rotation.z = 0.2;
-    r.elR.rotation.z = 0.2;
+    // repouso "pronto" + leve balanço de caminhada por cima (amplitude pequena — o arco
+    // fica sempre visível/levantado, não é o balanço livre de um braço vazio andando)
+    const armSwing = gait * 0.1;
+    r.shL.rotation.z = REST_SH_L - armSwing;
+    r.shR.rotation.z = REST_SH_R + armSwing;
+    r.elL.rotation.z = REST_EL_L;
+    r.elR.rotation.z = REST_EL_R;
     if (r.bow.scale.y !== 1) r.bow.scale.set(1, 1, 1);
     if (r.arrow.position.x !== 0) r.arrow.position.x = 0;
     if (!r.arrow.visible) r.arrow.visible = true;
+  }
+
+  // ── Arco: contra-gira o braço (shL+elL) pra ficar sempre ereto, como um arco de verdade
+  // seguraria — sem isso ele gira junto com o braço e vira uma "vareta caída" ao mirar. ──
+  r.bow.rotation.z = -(r.shL.rotation.z + r.elL.rotation.z) + BOW_TILT_Z;
+
+  // ── Corda: tensiona de verdade (ponto central acompanha o recuo da flecha) em vez de ──
+  // ficar sempre com a mesma corda "esticada" parada — geometria é por instância (ver
+  // buildStringGeo) só pra isso ser possível sem afetar os outros players.
+  const stringPos = r.string.geometry.attributes.position as THREE.BufferAttribute;
+  const stringMidX = -0.03 + r.arrow.position.x;
+  if (stringPos.getX(1) !== stringMidX) {
+    stringPos.setX(1, stringMidX);
+    stringPos.needsUpdate = true;
   }
 
   // ── Hit: recuo curto (tronco inclina pra trás) somado por cima ──

@@ -3,8 +3,19 @@
 > **Substituir este arquivo inteiro** ao fim de cada sessão de trabalho.
 > Não é histórico — histórico fica em `DEVLOG.md` e `docs/prompts/`.
 
-**Atualizado em:** 2026-07-06
+**Atualizado em:** 2026-07-07
 **Branch:** `main`. **Marco:** V1.
+**Sessão 44 (agente worker): PROMPT-0061 — Arqueiro: "pegada" do arco + animação de disparo**
+entregue (fora da numeração do BACKLOG, follow-up direto do CD em cima da PROMPT-0051):
+causa raiz achada por simulação headless — o arco (filho do cotovelo esquerdo) herdava a rotação
+do braço e ficava quase deitado no disparo full-pull (~72° da vertical). Fix: contra-rotação do
+arco por frame, mantendo-o ereto (~5.7° constante) em qualquer pose. Pose de repouso "pronto pra
+atirar" (braço já levantado, não mais caído); disparo agora mira o ponto de ancoragem perto da
+cabeça/bochecha; corda ganhou tensão real (geometria por instância, exceção barata à regra de
+compartilhar tudo); arco ganhou grip + encoches. `tsc --noEmit` limpo (client) · `vite build` OK ·
+draw calls inalterados (13/personagem). Ver `docs/DEVLOG.md` (Sessão 44) e
+`docs/prompts/PROMPT-0061.md`.
+
 **Sessão 43 (agente worker, Frente L): T-062 (SPEC-0015) — Ranking/stats no lobby** entregue:
 aba discreta dentro do card do lobby, acessível via botão "Ranking" nas tabs.
 Consumir `GET /api/v1/stats/me` (JWT, com timeout 3s) e `GET /api/v1/ranking` (público, paginado).

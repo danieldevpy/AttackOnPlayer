@@ -1,5 +1,26 @@
 # Devlog
 
+## 2026-07-07 — Sessão 44 (agente worker): PROMPT-0061 — Arqueiro: "pegada" do arco + animação de disparo
+
+- **Pedido do CD:** em cima da PROMPT-0051 (personagens procedurais V2), o arqueiro melhorou mas
+  "o arco e o personagem não tem aquela pegada de arqueiro" e a animação de disparo não ficou boa.
+- **Causa raiz (achada por simulação headless):** o arco é filho do cotovelo esquerdo e herdava a
+  rotação do braço inteiro — girava de 20° (repouso) até ~72° (quase deitado) no disparo full-pull,
+  em vez de continuar ereto como um arco de verdade.
+- **Fix:** contra-rotação do arco por frame (`bow.rotation.z = -(shL+elL) + tilt`), mantendo o arco
+  visualmente ereto (~5.7° constante) em qualquer pose — verificado por simulação de matrizes
+  (sem WebGL) em idle/walk/shoot.
+- **Pose de repouso "pronto pra atirar"** (braço do arco já levantado, mão da corda já perto dela)
+  em vez de braços caídos; balanço de caminhada reduzido (arco continua visível andando).
+- **Disparo mira o ponto de ancoragem:** braço da corda agora termina perto da cabeça/bochecha no
+  pull máximo (dist. medida: 0.29 vs. cabeça, mesma altura Y) em vez de terminar solto longe dela.
+- **Corda com tensão real:** geometria da corda passou de singleton global pra **por instância**
+  (3 vértices — exceção deliberada e barata à regra de "compartilhar tudo"), acompanhando o recuo
+  da flecha. Arco ganhou grip + encoches nas pontas (mergeados, 0 draw call extra).
+- **Gates:** `tsc --noEmit` limpo (client); `vite build` OK. Draw calls inalterados (13/personagem,
+  8 geometrias + 1 material compartilhados entre instâncias — checado programaticamente).
+- Ver `docs/prompts/PROMPT-0061.md` para diagnóstico completo e números da simulação headless.
+
 ## 2026-07-07 — Sessão 43 (agente worker, Frente L): T-062 (SPEC-0015) — Ranking/stats no lobby
 
 - **Pedido do CD:** implementar aba discreta de ranking no card do lobby, consumindo os endpoints T-060
