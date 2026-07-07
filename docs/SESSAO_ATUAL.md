@@ -5,6 +5,15 @@
 
 **Atualizado em:** 2026-07-06
 **Branch:** `main`. **Marco:** V1.
+**Sessão 43 (agente worker, Frente L): T-062 (SPEC-0015) — Ranking/stats no lobby** entregue:
+aba discreta dentro do card do lobby, acessível via botão "Ranking" nas tabs.
+Consumir `GET /api/v1/stats/me` (JWT, com timeout 3s) e `GET /api/v1/ranking` (público, paginado).
+Graceful degrade: Django fora → aba mostra estado vazio/"indisponível". Stats pessoais em box amarelo
+(kills/deaths/K-D/partidas); ranking em tabela (posição, nome, kills, deaths). Tab switch lazy-loads o ranking.
+tsc ×3 limpo · shared 49/49 · server 98/98 · bots 35/35 · `build @aop/client` OK · `bots 2 10` sem erro.
+Ver `docs/DEVLOG.md` (Sessão 43) e `docs/prompts/PROMPT-0060.md`.
+**⚠ Frente L completa: T-057 ✅ T-058 ✅ T-059 ✅ T-062 ✅**
+
 **Sessão 42 (agente worker, Frente L): T-059 (SPEC-0015) — Seleção no join** entregue:
 join do Colyseus envia `{nick, classId, skinId}` com a seleção real do lobby; servidor valida
 `classId/skinId` contra `CLASS_REGISTRY` (T-052) e sanitiza o nick server-side.
@@ -31,14 +40,13 @@ Ver `docs/DEVLOG.md` (Sessão 40) e `docs/prompts/PROMPT-0057.md`.
 | S — Som (SPEC-0013) | T-049 ✅ T-050 ✅ T-051 ✅ | **Fechada** |
 | C — Personagem (SPEC-0014) | T-052 ✅ T-053 ✅ T-054 ✅ T-055 ✅ T-056 ✅ | **Fechada** |
 | B — Backend/Admin (SPEC-0008) | T-060 ✅ T-061 ✅ T-029 ✅ | **Fechada** |
-| L — Lobby (SPEC-0015) | T-057 ✅ T-058 ✅ T-059 ✅ T-062 🔜 | **Em progresso** |
+| L — Lobby (SPEC-0015) | T-057 ✅ T-058 ✅ T-059 ✅ T-062 ✅ | **Fechada** |
 
 ---
 
-## Próximas tasks (Frente L)
+## Próximas tasks
 
-- **T-062** 〔P〕 — Aba ranking/stats no card do lobby: consumir `GET /stats/me` + `GET /ranking`
-  no card (aba discreta). Depende de T-057 ✅, T-060 ✅.
+**Frente L completa.** Próxima frente: SPEC-0009 (Deploy / Produção) ou SPEC-0006 (Matchmaking) ou specs menores conforme CD.
 
 ---
 

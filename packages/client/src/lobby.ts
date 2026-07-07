@@ -1,18 +1,22 @@
 /**
  * T-057 (SPEC-0015): Janela pré-sala — card único antes do join.
  * T-058 (SPEC-0015): Persistência de settings + nick.
+ * T-062 (SPEC-0015): Ranking/stats em aba discreta.
  *
  * Seções:
  *   1. Identidade: guest/conta + nick editável
  *   2. Seleção de classe + preview 3D girando (createCharacterVisual da T-053)
  *   3. Settings: perfil de controle, volumes, fullscreen
  *   4. Botão Jogar
+ *   5. Aba Ranking: stats pessoais + top 10 (T-062, graceful degrade)
  *
  * Regra de ouro: 1 clique com defaults sensatos.
  * Escopo: client-only. Não envia join, não toca em schema/servidor.
  * Persistência localStorage: sempre (nick, classId, skinId, profile, volumes).
  * Sync Django (T-058): GET ao abrir card (merge com localStorage); PUT ao clicar Jogar.
  *   Ambos são best-effort — falha de rede → console.warn, segue com localStorage.
+ * T-062: consumir GET /api/v1/stats/me (JWT) e GET /api/v1/ranking (público),
+ *   timeout 3s → fallback com estado vazio. Aba é discreta (não bloqueia Jogar).
  * Join com seleções (T-059) é task separada.
  */
 
@@ -86,6 +90,30 @@ interface DjangoSettings {
   display_name: string;
 }
 
+/** Resposta do endpoint GET /api/v1/stats/me (T-060) */
+interface PlayerStats {
+  kills: number;
+  deaths: number;
+  matches_played: number;
+}
+
+/** Uma linha do ranking retornado por GET /api/v1/ranking (T-060) */
+interface RankingEntry {
+  id: number;
+  display_name: string;
+  kills: number;
+  deaths: number;
+  matches_played: number;
+}
+
+/** Paginação do ranking */
+interface RankingResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: RankingEntry[];
+}
+
 function djangoBaseUrl(): string {
   const override = new URLSearchParams(location.search).get("authPort");
   if (location.hostname === "localhost" || location.hostname.startsWith("192.")) {
@@ -152,6 +180,70 @@ async function saveDjangoSettings(payload: Partial<DjangoSettings>): Promise<str
     return data.display_name ?? null;
   } catch (e) {
     console.warn("[lobby] não foi possível salvar settings no servidor:", e);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// T-062: Ranking/stats (best-effort com timeout 3s)
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Carrega as próprias stats da conta. Retorna null em caso de falha, timeout ou guest.
+ * Timeout: 3s (como na spec T-062).
+ */
+async function fetchPlayerStats(): Promise<PlayerStats | null> {
+  const token = localStorage.getItem(JWT_KEY);
+  if (!token) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const res = await fetch(`${djangoBaseUrl()}/api/v1/stats/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    if (!res.ok) return null;
+    return (await res.json()) as PlayerStats;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      console.warn("[lobby] timeout ao carregar stats pessoais (3s)");
+    } else {
+      console.warn("[lobby] não foi possível carregar stats pessoais:", e);
+    }
+    return null;
+  }
+}
+
+/**
+ * Carrega o ranking público (top 10). Retorna null em caso de falha ou timeout.
+ * Timeout: 3s (como na spec T-062).
+ */
+async function fetchRanking(page: number = 1): Promise<RankingResponse | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const url = new URL(`${djangoBaseUrl()}/api/v1/ranking`);
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("page_size", "10");
+
+    const res = await fetch(url.toString(), {
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    if (!res.ok) return null;
+    return (await res.json()) as RankingResponse;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      console.warn("[lobby] timeout ao carregar ranking (3s)");
+    } else {
+      console.warn("[lobby] não foi possível carregar ranking:", e);
+    }
     return null;
   }
 }
@@ -299,6 +391,80 @@ function injectLobbyStyles(): void {
     #lobby-play-btn:disabled { background: #333; color: #888; cursor: default; }
     #lobby-connecting { font-size: 11px; color: #aaa; font-family: monospace; min-width: 90px; }
 
+    /* T-062: Aba de Ranking */
+    #lobby-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 0 20px;
+    }
+    .lobby-tab {
+      flex: 1; max-width: 150px; padding: 10px 14px;
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: #888; font-size: 11px; font-family: monospace; font-weight: 600;
+      letter-spacing: 1px; cursor: pointer; text-transform: uppercase;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .lobby-tab:hover { color: #aaa; }
+    .lobby-tab.active { border-color: #ffd54f; color: #ffd54f; }
+
+    #lobby-tab-main { flex: 0; }
+    #lobby-tab-ranking { flex: 0; }
+
+    #lobby-panels {
+      position: relative; display: block;
+    }
+    .lobby-panel {
+      display: none;
+    }
+    .lobby-panel.active {
+      display: block;
+    }
+    #lobby-ranking-panel {
+      padding: 16px 20px;
+      max-height: 500px; overflow-y: auto;
+    }
+
+    .lobby-stats-box {
+      background: rgba(255,213,79,0.08); border: 1px solid rgba(255,213,79,0.3);
+      border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+      font-family: monospace; font-size: 12px; color: #ffd54f;
+    }
+    .lobby-stats-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 4px 0;
+    }
+    .lobby-stats-row > span:first-child { color: #999; }
+    .lobby-stats-row > span:last-child { font-weight: 700; }
+
+    .lobby-ranking-table {
+      width: 100%; border-collapse: collapse;
+      font-family: monospace; font-size: 11px; color: #ccc;
+    }
+    .lobby-ranking-table thead {
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .lobby-ranking-table th {
+      text-align: left; padding: 8px 6px; color: #888; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;
+    }
+    .lobby-ranking-table td {
+      padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .lobby-ranking-table tbody tr:hover {
+      background: rgba(255,213,79,0.04);
+    }
+    .lobby-ranking-table .rank { color: #ffd54f; font-weight: 700; min-width: 24px; }
+    .lobby-ranking-table .name { min-width: 100px; }
+    .lobby-ranking-table .stat { text-align: right; }
+
+    .lobby-ranking-empty {
+      text-align: center; padding: 40px 20px;
+      color: #666; font-family: monospace; font-size: 12px;
+    }
+    .lobby-ranking-loading {
+      text-align: center; padding: 20px;
+      color: #888; font-family: monospace; font-size: 11px;
+    }
+
     @media (max-width: 599px) {
       #lobby-body { flex-direction: column; }
       #lobby-left { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 14px 14px; }
@@ -306,6 +472,7 @@ function injectLobbyStyles(): void {
       #lobby-preview-wrap { max-height: 150px; }
       #lobby-play-btn { max-width: 100%; }
       #lobby-header h1 { font-size: 12px; letter-spacing: 1.5px; }
+      #lobby-ranking-panel { max-height: 300px; }
     }
   `;
   document.head.appendChild(style);
@@ -501,10 +668,19 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
     `;
     card.appendChild(header);
 
-    // ── Corpo ──
+    // ── Painéis (tabs) ──
+    const panels = document.createElement("div");
+    panels.id = "lobby-panels";
+
+    // Panel principal (classe, preview, settings)
+    const mainPanel = document.createElement("div");
+    mainPanel.className = "lobby-panel active";
+    mainPanel.id = "lobby-panel-main";
+
+    // ── Corpo do panel principal ──
     const body = document.createElement("div");
     body.id = "lobby-body";
-    card.appendChild(body);
+    mainPanel.appendChild(body);
 
     // ─── Coluna esquerda: identidade + settings ───
     const left = document.createElement("div");
@@ -579,6 +755,15 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
     const right = document.createElement("div");
     right.id = "lobby-right";
 
+    // T-062: tabs para Main/Ranking
+    const tabs = document.createElement("div");
+    tabs.id = "lobby-tabs";
+    tabs.innerHTML = `
+      <button type="button" class="lobby-tab active" id="lobby-tab-main">Principal</button>
+      <button type="button" class="lobby-tab" id="lobby-tab-ranking">Ranking</button>
+    `;
+    card.insertBefore(tabs, body);
+
     // Classe
     const classNames = Object.keys(CLASS_REGISTRY);
     const classCardsHtml = classNames
@@ -622,6 +807,16 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
 
     body.appendChild(right);
 
+    // Panel de Ranking (T-062)
+    const rankingPanel = document.createElement("div");
+    rankingPanel.className = "lobby-panel";
+    rankingPanel.id = "lobby-panel-ranking";
+    rankingPanel.innerHTML = '<div class="lobby-ranking-loading">Carregando ranking...</div>';
+
+    panels.appendChild(mainPanel);
+    panels.appendChild(rankingPanel);
+    card.insertBefore(panels, card.lastElementChild);
+
     // ── Footer: botão Jogar ──
     const footer = document.createElement("div");
     footer.id = "lobby-footer";
@@ -648,12 +843,129 @@ export function showLobby(opts: LobbyOptions): Promise<LobbySelection> {
     const connectingEl = document.getElementById("lobby-connecting")!;
     const logoutBtn = document.getElementById("lobby-logout-btn") as HTMLButtonElement | null;
 
+    // T-062: Ranking tab
+    const tabMain = document.getElementById("lobby-tab-main") as HTMLButtonElement;
+    const tabRanking = document.getElementById("lobby-tab-ranking") as HTMLButtonElement;
+    const panelMain = document.getElementById("lobby-panel-main") as HTMLDivElement;
+    const panelRanking = document.getElementById("lobby-panel-ranking") as HTMLDivElement;
+
+    // ── T-062: Renderização do painel de Ranking ──
+    async function loadAndRenderRanking(): Promise<void> {
+      panelRanking.innerHTML = '<div class="lobby-ranking-loading">Carregando ranking...</div>';
+
+      const [stats, ranking] = await Promise.all([
+        fetchPlayerStats(),
+        fetchRanking(1),
+      ]);
+
+      if (!stats && !ranking) {
+        // Ambos falharam: mostrar estado vazio
+        panelRanking.innerHTML = `
+          <div class="lobby-ranking-empty">
+            Ranking indisponível.<br/>
+            <span style="font-size: 10px; color: #555;">(backend offline?)</span>
+          </div>
+        `;
+        return;
+      }
+
+      let html = "";
+
+      // Seção de stats pessoais (se logado e disponível)
+      if (stats) {
+        const kda = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(2) : stats.kills.toFixed(2);
+        html += `
+          <div class="lobby-stats-box">
+            <div class="lobby-stats-row">
+              <span>Kills</span>
+              <span>${stats.kills}</span>
+            </div>
+            <div class="lobby-stats-row">
+              <span>Deaths</span>
+              <span>${stats.deaths}</span>
+            </div>
+            <div class="lobby-stats-row">
+              <span>K/D</span>
+              <span>${kda}</span>
+            </div>
+            <div class="lobby-stats-row">
+              <span>Partidas</span>
+              <span>${stats.matches_played}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      // Tabela de ranking
+      if (ranking && ranking.results.length > 0) {
+        html += `
+          <table class="lobby-ranking-table">
+            <thead>
+              <tr>
+                <th style="width: 32px;">Pos</th>
+                <th>Nome</th>
+                <th class="stat" style="width: 48px;">Kills</th>
+                <th class="stat" style="width: 48px;">Deaths</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        ranking.results.forEach((entry, idx) => {
+          const pos = idx + 1;
+          html += `
+            <tr>
+              <td class="rank">#${pos}</td>
+              <td class="name">${entry.display_name.substring(0, 20)}</td>
+              <td class="stat">${entry.kills}</td>
+              <td class="stat">${entry.deaths}</td>
+            </tr>
+          `;
+        });
+
+        html += `
+            </tbody>
+          </table>
+        `;
+      } else if (ranking) {
+        html += '<div class="lobby-ranking-empty">Nenhuma entrada no ranking.</div>';
+      }
+
+      panelRanking.innerHTML = html;
+    }
+
     // ── Preview 3D ──
     const previewCanvas = document.getElementById("lobby-preview-canvas") as HTMLCanvasElement;
     const preview = createPreviewRenderer(previewCanvas);
     preview.setClass(classId, skinId);
 
     // ── Eventos ──
+
+    // T-062: Tab switching
+    function switchTab(activeTab: string): void {
+      const tabs = overlay.querySelectorAll<HTMLButtonElement>(".lobby-tab");
+      const panels = overlay.querySelectorAll<HTMLDivElement>(".lobby-panel");
+
+      tabs.forEach((t) => {
+        const isActive = (t.id === "lobby-tab-main" && activeTab === "main") ||
+                         (t.id === "lobby-tab-ranking" && activeTab === "ranking");
+        t.classList.toggle("active", isActive);
+      });
+
+      panels.forEach((p) => {
+        const isActive = (p.id === "lobby-panel-main" && activeTab === "main") ||
+                         (p.id === "lobby-panel-ranking" && activeTab === "ranking");
+        p.classList.toggle("active", isActive);
+      });
+
+      // Carrega ranking ao abrir a aba (lazy-load)
+      if (activeTab === "ranking") {
+        loadAndRenderRanking();
+      }
+    }
+
+    tabMain.addEventListener("click", () => switchTab("main"));
+    tabRanking.addEventListener("click", () => switchTab("ranking"));
 
     // Logout da conta
     logoutBtn?.addEventListener("click", () => {
