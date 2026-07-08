@@ -1,5 +1,29 @@
 # Devlog
 
+## 2026-07-08 — Sessão 53 (agente worker): PROMPT-0070 — T-069: espera de respawn como arquibancada (SPEC-0016)
+
+- **Task:** T-069 (`docs/BACKLOG.md`) — matar a "tela morta" de quem espera o Battle Royane
+  relâmpago (T-066 server + T-067 UI de fases) acabar. Execução automatizada via skill
+  `attackonplayer-executor`, escopo restrito à task.
+- **Entregue:** `packages/client/src/main.ts` ganhou overlay "arquibancada" sob demanda
+  (`getRespawnWaitEls`/`updateRespawnWait`, mesmo padrão DOM do T-068) com barra de progresso
+  recalculada a cada frame a partir de `event.phaseEndsAt` e um `holdStartedAt` local (sem
+  timer próprio); `followCamera()` mira `zoneX/zoneZ` numa altura elevada
+  (`CAMERA_HOLD_Y=30`) quando o PRÓPRIO player tem `waitingRespawn=true`, reaproveitando o
+  mesmo lerp exponencial (0.06/frame, converge em ~1s, sem corte); `syncWorld()` esconde
+  mesh+nameplate (`vis.visible=false`) de QUALQUER player segurado (próprio, outros, bots) e
+  pula o resto do frame pra ele. A materialização ao liberar (scale-in, fade de tela, som)
+  já disparava sozinha via o mecanismo existente de `spawnProtectedUntil` (T-045) — zero
+  duplicação, como a task pedia.
+- **Gates:** `tsc` ×3 limpo; `vite build` OK; shared 49/49, server 129/129, bots 35/35 (nenhum
+  editado — task client-only); smoke `bots -- 3 15` sem erro no tick. **Preview de browser
+  tentado desta vez** (diferente do T-068): servidor+cliente subidos via `preview_start`,
+  evento disparado de verdade via `dev_event battle_royale` (script `colyseus.js` standalone),
+  servidor confirmou um bot preso aguardando — mas o cliente no preview nunca saiu do estado
+  inicial (HUD parado, `preview_screenshot` sempre expirando), indicando que o loop de
+  render não chega a rodar nesse ambiente. Critérios visuais ficam pendentes de confirmação
+  manual, mesma pendência do T-067/T-068. Detalhes em `docs/prompts/PROMPT-0070.md`.
+
 ## 2026-07-08 — Sessão 52 (agente worker): PROMPT-0069 — T-068: visual da zona de evento (SPEC-0016)
 
 - **Task:** T-068 (`docs/BACKLOG.md`) — representação espacial da zona do Battle Royale

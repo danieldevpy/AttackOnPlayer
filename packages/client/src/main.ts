@@ -450,6 +450,53 @@ function updateZoneVisual(now: number) {
   }
 }
 
+// SPEC-0016 (T-069): overlay de "arquibancada" — o PRÓPRIO player com `waitingRespawn=true`
+// vê isto em vez de tela morta. Mesmo padrão DOM do T-068 (criado sob demanda, reaproveitado).
+let respawnWaitEl: HTMLDivElement | null = null;
+let respawnWaitBarEl: HTMLDivElement | null = null;
+function getRespawnWaitEls(): { box: HTMLDivElement; bar: HTMLDivElement } {
+  if (!respawnWaitEl) {
+    respawnWaitEl = document.createElement("div");
+    respawnWaitEl.style.cssText =
+      "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:24;text-align:center;" +
+      "pointer-events:none;opacity:0;transition:opacity .3s ease;" +
+      "background:rgba(10,12,18,.85);border:1px solid #ffd54f66;border-radius:12px;" +
+      'padding:14px 28px;font-family:"Segoe UI",system-ui,sans-serif;';
+    respawnWaitEl.innerHTML =
+      '<div style="font-weight:800;font-size:16px;color:#ffe082;text-shadow:0 0 8px rgba(0,0,0,.6);">' +
+      "☠ Você caiu! Renascendo quando o evento acabar</div>" +
+      '<div style="margin-top:8px;width:220px;height:8px;border-radius:4px;background:#0006;overflow:hidden;">' +
+      '<div data-role="bar" style="height:100%;width:0%;background:#ffd54f;"></div></div>';
+    document.body.appendChild(respawnWaitEl);
+    respawnWaitBarEl = respawnWaitEl.querySelector('[data-role="bar"]') as HTMLDivElement;
+  }
+  return { box: respawnWaitEl, bar: respawnWaitBarEl! };
+}
+
+// `holdStartedAt` (epoch ms, mesma base de `event.phaseEndsAt`) marca o instante em que ESTE
+// cliente observou `waitingRespawn` virar true — referência fixa pra recalcular a barra a cada
+// frame sem timer próprio (reconexão/early-end nunca dessincroniza, spec: "nunca trava").
+let waitingRespawnActive = false;
+let respawnHoldStartedAt = 0;
+function updateRespawnWait(_now: number) {
+  const st: any = room?.state;
+  const me = st?.players?.get?.(mySessionId);
+  const waiting = me?.waitingRespawn === true;
+
+  if (waiting !== waitingRespawnActive) {
+    waitingRespawnActive = waiting;
+    if (waiting) respawnHoldStartedAt = Date.now();
+    getRespawnWaitEls().box.style.opacity = waiting ? "1" : "0";
+  }
+  if (!waiting) return;
+
+  const { bar } = getRespawnWaitEls();
+  const endsAt: number = st?.event?.phaseEndsAt ?? Date.now();
+  const totalMs = Math.max(1, endsAt - respawnHoldStartedAt);
+  const frac = Math.min(1, Math.max(0, (Date.now() - respawnHoldStartedAt) / totalMs));
+  bar.style.width = `${(frac * 100).toFixed(1)}%`;
+}
+
 // ---------- Rede ----------
 // `?port=NNNN` só pra testar contra um servidor local em porta alternativa (ex.: quando a
 // porta padrão já está ocupada por outra sessão de dev) — nunca usado fora de localhost.
@@ -939,6 +986,14 @@ function syncWorld() {
       scene.add(vis);
       playerVisuals.set(id, vis);
     }
+
+    // SPEC-0016 (T-069): segurado (waitingRespawn) some inteiro (mesh + nameplate, que é
+    // filho do group — visible=false já cobre os dois) até o evento liberar o respawn.
+    // Sem isso, a queda cosmética da T-045 reseta o scale sozinha após ~600ms e vira um
+    // boneco parado no local da morte (bots idem — mesmo estado sincronizado).
+    vis.visible = !p.waitingRespawn;
+    if (p.waitingRespawn) return;
+
     vis.position.x += (p.x - vis.position.x) * 0.25;
     vis.position.z += (p.z - vis.position.z) * 0.25;
     // dir do servidor segue a convenção atan2(z,x); rotation.y = -dir alinha o
@@ -1172,24 +1227,42 @@ function syncWorld() {
 
 // câmera segue o jogador suavemente
 const CAMERA_AIM_OFFSET = 2.5; // ADR-015: leve deslocamento do alvo na direção da mira, sem girar a câmera
+// SPEC-0016 (T-069): vista elevada do centro da zona enquanto o PRÓPRIO player está segurado
+// (`waitingRespawn`) — mesmo lerp exponencial (fator 0.06 já converge em ~1s, sem tween novo),
+// então a troca de alvo (jogador ⇄ zona) nunca corta a câmera (spec: "sem corte seco").
+const CAMERA_HOLD_Y = 30;
 function followCamera() {
   const me = playerVisuals.get(mySessionId);
   if (!me) return;
-  let offsetX = 0;
-  let offsetZ = 0;
-  const { aimX, aimZ } = lastIntent;
-  if (typeof aimX === "number" && typeof aimZ === "number") {
-    const len = Math.hypot(aimX, aimZ);
-    if (len > 1e-3) {
-      offsetX = (aimX / len) * CAMERA_AIM_OFFSET;
-      offsetZ = (aimZ / len) * CAMERA_AIM_OFFSET;
+  const myState: any = room?.state?.players?.get?.(mySessionId);
+  const waitingRespawn = myState?.waitingRespawn === true;
+
+  let tx: number;
+  let tz: number;
+  let ty: number;
+  if (waitingRespawn) {
+    const ev: any = room?.state?.event;
+    tx = ev?.zoneX ?? me.position.x;
+    tz = ev?.zoneZ ?? me.position.z;
+    ty = CAMERA_HOLD_Y;
+  } else {
+    let offsetX = 0;
+    let offsetZ = 0;
+    const { aimX, aimZ } = lastIntent;
+    if (typeof aimX === "number" && typeof aimZ === "number") {
+      const len = Math.hypot(aimX, aimZ);
+      if (len > 1e-3) {
+        offsetX = (aimX / len) * CAMERA_AIM_OFFSET;
+        offsetZ = (aimZ / len) * CAMERA_AIM_OFFSET;
+      }
     }
+    tx = me.position.x + offsetX;
+    tz = me.position.z + offsetZ + 8;
+    ty = 15;
   }
-  const tx = me.position.x + offsetX;
-  const tz = me.position.z + offsetZ;
   camera.position.x += (tx - camera.position.x) * 0.06;
-  camera.position.z += (tz + 8 - camera.position.z) * 0.06;
-  camera.position.y += (15 - camera.position.y) * 0.06;
+  camera.position.z += (tz - camera.position.z) * 0.06;
+  camera.position.y += (ty - camera.position.y) * 0.06;
   camera.lookAt(camera.position.x, 0, camera.position.z - 8);
 }
 
@@ -1223,6 +1296,7 @@ function animate() {
   updateHud(performance.now());
   updateEvents(performance.now()); // SPEC-0016 (T-067)
   updateZoneVisual(performance.now()); // SPEC-0016 (T-068)
+  updateRespawnWait(performance.now()); // SPEC-0016 (T-069)
   // Atualiza painel de debug a ~10fps para não sobrecarregar DOM
   if (debugOpen && ++debugTick % 2 === 0) updateDebugState();
   renderer.render(scene, camera);
