@@ -19,6 +19,14 @@ env = environ.Env(
     JWT_TTL_SECONDS=(int, 86400),
 )
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://45.231.133.116",
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://45.231.133.116",
+]
+
 # .env local (dev). Em prod, as envs vêm do ambiente (gunicorn/compose) e este arquivo não existe.
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -54,9 +62,12 @@ INSTALLED_APPS = [
     "telemetry",
 ]
 
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
