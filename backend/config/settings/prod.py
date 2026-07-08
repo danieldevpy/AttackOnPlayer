@@ -14,3 +14,6 @@ CSRF_COOKIE_SECURE = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
+
+# WhiteNoise em produção: desabilita scan do disco a cada request (já tem manifest de build).
+WHITENOISE_AUTOREFRESH = False

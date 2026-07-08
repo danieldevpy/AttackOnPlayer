@@ -135,6 +135,9 @@ done
 log "Aplicando migrations do backend..."
 (cd "$BACKEND_DIR" && DJANGO_SETTINGS_MODULE=config.settings.prod "$BACKEND_DIR/.venv/bin/python" manage.py migrate --noinput)
 
+log "Coletando arquivos estáticos (WhiteNoise)..."
+(cd "$BACKEND_DIR" && DJANGO_SETTINGS_MODULE=config.settings.prod "$BACKEND_DIR/.venv/bin/python" manage.py collectstatic --noinput)
+
 log "Importando mapas para o registry (import_maps)..."
 (cd "$BACKEND_DIR" && DJANGO_SETTINGS_MODULE=config.settings.prod "$BACKEND_DIR/.venv/bin/python" manage.py import_maps) \
   || warn "import_maps falhou — confira maps/*.map.json na raiz do repo."
