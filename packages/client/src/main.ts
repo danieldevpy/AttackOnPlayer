@@ -27,6 +27,8 @@ import type { Intent } from "./input/types";
 import { initImmersion, setUnloadGuard } from "./immersion";
 import { getAuthToken, ensureGuestRegistered } from "./auth";
 import { showLobby } from "./lobby";
+import { profiler } from "./profiler";
+import { setupRendererStats } from "./renderer-stats";
 
 // T-048 (SPEC-0012): blindagem contra ações do navegador (menu de contexto, zoom, seleção
 // de texto, etc.) — sempre ativa, independente de perfil de controle ou conexão.
@@ -63,6 +65,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
+setupRendererStats(renderer);
 function resizeRenderer() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -1286,25 +1289,67 @@ initEvents({ getRoom: () => room });
 // ---------- Loop ----------
 let t = 0;
 let debugTick = 0;
+let frameNumber = 0;
 function animate() {
   requestAnimationFrame(animate);
+  profiler.start(frameNumber++);
+
   t += 0.05;
+  profiler.mark("syncWorld");
   syncWorld();
+  profiler.mark("syncWorld");
+
+  profiler.mark("followCamera");
   followCamera();
+  profiler.mark("followCamera");
+
+  profiler.mark("audio");
   audio.setListenerPosition(camera.position.x, camera.position.z); // T-051: câmera nunca gira, pan = X do mundo
+  profiler.mark("audio");
+
+  profiler.mark("collectibles");
   collectibleMeshes.forEach((mesh) => {
     mesh.position.y = 0.4 + Math.sin(t) * 0.08;
     mesh.rotation.y += 0.02;
   });
+  profiler.mark("collectibles");
+
+  profiler.mark("updateDamagePopups");
   updateDamagePopups(performance.now()); // T-018
+  profiler.mark("updateDamagePopups");
+
+  profiler.mark("vfx");
   vfx.update(performance.now()); // T-022
+  profiler.mark("vfx");
+
+  profiler.mark("updateHud");
   updateHud(performance.now());
+  profiler.mark("updateHud");
+
+  profiler.mark("updateEvents");
   updateEvents(performance.now()); // SPEC-0016 (T-067)
+  profiler.mark("updateEvents");
+
+  profiler.mark("updateZoneVisual");
   updateZoneVisual(performance.now()); // SPEC-0016 (T-068)
+  profiler.mark("updateZoneVisual");
+
+  profiler.mark("updateRespawnWait");
   updateRespawnWait(performance.now()); // SPEC-0016 (T-069)
+  profiler.mark("updateRespawnWait");
+
   // Atualiza painel de debug a ~10fps para não sobrecarregar DOM
-  if (debugOpen && ++debugTick % 2 === 0) updateDebugState();
+  if (debugOpen && ++debugTick % 2 === 0) {
+    profiler.mark("updateDebugState");
+    updateDebugState();
+    profiler.mark("updateDebugState");
+  }
+
+  profiler.mark("render");
   renderer.render(scene, camera);
+  profiler.mark("render");
+
+  profiler.end();
 }
 animate();
 
