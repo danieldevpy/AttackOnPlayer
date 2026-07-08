@@ -149,8 +149,11 @@ function buildHead(p: Palette): THREE.BufferGeometry {
   const parts: SubPart[] = [
     // cabeça facetada: testa maior no topo, queixo afunilado embaixo
     { g: hex(0.15, 0.1, 0.24), c: p.skin, m: xf(0, 0.12, 0) },
-    // capuz pontudo cobrindo topo/nuca (cone 6 lados, levemente pra trás)
-    { g: new THREE.ConeGeometry(0.21, 0.36, 6), c: p.leather, m: xf(-0.03, 0.22, 0, 0, Math.PI / 6, -0.12) },
+    // capuz: touca justa cobrindo testa/topo/nuca (hex frustum, um pouco mais larga que o
+    // crânio pra "vestir por cima") + ponta pequena inclinada pra trás — em vez de um cone
+    // único gigante, que virava um "chapéu de bruxa" cobrindo tronco inteiro.
+    { g: hex(0.16, 0.135, 0.15), c: p.leather, m: xf(-0.015, 0.195, 0, 0, Math.PI / 6, 0) },
+    { g: new THREE.ConeGeometry(0.1, 0.16, 6), c: p.leather, m: xf(-0.04, 0.33, 0, 0, Math.PI / 6, 0.22) },
     // cabelo aparecendo sob o capuz
     { g: box4(0.12, 0.14, 0.08), c: p.hair, m: xf(-0.06, 0.06, 0, 0, Math.PI / 4, 0) },
     // barba no queixo (afunila pra baixo)
@@ -191,23 +194,26 @@ function buildShin(p: Palette): THREE.BufferGeometry {
   ]);
 }
 
+// Curva do arco no frame LOCAL DA MÃO: a barriga (grip, maior x) fica em x=0 — a própria
+// origem do pivô "bow" (ver createCharacterVisual) — pra mão realmente segurar o arco no
+// lugar certo, em vez do grip flutuar ~0.16 unidades longe da mão (bug da V2 original).
+// Pontas mais compridas (±0.30 em vez de ±0.24) pra um arco de leitura mais alta/presente.
 function buildBow(p: Palette): THREE.BufferGeometry {
-  // arco curvo via CatmullRomCurve3 + TubeGeometry (substitui o TorusGeometry da V1).
   const curve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0, -0.24, 0),
-    new THREE.Vector3(0.13, -0.12, 0),
-    new THREE.Vector3(0.16, 0, 0),
-    new THREE.Vector3(0.13, 0.12, 0),
-    new THREE.Vector3(0, 0.24, 0),
+    new THREE.Vector3(-0.19, -0.3, 0),
+    new THREE.Vector3(-0.036, -0.15, 0),
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(-0.036, 0.15, 0),
+    new THREE.Vector3(-0.19, 0.3, 0),
   ]);
-  const tube = new THREE.TubeGeometry(curve, 14, 0.016, 4, false);
+  const tube = new THREE.TubeGeometry(curve, 14, 0.017, 4, false);
   return mergeColored([
     { g: tube, c: p.wood },
-    // grip escuro no centro (onde a mão do arqueiro segura) — reforça a leitura de "arco", não graveto
-    { g: box4(0.03, 0.03, 0.1), c: p.leatherDk, m: xf(0.16, 0, 0, 0, Math.PI / 4, 0) },
+    // grip escuro na barriga do arco (x=0 = onde a mão fecha) — reforça a leitura de "arco", não graveto
+    { g: box4(0.032, 0.032, 0.11), c: p.leatherDk, m: xf(0, 0, 0, 0, Math.PI / 4, 0) },
     // encoches nas pontas (onde a corda prende)
-    { g: new THREE.ConeGeometry(0.024, 0.045, 4), c: p.leatherDk, m: xf(0.02, 0.25, 0, 0, 0, Math.PI * 0.92) },
-    { g: new THREE.ConeGeometry(0.024, 0.045, 4), c: p.leatherDk, m: xf(0.02, -0.25, 0, 0, 0, -Math.PI * 0.08) },
+    { g: new THREE.ConeGeometry(0.024, 0.045, 4), c: p.leatherDk, m: xf(-0.17, 0.31, 0, 0, 0, Math.PI * 0.92) },
+    { g: new THREE.ConeGeometry(0.024, 0.045, 4), c: p.leatherDk, m: xf(-0.17, -0.31, 0, 0, 0, -Math.PI * 0.08) },
   ]);
 }
 
@@ -227,9 +233,9 @@ function buildArrow(p: Palette): THREE.BufferGeometry {
 // (tensão real da corda), o que uma geometria singleton compartilhada não permitiria.
 function buildStringGeo(): THREE.BufferGeometry {
   return new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(0, 0.24, 0),
-    new THREE.Vector3(-0.03, 0, 0),
-    new THREE.Vector3(0, -0.24, 0),
+    new THREE.Vector3(-0.19, 0.3, 0),
+    new THREE.Vector3(-0.22, 0, 0),
+    new THREE.Vector3(-0.19, -0.3, 0),
   ]);
 }
 
@@ -514,7 +520,7 @@ export function updateCharacterAnimation(playerGroup: THREE.Group, t: number, mo
   // ficar sempre com a mesma corda "esticada" parada — geometria é por instância (ver
   // buildStringGeo) só pra isso ser possível sem afetar os outros players.
   const stringPos = r.string.geometry.attributes.position as THREE.BufferAttribute;
-  const stringMidX = -0.03 + r.arrow.position.x;
+  const stringMidX = -0.22 + r.arrow.position.x;
   if (stringPos.getX(1) !== stringMidX) {
     stringPos.setX(1, stringMidX);
     stringPos.needsUpdate = true;
