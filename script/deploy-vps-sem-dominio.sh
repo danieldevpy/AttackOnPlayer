@@ -209,8 +209,9 @@ log "Importando mapas para o registry (import_maps)..."
   || warn "import_maps falhou — confira maps/*.map.json na raiz do repo."
 
 # ---------- 6. Build do client com o IP fixo no bundle ----------
-log "Build do client (VITE_SERVER_URL=ws://$PUBLIC_IP:$BACK_PORT)..."
-VITE_SERVER_URL="ws://$PUBLIC_IP:$BACK_PORT" npm run build -w @aop/client
+log "Build do client (VITE_SERVER_URL=ws://$PUBLIC_IP:$BACK_PORT, VITE_DJANGO_URL=http://$PUBLIC_IP:$DJANGO_PORT)..."
+VITE_SERVER_URL="ws://$PUBLIC_IP:$BACK_PORT" VITE_DJANGO_URL="http://$PUBLIC_IP:$DJANGO_PORT" \
+  npm run build -w @aop/client
 
 # ---------- 7. Subir/atualizar processos via pm2 ----------
 log "Subindo backend Django (aop-backend) na porta $DJANGO_PORT..."

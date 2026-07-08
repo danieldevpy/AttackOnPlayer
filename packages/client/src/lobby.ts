@@ -27,7 +27,7 @@ import { CLASS_REGISTRY, DEFAULT_CLASS_ID } from "@aop/shared";
 import { createCharacterVisual, updateCharacterAnimation } from "./characters";
 import type { AudioSystem } from "./audio";
 import type { ProfileId } from "./input/manager";
-import { getAuthToken, getAccount, clearSession, updateAccountDisplayName, login, register } from "./auth";
+import { getAuthToken, getAccount, clearSession, updateAccountDisplayName, login, register, djangoBaseUrl } from "./auth";
 
 // ─────────────────────────────────────────────────────────
 // Tipos e constantes de persistência local
@@ -97,14 +97,6 @@ interface RankingResponse {
   next: string | null;
   previous: string | null;
   results: RankingEntry[];
-}
-
-function djangoBaseUrl(): string {
-  const override = new URLSearchParams(location.search).get("authPort");
-  if (location.hostname === "localhost" || location.hostname.startsWith("192.")) {
-    return `http://${location.hostname}:${override ?? 8000}`;
-  }
-  return `${location.protocol}//${location.host}`;
 }
 
 /**

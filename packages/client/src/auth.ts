@@ -17,7 +17,15 @@ export interface Account {
   display_name: string;
 }
 
-function authBaseUrl(): string {
+// `VITE_DJANGO_URL` (build-time): deploy em VPS por IP público sem domínio/TLS — o backend
+// Django roda numa porta própria (DJANGO_PORT), diferente da porta do client estático, então
+// a heurística abaixo (que assume same-origin atrás de proxy) erraria o alvo. Espelha
+// `VITE_SERVER_URL` do game server (ver `main.ts`). Não usado no fluxo com domínio+TLS
+// (M5/SPEC-0009), que não seta essa env — ali same-origin é o comportamento certo.
+const configuredDjangoUrl = import.meta.env.VITE_DJANGO_URL as string | undefined;
+
+export function djangoBaseUrl(): string {
+  if (configuredDjangoUrl) return configuredDjangoUrl;
   const override = new URLSearchParams(location.search).get("authPort");
   if (location.hostname === "localhost" || location.hostname.startsWith("192.")) {
     return `http://${location.hostname}:${override ?? 8000}`;
@@ -37,7 +45,7 @@ function extractErrorMessage(data: unknown): string {
 }
 
 async function apiPost(path: string, body: unknown, token?: string): Promise<any> {
-  const res = await fetch(`${authBaseUrl()}${path}`, {
+  const res = await fetch(`${djangoBaseUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
