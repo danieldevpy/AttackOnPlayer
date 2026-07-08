@@ -6,32 +6,33 @@
 **Atualizado em:** 2026-07-08
 **Branch:** `main`. **Marco:** V1.x (SPEC-0016 — Eventos e modos de jogo).
 
-**Sessão 51 (agente worker): PROMPT-0068 — T-067: Cliente — UI genérica de fases de evento**
-Executada a T-067 (`docs/BACKLOG.md`), pedido explícito do CD: **sem preview de browser**.
-`packages/client/src/events.ts` (novo): camada de UI 100% event-agnostic, dirigida por
-`state.event` (schema da T-065) — banner de **warning** (nome via `EVENT_LABELS[id]` +
-countdown grande derivado de `phaseEndsAt - Date.now()` a cada frame, nunca timer próprio),
-HUD compacto de **active** (tempo restante + contagem de vivos `hp>0 && !waitingRespawn`),
-destaque de **ending** (broadcast `event_result {survivorNames, reason}` que a T-066 emite —
-tolera ausência, mostra "Evento encerrado"), **idle** com early-return antes de tocar DOM
-(zero custo/zero elemento novo enquanto nenhum evento nunca disparou). `index.html` ganhou 3
-containers + CSS (fade/translate ≤300ms, ajuste `mobile-layout` da T-064). `main.ts`:
-`initEvents`/`updateEvents` no loop, `room.onMessage("event_result", ...)` novo. Gates: `tsc`
-×3 limpo, `vite build` OK, shared 49/49 + server 129/129 + bots 35/35 (nenhum editado — task
-é client-only), smoke `bots -- 4 20` contra o dev server já rodando (0 erros). Decisões em
-`docs/prompts/PROMPT-0068.md`.
+**Sessão 52 (agente worker): PROMPT-0069 — T-068: Cliente: visual da zona (anel + chão de fora)**
+Executada a T-068 (`docs/BACKLOG.md`), depende de T-066+T-067 (ambas concluídas). Entregue em
+`packages/client/src/visuals.ts` (`createZoneRingMesh`, `createZoneDarkMesh`,
+`buildZoneDarkGeometry` — furo circular via `THREE.Shape`+`Path.absarc`+`ShapeGeometry`,
+vértices remapeados Y→Z ao invés de rotacionar o mesh, `DoubleSide`) e
+`packages/client/src/main.ts` (`updateZoneVisual(now)` no loop, chamado após `updateEvents`):
+anel segue `zoneX/zoneZ/zoneRadius` por posição+scale (sem realocar geometria), chão
+escurecido regenera só quando o raio muda >0.5 tile, vinheta vermelha DOM liga com o próprio
+player fora do raio durante `active` (reuso do padrão de overlay da T-045), seta DOM aponta
+pro centro quando o player está fora e longe (`dist > raio×1.5`), tudo desmonta com fade
+≤500ms saindo de `warning`/`active`. `events.ts` não precisou mudar. Gates: `tsc` ×3 limpo,
+`vite build` OK, shared 49/49 + server 129/129 + bots 35/35 (nenhum editado — client-only),
+smoke `bots -- 3 15` (0 erros no tick). Decisões em `docs/prompts/PROMPT-0069.md`.
 
-**Pendência desta sessão:** a verificação visual do critério de aceite (4 fases na ordem,
-countdown batendo ±250ms com o servidor, banner legível em mobile) **não foi feita** — pedido
-explícito de pular o preview. Recomendado rodar antes de prosseguir: servidor `DEBUG=1` +
-`room.send("dev_event", "battle_royale")`, observar banner→HUD→resultado→desmonte.
+**Pendência desta sessão:** verificação visual real (anel visível no warning, chão
+escurecendo gradual, anel encolhendo até sumir, vinheta ligando/desligando cruzando a borda,
+seta apontando certo) **não foi feita** — o ambiente deste agente é headless, sem
+display/browser. Recomendado antes de prosseguir: `DEBUG=1` + `dev_event battle_royale` com
+≥4 bots/players, observar via preview do Vite. Essa mesma pendência já existia da T-067
+(também nunca validada visualmente) — vale rodar as duas juntas.
 
-**Próximo passo:** validar visualmente a T-067 (pendência acima) e então **T-068 ∥ T-069 ∥
-T-070 ∥ T-071** (4 frentes disjuntas, já liberadas): visual da zona / espera de respawn como
-arquibancada / bots cientes do evento / painel Django `EventModeConfig`. T-068 e T-069 tocam
-nos mesmos arquivos de T-067 (`events.ts`, `main.ts`) — coordenar se rodarem em paralelo com
-outra sessão. T-072 (polish som/VFX) depois de T-068+T-069; T-073 (QA da spec inteira) por
-último. Ver `specs/SPEC-0016-eventos-e-modos-de-jogo.md`.
+**Próximo passo:** validar visualmente T-067+T-068 (pendências acima). T-069 (espera de
+respawn como arquibancada) e T-070 (bots cientes do evento) continuam liberadas — T-069 toca
+nos mesmos arquivos (`events.ts`, `main.ts`, `visuals.ts`), coordenar se rodar em paralelo com
+outra sessão. T-071 (painel Django) segue independente. T-072 (polish som/VFX) depende de
+T-068+T-069 (T-068 já feita aqui). T-073 (QA da spec inteira) por último. Ver
+`specs/SPEC-0016-eventos-e-modos-de-jogo.md`.
 
 **Nota:** bots headless ainda não reagem à zona (T-070 pendente) — seguem farmando fora dela
 durante o evento; isso é esperado até a T-070 rodar.

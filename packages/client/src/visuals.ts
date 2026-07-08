@@ -398,6 +398,74 @@ export function createCollectibleVisual(kind: string, weaponId?: string): THREE.
 }
 
 /**
+ * SPEC-0016 (T-068): representação espacial da zona de evento (Battle Royale relâmpago).
+ * Placeholder-first (§Notas da IA): anel fino (torus) que segue o raio por SCALE — nasce com
+ * raio 1 e escala pro raio real a cada frame, sem realocar geometria — e chão escurecido de
+ * fora com um furo circular (regenerado só quando o raio muda de verdade, ver
+ * `buildZoneDarkGeometry`). Orquestração (fade, posição, quando mostrar) fica em main.ts, que
+ * é quem sabe a fase do evento e o tamanho do mapa.
+ */
+const zoneRingGeo = new THREE.TorusGeometry(1, 0.06, 8, 48); // raio unitário — o raio real vem do scale
+export function createZoneRingMesh(): THREE.Mesh {
+  const mesh = new THREE.Mesh(
+    zoneRingGeo,
+    new THREE.MeshBasicMaterial({ color: 0xff5252, transparent: true, opacity: 0, side: THREE.DoubleSide })
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = 0.05; // spec: y≈0.05
+  mesh.visible = false;
+  return mesh;
+}
+
+export function createZoneDarkMesh(): THREE.Mesh {
+  const mesh = new THREE.Mesh(
+    new THREE.BufferGeometry(), // placeholder vazio — só ganha forma no 1º evento (buildZoneDarkGeometry)
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, side: THREE.DoubleSide })
+  );
+  mesh.position.y = 0.03; // acima do chão/zonas pintadas (0.015), abaixo do anel (0.05)
+  mesh.visible = false;
+  return mesh;
+}
+
+/**
+ * Constrói a geometria do chão escurecido de FORA da zona: retângulo do mapa inteiro
+ * (0,0)-(mapW,mapH) com um furo circular no centro/raio atual (`THREE.ShapeGeometry` com
+ * hole path, 1 draw call — spec §Notas da IA). Chamar só quando o raio mudar o suficiente
+ * (`ZONE_REDRAW_EPS` em main.ts), nunca todo frame.
+ *
+ * O Shape vive no plano XY local; em vez de rotacionar o mesh (fácil de errar o sinal),
+ * troca-se Y por Z direto nos vértices pra mapear pro chão (XZ). A normal resultante pode
+ * apontar pra baixo dependendo da winding — irrelevante aqui porque o material é
+ * `DoubleSide` e só existe pelo efeito visual/transparência, não por iluminação.
+ */
+export function buildZoneDarkGeometry(
+  mapW: number,
+  mapH: number,
+  cx: number,
+  cz: number,
+  radius: number
+): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.lineTo(mapW, 0);
+  shape.lineTo(mapW, mapH);
+  shape.lineTo(0, mapH);
+  shape.lineTo(0, 0);
+  const hole = new THREE.Path();
+  hole.absarc(cx, cz, Math.max(radius, 0.01), 0, Math.PI * 2, false);
+  shape.holes.push(hole);
+  const geo = new THREE.ShapeGeometry(shape, 32);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    pos.setY(i, 0);
+    pos.setZ(i, y);
+  }
+  pos.needsUpdate = true;
+  return geo;
+}
+
+/**
  * Props (T-002, fase F2 — só para cenário): cada tipo é 1+ "partes" de primitivas.
  * main.ts monta 1 InstancedMesh POR PARTE (não por prop), então N pedras/árvores
  * continuam custando poucos draw calls — a composição não fura o orçamento (< 200).

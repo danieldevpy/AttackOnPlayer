@@ -1,5 +1,32 @@
 # Devlog
 
+## 2026-07-08 — Sessão 52 (agente worker): PROMPT-0069 — T-068: visual da zona de evento (SPEC-0016)
+
+- **Task:** T-068 (`docs/BACKLOG.md`) — representação espacial da zona do Battle Royale
+  relâmpago (T-066 server + T-067 UI de fases, ambas concluídas): anel no chão + chão de fora
+  escurecido + vinheta + seta de direção. Execução automatizada via skill
+  `attackonplayer-executor`, escopo restrito à task.
+- **Entregue:** `packages/client/src/visuals.ts` ganhou `createZoneRingMesh`,
+  `createZoneDarkMesh` e `buildZoneDarkGeometry` (furo circular via `THREE.Shape`/`Path.absarc`
+  + `ShapeGeometry`, vértices remapeados Y→Z em vez de rotacionar o mesh, material
+  `DoubleSide`). `packages/client/src/main.ts` ganhou `updateZoneVisual(now)` no loop
+  `animate()` (logo após `updateEvents`): anel segue `zoneX/zoneZ/zoneRadius` por posição+scale
+  (zero realocação de geometria), chão escurecido regenera só quando o raio muda >0.5 tile
+  (`ZONE_REDRAW_EPS`), vinheta vermelha DOM liga só com o próprio player fora do raio durante
+  `active` (reuso do padrão `spawnFadeEl` da T-045), seta DOM aponta pro centro quando o
+  player está fora e longe (`dist > raio×1.5`) — ângulo derivado sem estado de câmera extra
+  explorando que a câmera nunca gira (ADR-015). Tudo desmonta em fade ≤500ms saindo de
+  `warning`/`active`. `events.ts` não precisou mudar (a zona lê `state.event` direto em
+  `main.ts`, que já tem `scene`/`mapDims`/`mySessionId`).
+- **Gates:** `tsc` ×3 limpo; `vite build` OK; shared 49/49, server 129/129, bots 35/35 (nenhum
+  editado — T-068 é client-only); smoke `bots -- 3 15` contra servidor de dev, 0 erros no tick
+  (evento não disparou na janela curta — esperado, `BR_MIN_PLAYERS=4` > 3 bots). Draw calls:
+  +2 por inspeção de código (dentro do orçamento `≤+3` da task; sem contador de runtime no F3
+  hoje). **Preview de browser não executado** — ambiente deste agente é headless, sem
+  display/browser disponível; critérios de aceite visuais (anel/chão/vinheta/seta observados
+  de verdade, encolhimento até sumir) ficam pendentes de confirmação manual. Detalhes em
+  `docs/prompts/PROMPT-0069.md`.
+
 ## 2026-07-08 — Sessão 51 (agente worker): PROMPT-0068 — T-067: UI genérica de fases de evento (SPEC-0016)
 
 - **Task:** T-067 (`docs/BACKLOG.md`) — camada de UI cliente pro Event Director (T-065) +

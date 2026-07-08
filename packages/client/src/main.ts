@@ -16,7 +16,7 @@ import {
   mapFileToGameMap,
   LAUNCHERS,
 } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate } from "./visuals";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate, createZoneRingMesh, createZoneDarkMesh, buildZoneDarkGeometry } from "./visuals";
 import { updateCharacterAnimation, triggerCharacterShoot, triggerCharacterHit, triggerCharacterDeath } from "./characters";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
 import { initEvents, updateEvents, onEventResult } from "./events";
@@ -82,12 +82,26 @@ scene.add(sun);
 const vfx = createVfxSystem();
 scene.add(vfx.points);
 
+// SPEC-0016 (T-068): visual espacial da zona de evento — meshes existem desde já (custo zero
+// enquanto invisíveis), só ganham forma/posição quando um evento espacial estiver em warning/active.
+const zoneRing = createZoneRingMesh();
+scene.add(zoneRing);
+const zoneDark = createZoneDarkMesh();
+scene.add(zoneDark);
+let zoneDarkLastRadius = -1; // força a 1ª geração de geometria no primeiro evento
+const ZONE_REDRAW_EPS = 0.5; // tiles — regenera o furo só numa mudança de raio perceptível (spec §Notas da IA)
+const ZONE_FADE_MS = 500; // spec: desmonta em idle/ending com fade ≤500ms (entrada usa a mesma duração)
+let zoneFadeStart = 0;
+let zoneFadeDir: 1 | -1 = 1; // 1 = entrando (warning/active), -1 = saindo (idle/ending)
+let zoneWasVisible = false;
+
 // T-049 (SPEC-0013): registry de sons nomeados — mesmo AudioContext pra todo o jogo,
 // destravado no primeiro gesto do usuário (regra de autoplay dos browsers).
 const audio = createAudioSystem();
 
 // ---------- Mundo (construído após receber mapW/mapH/mapSeed OU "map_data" do servidor) ----------
 let worldBuilt = false;
+let mapDims: { w: number; h: number } | undefined; // SPEC-0016 (T-068): bounds do mapa pro chão escurecido da zona
 // T-024 (SPEC-0007): mapa curado (mapId) não dá pra reconstruir por seed — o cliente recebe
 // o GameMap já pronto (via `map_data` + `mapFileToGameMap`). Mapa gerado (sem mapId) continua
 // reconstruindo localmente por `buildMap(w,h,seed)`, como sempre (ADR-007, zero tráfego extra).
@@ -195,6 +209,7 @@ function buildWorld(map: GameMap) {
 
   camera.position.set(w / 2, 15, h / 2 + 8);
   camera.lookAt(w / 2, 0, h / 2);
+  mapDims = { w, h };
   worldBuilt = true;
   console.log(`[client] mundo ${w}x${h} (seed ${seed}), ${map.props.length} props, ${map.zones.length} zonas`);
 }
@@ -324,6 +339,115 @@ function triggerSpawnFade() {
     el.style.transition = "opacity 0.2s linear";
     el.style.opacity = "0";
   }, 250); // 200ms fade-out + 50ms pausa = 250ms antes do fade-in
+}
+
+// SPEC-0016 (T-068): vinheta vermelha DOM quando o PRÓPRIO player está fora da zona durante
+// o `active` — reuso do padrão de overlay do fade de morte (T-045, acima): div fixo full-screen,
+// só opacidade muda por frame, nada realocado.
+let zoneVignetteEl: HTMLDivElement | null = null;
+function getZoneVignetteEl(): HTMLDivElement {
+  if (!zoneVignetteEl) {
+    zoneVignetteEl = document.createElement("div");
+    zoneVignetteEl.style.cssText =
+      "position:fixed;inset:0;pointer-events:none;z-index:15;opacity:0;transition:opacity .2s linear;" +
+      "background:radial-gradient(ellipse at center, transparent 55%, rgba(255,23,23,.45) 100%);";
+    document.body.appendChild(zoneVignetteEl);
+  }
+  return zoneVignetteEl;
+}
+
+// SPEC-0016 (T-068): seta DOM apontando pro centro da zona quando o player está fora E longe
+// (> raio × 1.5) durante warning/active — padrão barato (CSS border-triangle rotacionado).
+let zoneArrowEl: HTMLDivElement | null = null;
+function getZoneArrowEl(): HTMLDivElement {
+  if (!zoneArrowEl) {
+    zoneArrowEl = document.createElement("div");
+    zoneArrowEl.style.cssText =
+      "position:fixed;top:50%;left:50%;width:0;height:0;pointer-events:none;z-index:16;opacity:0;" +
+      "transition:opacity .2s linear;margin:-120px 0 0 -16px;transform-origin:16px 120px;" +
+      "border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:28px solid #ff5252;";
+    document.body.appendChild(zoneArrowEl);
+  }
+  return zoneArrowEl;
+}
+
+/**
+ * SPEC-0016 (T-068): orquestra o visual da zona (anel + chão escurecido + vinheta + seta),
+ * dirigido 100% por `state.event` (mesmo schema da T-065/T-067) — sem lógica de jogo, só
+ * leitura + desenho. Desmonta em fade ≤500ms ao sair de warning/active (`idle`/`ending`).
+ */
+function updateZoneVisual(now: number) {
+  if (!mapDims) return; // mundo ainda não construído — nada pra desenhar
+  const st: any = room?.state;
+  const ev = st?.event;
+  const phase: string = ev?.phase ?? "idle";
+  const showZone = phase === "warning" || phase === "active";
+
+  if (showZone !== zoneWasVisible) {
+    zoneFadeDir = showZone ? 1 : -1;
+    zoneFadeStart = now;
+    zoneWasVisible = showZone;
+  }
+
+  const age = now - zoneFadeStart;
+  const fadeFrac = zoneFadeDir === 1 ? Math.min(1, age / ZONE_FADE_MS) : 1 - Math.min(1, age / ZONE_FADE_MS);
+
+  if (fadeFrac <= 0 && !showZone) {
+    // completamente desmontado: some tudo e não regenera geometria à toa
+    zoneRing.visible = false;
+    zoneDark.visible = false;
+    getZoneVignetteEl().style.opacity = "0";
+    getZoneArrowEl().style.opacity = "0";
+    return;
+  }
+
+  const radius = Math.max(0.01, ev?.zoneRadius ?? 0);
+  const cx = ev?.zoneX ?? 0;
+  const cz = ev?.zoneZ ?? 0;
+
+  zoneRing.visible = true;
+  zoneRing.position.x = cx;
+  zoneRing.position.z = cz;
+  zoneRing.scale.setScalar(radius); // segue o raio por scale — zero realocação de geometria
+  (zoneRing.material as THREE.MeshBasicMaterial).opacity = 0.85 * fadeFrac;
+
+  // Chão escurecido: regenera o furo só numa mudança de raio perceptível (~0.5 tile) —
+  // nunca todo frame (spec §Notas da IA / "leve sempre" §5).
+  if (Math.abs(radius - zoneDarkLastRadius) > ZONE_REDRAW_EPS) {
+    zoneDark.geometry.dispose();
+    zoneDark.geometry = buildZoneDarkGeometry(mapDims.w, mapDims.h, cx, cz, radius);
+    zoneDarkLastRadius = radius;
+  }
+  zoneDark.visible = true;
+  (zoneDark.material as THREE.MeshBasicMaterial).opacity = 0.55 * fadeFrac;
+
+  // Vinheta + seta: só fazem sentido com o PRÓPRIO player fora da zona, durante warning/active
+  // de verdade (não durante o fade de saída).
+  const me = st?.players?.get?.(mySessionId);
+  if (me && showZone) {
+    const dx = me.x - cx;
+    const dz = me.z - cz;
+    const dist = Math.hypot(dx, dz);
+    const outside = dist > radius;
+    // Dano de zona só existe no `active` (spec) — vinheta só liga nessa fase (feedback, o
+    // dano de verdade é do servidor).
+    getZoneVignetteEl().style.opacity = phase === "active" && outside ? "0.9" : "0";
+
+    const arrowEl = getZoneArrowEl();
+    if (outside && dist > radius * 1.5 && dist > 1e-3) {
+      // Câmera nunca gira (ADR-015, followCamera acima): +X mundo = direita na tela, -Z mundo
+      // = "pra cima" na tela — por isso dá pra derivar o ângulo da seta sem nenhum estado de
+      // câmera. Vetor até o centro é (-dx,-dz); 0° = seta apontando pra cima na tela.
+      const screenDeg = (Math.atan2(-dx, dz) * 180) / Math.PI;
+      arrowEl.style.transform = `rotate(${screenDeg}deg)`;
+      arrowEl.style.opacity = "0.85";
+    } else {
+      arrowEl.style.opacity = "0";
+    }
+  } else {
+    getZoneVignetteEl().style.opacity = "0";
+    getZoneArrowEl().style.opacity = "0";
+  }
 }
 
 // ---------- Rede ----------
@@ -1098,6 +1222,7 @@ function animate() {
   vfx.update(performance.now()); // T-022
   updateHud(performance.now());
   updateEvents(performance.now()); // SPEC-0016 (T-067)
+  updateZoneVisual(performance.now()); // SPEC-0016 (T-068)
   // Atualiza painel de debug a ~10fps para não sobrecarregar DOM
   if (debugOpen && ++debugTick % 2 === 0) updateDebugState();
   renderer.render(scene, camera);
