@@ -358,7 +358,7 @@ export const BR_WARNING_MS = 8_000;
 export const BR_DURATION_MS = 10_000;
 export const BR_ENDING_MS = 1_500;
 export const BR_ZONE_RADIUS_MIN = 6;
-export const BR_ZONE_RADIUS_MAX = 50;
+export const BR_ZONE_RADIUS_MAX = 42;
 /** Dano de zona por segundo fora da área (dano verdadeiro — ignora safe zone/escudo/spawn protection). */
 export const BR_OUTSIDE_DPS_BASE = 10;
 /** Curva de crescimento do dano de zona: dps = BASE × (1 + GROWTH × t), t = segundos de evento. */
