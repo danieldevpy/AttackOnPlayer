@@ -329,6 +329,14 @@ export const DIRECTOR_EVAL_MS = 10_000;
 /** Chance base de disparo por avaliação, já com pelo menos 1 evento elegível. */
 export const DIRECTOR_TRIGGER_CHANCE = 0.2;
 /**
+ * Primeira ativação determinística (pedido do CD, 2026-07-08): enquanto a sala NÃO rodou
+ * nenhum evento, o dado fica fora do jogo — este período é warm-up SEM evento, e o primeiro
+ * eval elegível depois dele dispara garantido (~1min, nem antes nem à mercê da sorte).
+ * Depois do 1º evento, o ritmo probabilístico normal assume. A elegibilidade continua
+ * valendo (ex.: BR exige ≥4 vivos); `dev_event` (DEBUG=1) ignora o warm-up.
+ */
+export const DIRECTOR_FIRST_EVENT_AFTER_MS = 60_000;
+/**
  * Mortes/min a partir das quais a sessão é considerada "quente" — a chance de disparo já
  * caiu ao piso (0.5×) nesse ponto e não cai mais; sessão "morna" (0 mortes/min) chega a 2×.
  * Ritmo de tensão/alívio, nunca timer previsível (spec §Director). Número de partida — ajustar

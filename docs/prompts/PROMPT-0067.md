@@ -94,3 +94,29 @@ estado; o ciclo é visível via bots/debug/console.
 
 T-067 (∥, UI genérica de fases) já podia rodar em paralelo; T-068/T-069/T-070/T-071 liberadas
 agora que a T-066 existe (4 frentes disjuntas em paralelo). Depois T-072/T-073 (QA).
+
+## Addendum (mesmo dia) — primeira ativação determinística aos 60s
+
+CD testou e "não conseguiu iniciar o evento" — diagnóstico: o evento DISPAROU (os avisos
+`onMessage() not registered for type 'event_result'` no console do cliente e dos bots são o
+broadcast de fim do BR chegando), mas sem UI (T-067..T-069) não há nada visível, e o gatilho
+probabilístico é imprevisível pra teste. Pedido: "faça com que ele se inicie após 1 minuto do
+servidor rodando".
+
+Implementado no `EventDirector` (genérico, não específico do BR):
+
+- Dial novo `DIRECTOR_FIRST_EVENT_AFTER_MS = 60_000` em `packages/shared/src/constants.ts`.
+- Enquanto a sala NUNCA rodou evento (`globalLastEndedAt === -Infinity`): warm-up — nenhum
+  disparo automático, nem com dado favorável; primeiro eval elegível após 60s de sala dispara
+  GARANTIDO (sem dado). Depois do 1º evento, ritmo probabilístico normal.
+- `dev_event` (DEBUG=1) ignora o warm-up (gatilho manual continua imediato).
+- Elegibilidade continua valendo: com <4 vivos aos 60s, espera ficar elegível.
+- Sentinela `firstTickAt = -1` (não 0) — o teste com `now=0` pegou o bug de o 0 ser re-setado
+  (mesma classe do `globalLastEndedAt` da T-065).
+
+Verificação: server 129/129 (1 teste novo + avaliação periódica adaptada pra não depender do
+dado), `tsc` ×3, shared 49, bots 35; smoke com 5 bots SEM dev_event: telemetria mostra
+`match_start` → `event_warning` em **60.2s** exatos, ciclo completo sem erro.
+
+Os avisos no console do cliente (`event_result`/`upgrade_offer_closed` sem handler) somem
+quando a T-067 registrar os handlers; o 401 do lobby é settings/auth do Django, sem relação.

@@ -6,6 +6,7 @@ import {
   DIRECTOR_EVAL_MS,
   DIRECTOR_TRIGGER_CHANCE,
   DIRECTOR_HOT_DEATHS_PER_MIN,
+  DIRECTOR_FIRST_EVENT_AFTER_MS,
   EVENT_GLOBAL_COOLDOWN_MS,
   pickWeighted,
 } from "@aop/shared";
@@ -35,6 +36,11 @@ export class EventDirector {
   // no instante 0" — senão o cooldown global bloquearia qualquer disparo nos primeiros
   // EVENT_GLOBAL_COOLDOWN_MS de vida da sala.
   private globalLastEndedAt = -Infinity;
+  // Instante do primeiro tick da sala — base da garantia de primeira ativação
+  // (DIRECTOR_FIRST_EVENT_AFTER_MS). -1 (não 0) = ainda não tickou — `now` pode ser
+  // legitimamente 0 em teste, e um sentinela 0 seria re-setado no tick seguinte
+  // (mesma classe de bug do `globalLastEndedAt` acima).
+  private firstTickAt = -1;
   private deathTimestamps: number[] = [];
   // Cache do `room` do tick corrente — permite que `respawnPolicyFor` (chamado pelo pipeline
   // de morte, fora do `tick`) delegue ao hook do evento sem precisar receber `room` de novo.
@@ -59,6 +65,7 @@ export class EventDirector {
   /** Roda a cada tick de `updateInner` — sem timer novo (spec §Director). */
   tick(room: EventRoom, dt: number, now: number) {
     this.room = room;
+    if (this.firstTickAt < 0) this.firstTickAt = now;
     switch (this.phase) {
       case "idle":
         this.tickIdle(room, now);
@@ -108,7 +115,16 @@ export class EventDirector {
     );
     if (candidates.length === 0) return;
 
-    if (Math.random() >= triggerChance(this.deathsPerMinute(now))) return;
+    // Primeira ativação determinística (pedido do CD): enquanto NENHUM evento rodou nesta
+    // sala, o dado fica fora do jogo — o 1º minuto (DIRECTOR_FIRST_EVENT_AFTER_MS) é warm-up
+    // sem evento, e o primeiro eval elegível depois disso dispara GARANTIDO. Quem sobe o
+    // projeto pra testar vê o evento em ~1min, nem antes nem à mercê da sorte. Depois do 1º
+    // evento (`globalLastEndedAt` setado), o ritmo probabilístico normal assume.
+    if (this.globalLastEndedAt === -Infinity) {
+      if (now < this.firstTickAt + DIRECTOR_FIRST_EVENT_AFTER_MS) return;
+    } else if (Math.random() >= triggerChance(this.deathsPerMinute(now))) {
+      return;
+    }
 
     const weights: Array<[string, number]> = candidates.map((d) => [d.id, d.weight ?? 1]);
     const chosenId = pickWeighted(Math.random, weights);

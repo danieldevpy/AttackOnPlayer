@@ -31,6 +31,12 @@ paralelo (4 frentes disjuntas): T-068 (visual da zona) ∥ T-069 (espera de resp
 (bots cientes do evento) ∥ T-071 (painel Django EventModeConfig). T-072 após T-068+T-069;
 T-073 (QA smoke da spec inteira) por último. Ver `specs/SPEC-0016-eventos-e-modos-de-jogo.md`.
 
+**Follow-up do CD (mesmo dia):** primeira ativação agora é **determinística** — sala nova
+não dispara nada no 1º minuto (warm-up) e o primeiro evento elegível dispara GARANTIDO aos
+~60s (`DIRECTOR_FIRST_EVENT_AFTER_MS`, dial); depois o ritmo probabilístico normal assume.
+`dev_event` (DEBUG=1) segue imediato; elegibilidade (≥4 vivos) continua valendo — rode
+`npm run bots -- 4 600` pra completar a sala. Verificado por telemetria: 60.2s exatos.
+
 **Nota pra quem for testar à mão:** sem UI ainda (T-067..T-069), o evento é visível pelo
 estado sincronizado, pelo feed do `/debug/rooms` (DEBUG=1) e pelos logs do servidor
 ("morreu e aguarda o fim do evento"). Bots headless ainda não reagem à zona (T-070) — morrem

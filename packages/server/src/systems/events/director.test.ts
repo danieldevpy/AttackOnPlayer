@@ -6,6 +6,7 @@ import {
   DIRECTOR_EVAL_MS,
   DIRECTOR_TRIGGER_CHANCE,
   DIRECTOR_HOT_DEATHS_PER_MIN,
+  DIRECTOR_FIRST_EVENT_AFTER_MS,
   EVENT_GLOBAL_COOLDOWN_MS,
   buildMap,
 } from "@aop/shared";
@@ -145,18 +146,51 @@ describe("EventDirector — máquina de estados (T-065)", () => {
     const def = makeDef();
     const director = new EventDirector({ test_event: def });
     const room = makeRoom();
+
+    director.tick(room, 0.05, 0); // 1ª avaliação (t=0): warm-up da 1ª ativação segura
+    expect(room.state.event.phase).toBe("idle");
+
+    // reavalia (intervalo completo) 1ms antes do warm-up vencer: ainda idle
+    director.tick(room, 0.05, DIRECTOR_FIRST_EVENT_AFTER_MS - 1);
+    expect(room.state.event.phase).toBe("idle");
+
+    // warm-up vencido, MAS o intervalo da última avaliação não completou → não reavalia
+    director.tick(room, 0.05, DIRECTOR_FIRST_EVENT_AFTER_MS);
+    expect(room.state.event.phase).toBe("idle");
+
+    // intervalo completo → reavalia e a 1ª ativação garantida dispara
+    director.tick(room, 0.05, DIRECTOR_FIRST_EVENT_AFTER_MS - 1 + DIRECTOR_EVAL_MS);
+    expect(room.state.event.phase).toBe("warning");
+  });
+
+  it("primeira ativação determinística: warm-up sem evento até DIRECTOR_FIRST_EVENT_AFTER_MS, dispara garantido depois; daí volta ao dado", () => {
+    const def = makeDef();
+    const director = new EventDirector({ test_event: def });
+    const room = makeRoom();
     const randomSpy = vi.spyOn(Math, "random");
 
-    randomSpy.mockReturnValue(0.99); // 1ª avaliação (t=0): não dispara
-    director.tick(room, 0.05, 0);
+    randomSpy.mockReturnValue(0); // a sorte SEMPRE dispararia — o warm-up tem que segurar
+    director.tick(room, 0.05, 0); // 1º tick fixa a idade da sala
+    expect(room.state.event.phase).toBe("idle");
+    director.tick(room, 0.05, DIRECTOR_EVAL_MS); // reavalia dentro do warm-up — segue idle
     expect(room.state.event.phase).toBe("idle");
 
-    randomSpy.mockReturnValue(0); // dispararia se avaliasse, mas o intervalo não completou
-    director.tick(room, 0.05, 1);
-    expect(room.state.event.phase).toBe("idle");
+    randomSpy.mockReturnValue(0.999); // a partir daqui a sorte NUNCA dispararia
 
-    director.tick(room, 0.05, DIRECTOR_EVAL_MS); // intervalo completo → reavalia e dispara
+    director.tick(room, 0.05, DIRECTOR_FIRST_EVENT_AFTER_MS); // idade atingida → garantido
     expect(room.state.event.phase).toBe("warning");
+
+    // ciclo completo até idle — a partir daqui a garantia não vale mais
+    const t1 = DIRECTOR_FIRST_EVENT_AFTER_MS;
+    director.tick(room, 0.05, t1 + def.warningMs);
+    director.tick(room, 0.05, t1 + def.warningMs + def.durationMs);
+    const tEnd = t1 + def.warningMs + def.durationMs + def.endingMs;
+    director.tick(room, 0.05, tEnd);
+    expect(room.state.event.phase).toBe("idle");
+
+    // muito além da idade mínima e fora do cooldown global, mas com dado ruim: não dispara
+    director.tick(room, 0.05, tEnd + EVENT_GLOBAL_COOLDOWN_MS + DIRECTOR_EVAL_MS * 10);
+    expect(room.state.event.phase).toBe("idle");
   });
 
   it("respawnPolicyFor delega ao hook do evento ativo (por fase) e cai em default sem evento/hook", () => {

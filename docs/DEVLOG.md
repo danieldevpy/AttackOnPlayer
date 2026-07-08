@@ -34,6 +34,19 @@
   `dev_event` observado completo (`idle→warning→active→ending→idle`, `event_result` com
   `last_survivor`, `/debug/rooms` com fase/countdown).
 - Detalhes/decisões em `docs/prompts/PROMPT-0067.md`. T-067..T-071 liberadas.
+- **Follow-up (mesmo dia, pedido do CD ao testar):** "não consegui iniciar o evento" — na
+  real ele TINHA disparado (o `event_result` chegou no console do cliente/bots), mas sem UI
+  (T-067..069) não há nada pra ver, e o gatilho probabilístico é imprevisível pra teste.
+  Adicionada **primeira ativação determinística**: dial `DIRECTOR_FIRST_EVENT_AFTER_MS=60s`
+  (`constants.ts`) — enquanto a sala nunca rodou evento, o dado fica fora do jogo (warm-up
+  sem evento) e o primeiro eval elegível após 60s dispara garantido; depois o ritmo
+  probabilístico normal assume. `dev_event` ignora o warm-up; elegibilidade (≥4 vivos)
+  continua valendo. Sentinela do `firstTickAt` é `-1` (não 0) — o teste pegou a mesma classe
+  de bug do `globalLastEndedAt`. Testes: +1 novo no `director.test.ts` (warm-up segura mesmo
+  com dado favorável; garante aos 60s com dado ruim; depois do 1º evento volta ao dado) e o
+  teste de avaliação periódica foi adaptado (não depende mais do dado). Gates: `tsc` ×3,
+  shared 49, server 129, bots 35; smoke medido por telemetria: `match_start` →
+  `event_warning` em **60.2s** exatos.
 
 ## 2026-07-08 — Sessão 49 (agente worker): PROMPT-0066 — T-065: núcleo do Event Director (SPEC-0016)
 
