@@ -165,6 +165,7 @@ export class EventDirector {
     this.phaseEndsAt = now + def.endingMs;
     this.pendingEndReason = reason;
     this.syncSchema(room);
+    def.onEndingStart?.(room, reason, now);
     room.emitDebug("event_phase", { id: def.id, phase: this.phase, phaseEndsAt: this.phaseEndsAt, reason });
   }
 

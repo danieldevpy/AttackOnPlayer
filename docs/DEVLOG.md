@@ -1,5 +1,40 @@
 # Devlog
 
+## 2026-07-08 — Sessão 50 (agente worker): PROMPT-0067 — T-066: Battle Royale server-side completo (SPEC-0016)
+
+- **Task:** T-066 (`docs/BACKLOG.md`) — primeiro evento concreto sobre o núcleo da T-065.
+- **Entregue:** `packages/server/src/systems/events/battleRoyale.ts` (elegibilidade ≥4 vivos +
+  cooldown próprio 120s; warning com centro por densidade — janela 9×9 via imagem integral,
+  snap `nearestReachableCell`, raio envolvendo o cluster com folga e clamp MIN/MAX; active com
+  raio interpolando linear até 0 e dano de zona verdadeiro `10×(1+0.5t)` direto em `p.hp`,
+  ignorando safe/escudo/protection; early-end com ≤1 vivo; ending resolvendo resultado na
+  ENTRADA da fase — full-heal no lugar + bônus, liberação de TODOS os `waitingRespawn` no mesmo
+  tick, broadcast `event_result`) + registro no `EVENT_REGISTRY` (a partir daqui o Director
+  dispara de verdade). Telemetria nova: `event_warning`/`event_start`/`event_zone_death`/
+  `event_end` no union `TelemetryEvent` (server-only).
+- **Mudanças de suporte (genéricas, não específicas do BR):** hook novo `onEndingStart` no
+  `EventDefinition` (Director chama 1× na transição active→ending — sem ele não havia gancho
+  pro resultado; o CD pediu respawn imediato no early-end); `EventRoom` cresceu (`map`,
+  `reachable`, `telemetryBase`, `broadcast`, `grantXp`, `releaseHeldRespawns`) — `ArenaRoom` só
+  mudou visibilidade + ganhou `releaseHeldRespawns`; player segurado ficou de fato fora do
+  jogo (input ignorado/zerado no hold, coleta com guard `hp<=0`, projéteis já pulavam mortos —
+  confirmado com teste). Estado runtime do BR em `WeakMap` por sala (definição no registry é
+  singleton compartilhado).
+- **Sutileza registrada:** a morte que CAUSA o early-end (deixa 1 vivo) é processada depois do
+  Director no mesmo tick — cai na fase "ending" com policy `"default"` e renasce direto, junto
+  com os segurados. Comportamento intencional (respawn imediato no fim antecipado), coberto por
+  teste.
+- **Testes:** `battleRoyale.test.ts` (16: curva de dps, densidade com 2 clusters, clamps do
+  raio, elegibilidade/cooldowns, warning→schema walkable, respawn inside_zone, dano ignora
+  proteções, interpolação do raio, hold+liberação conjunta+bônus, timeout >1 vivo, cooldown
+  próprio vs global, projétil atravessa held). Único teste editado: fake `makeRoom` do
+  `director.test.ts` (contrato `EventRoom` maior — stubs, zero mudança de lógica).
+- **Gates:** `tsc` ×3 limpo; shared 49/49, server 128/128, bots 35/35; smoke isolado (:2599,
+  DEBUG=1): 6 bots/75s com BR disparando naturalmente (0 erros) + ciclo forçado via
+  `dev_event` observado completo (`idle→warning→active→ending→idle`, `event_result` com
+  `last_survivor`, `/debug/rooms` com fase/countdown).
+- Detalhes/decisões em `docs/prompts/PROMPT-0067.md`. T-067..T-071 liberadas.
+
 ## 2026-07-08 — Sessão 49 (agente worker): PROMPT-0066 — T-065: núcleo do Event Director (SPEC-0016)
 
 - **Task:** T-065 (`docs/BACKLOG.md`), primeira e bloqueante da frente V1.x SPEC-0016 (Event

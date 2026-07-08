@@ -2,7 +2,8 @@
 // Tudo aqui é genérico — nenhum tipo conhece Battle Royale (T-066) ou qualquer evento
 // específico; a arquitetura plugável depende disso (evento novo = arquivo novo + entrada no
 // registry, zero mudança nestes contratos).
-import { ArenaState } from "../../state/ArenaState";
+import { GameMap } from "@aop/shared";
+import { ArenaState, Player } from "../../state/ArenaState";
 
 /** Fases do ciclo de vida de um evento — sincronizadas no schema (`ArenaState.event.phase`). */
 export type EventPhase = "idle" | "warning" | "active" | "ending";
@@ -35,8 +36,21 @@ export interface EligibilityContext {
  */
 export interface EventRoom {
   state: ArenaState;
+  /** Mapa da sala + células alcançáveis (BFS pré-computado no onCreate) — eventos espaciais
+   * (ex.: zona do Battle Royale) snapam centro/spawn em célula walkable com isto (T-066). */
+  map: GameMap;
+  reachable: Uint8Array;
   emitDebug(type: string, payload: any): void;
   emitTelemetry(event: any): void;
+  /** Campos-base da telemetria (v/ts/tick/matchId) — todo emitTelemetry de evento espalha isto. */
+  telemetryBase(): Record<string, any>;
+  /** Broadcast Colyseus pra todos os clientes (ex.: `event_result` no fim do evento — T-067 lê). */
+  broadcast(type: string, message?: any): void;
+  /** XP pelo pipeline completo (multiplicadores, level-up, oferta de card) — bônus de evento. */
+  grantXp(id: string, p: Player, amount: number): void;
+  /** Libera TODOS os `waitingRespawn` no MESMO tick (respawn default + spawn protection);
+   * devolve quantos liberou — é o `holdCount` da telemetria de fim de evento. */
+  releaseHeldRespawns(now: number): number;
 }
 
 /**
@@ -58,6 +72,10 @@ export interface EventDefinition {
   onWarningStart?(room: EventRoom, now: number): void;
   onStart?(room: EventRoom, now: number): void;
   onTick?(room: EventRoom, dt: number, now: number): void;
+  /** Chamado 1× na transição active→ending (timeout OU earlyEndCondition) — é aqui que o
+   * evento resolve o RESULTADO (bônus, full-heal, liberação dos `waitingRespawn`), enquanto
+   * a fase "ending" exibe o destaque; `onEnd` só fecha o ciclo (cleanup) ao voltar pra idle. */
+  onEndingStart?(room: EventRoom, reason: string, now: number): void;
   onEnd?(room: EventRoom, reason: string, now: number): void;
 
   /** Consultado pelo pipeline de morte (`handleDeath`) antes do respawn. Sem hook, cai em "default". */

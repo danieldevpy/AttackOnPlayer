@@ -109,7 +109,9 @@ export const activeRooms = new Map<string, ArenaRoom>();
 
 export class ArenaRoom extends Room<ArenaState> {
   maxClients = MAX_PLAYERS;
-  private map!: GameMap;
+  // Público desde a T-066 (SPEC-0016): a interface estrutural `EventRoom` expõe mapa +
+  // células alcançáveis pros eventos espaciais (zona do BR snapa centro/spawn em walkable).
+  public map!: GameMap;
   private budget = 5;
   private metrics = new MetricsRecorder();
   private effects = new EffectSystem();
@@ -131,7 +133,8 @@ export class ArenaRoom extends Room<ArenaState> {
   private nextWeaponSpawnAt = 0;
   // SPEC-0011: conjunto de células alcançáveis (BFS do centro do mapa), calculado 1x no
   // onCreate. A arma nasce em célula walkable E alcançável (ignora zonas/pesos).
-  private reachable!: Uint8Array;
+  // Público desde a T-066 (SPEC-0016): `EventRoom` exige (ver `map` acima).
+  public reachable!: Uint8Array;
   public debugEvents: Array<{ time: number; type: string; payload: any }> = [];
   // T-016: fila de ofertas de card por player — levels[0] é a oferta aberta; o resto aguarda.
   // T-017: `cards` guarda a oferta REAL enviada (marcos incluem skills e dependem do estado
@@ -163,7 +166,9 @@ export class ArenaRoom extends Room<ArenaState> {
   // T-061: próxima checagem de config ao vivo (ver PLATFORM_SYNC_INTERVAL_MS).
   private nextPlatformSyncAt = 0;
 
-  private telemetryBase() {
+  /** Público desde a T-066 (SPEC-0016): os hooks de evento (`EventRoom`) espalham estes
+   * campos-base em cada `emitTelemetry` próprio (event_warning/event_end etc.). */
+  telemetryBase() {
     return {
       v: TELEMETRY_SCHEMA_VERSION as typeof TELEMETRY_SCHEMA_VERSION,
       ts: Date.now(),
@@ -261,6 +266,9 @@ export class ArenaRoom extends Room<ArenaState> {
       (client, msg: { x: number; z: number; aimX?: number; aimZ?: number; fire?: boolean }) => {
         const p = this.state.players.get(client.sessionId);
         if (!p || typeof msg?.x !== "number" || typeof msg?.z !== "number") return;
+        // SPEC-0016 (T-066): morto segurado por evento ("hold_until_end") fica FORA do jogo —
+        // sem input/tiro até o evento liberar o respawn (bots continuam mandando input).
+        if (p.waitingRespawn) return;
         const len = Math.hypot(msg.x, msg.z);
         p.inputX = len > 1e-3 ? msg.x / Math.max(1, len) : 0;
         p.inputZ = len > 1e-3 ? msg.z / Math.max(1, len) : 0;
@@ -636,6 +644,10 @@ export class ArenaRoom extends Room<ArenaState> {
     // coleta
     this.state.collectibles.forEach((c, cid) => {
       this.state.players.forEach((p, pid) => {
+        // SPEC-0016 (T-066): morto (em especial o segurado por evento, que fica ticks com
+        // hp=0 no lugar da morte) não coleta nada. No fluxo normal o respawn no mesmo tick
+        // devolve hp=maxHp antes deste passe, então nada muda fora de evento.
+        if (p.hp <= 0) return;
         if (Math.hypot(p.x - c.x, p.z - c.z) >= COLLECT_DIST) return;
         this.state.collectibles.delete(cid);
         // SPEC-0011 (T-039): pickup da arma leva o weaponId no evento — o cliente usa pra
@@ -952,6 +964,11 @@ export class ArenaRoom extends Room<ArenaState> {
       // SPEC-0016: morte processada, mas o respawn fica em espera — o evento ativo libera
       // todos os `waitingRespawn` juntos, no mesmo tick, ao terminar (T-066).
       p.waitingRespawn = true;
+      // T-066: segurado fica fora do jogo — congela input/tiro no local da morte (o handler
+      // de "input" também ignora mensagens enquanto `waitingRespawn`).
+      p.inputX = 0;
+      p.inputZ = 0;
+      p.firing = false;
       this.emitDebug("respawn_held", { playerId: id, killerId: killerByVictim.get(id) ?? null });
       console.log(`[arena] ${p.name} morreu e aguarda o fim do evento.`);
       return;
@@ -959,6 +976,22 @@ export class ArenaRoom extends Room<ArenaState> {
 
     const spawn = policy === "inside_zone" ? this.pickZoneSpawnPoint() : this.pickRespawnPoint(id);
     this.respawnPlayer(id, p, spawn, now, killerByVictim.get(id) ?? null);
+  }
+
+  /**
+   * SPEC-0016 (T-066): libera TODOS os `waitingRespawn` no MESMO tick — chamado pelo evento
+   * ativo ("hold_until_end") ao entrar em "ending". Respawn default (spawn seguro +
+   * spawn protection normal), exatamente como uma morte comum liberaria. Devolve quantos
+   * liberou (o `holdCount` da telemetria `event_end`). Público: faz parte do `EventRoom`.
+   */
+  releaseHeldRespawns(now: number): number {
+    let released = 0;
+    this.state.players.forEach((p, id) => {
+      if (!p.waitingRespawn) return;
+      released += 1;
+      this.respawnPlayer(id, p, this.pickRespawnPoint(id), now, null);
+    });
+    return released;
   }
 
   /** SPEC-0016 (T-065): respawn em si, extraído pra ser reutilizável tanto pelo caminho
@@ -990,8 +1023,9 @@ export class ArenaRoom extends Room<ArenaState> {
     console.log(`[arena] ${p.name} morreu. Respawn no nível ${p.level} em (${spawn.x}, ${spawn.z}).`);
   }
 
-  /** XP → nível → oferta de cards (T-003/T-016). Loop cobre XP suficiente p/ vários níveis de uma vez. */
-  private grantXp(id: string, p: Player, amount: number) {
+  /** XP → nível → oferta de cards (T-003/T-016). Loop cobre XP suficiente p/ vários níveis de uma vez.
+   * Público desde a T-066 (SPEC-0016): bônus de evento (`EventRoom.grantXp`) usa o pipeline completo. */
+  grantXp(id: string, p: Player, amount: number) {
     p.xp += amount * p.xpMult * this.xpMultiplier; // xp_boost (farm_event) dobra o ganho — T-004
 
     while (p.xp >= xpToNext(p.level)) {

@@ -6,50 +6,37 @@
 **Atualizado em:** 2026-07-08
 **Branch:** `main`. **Marco:** V1.x (SPEC-0016 — Eventos e modos de jogo).
 
-**Sessão 49 (agente worker): PROMPT-0066 — T-065: núcleo do Event Director**
-Executada a T-065 (`docs/BACKLOG.md`), primeira e bloqueante da frente SPEC-0016 (Event
-Director + Battle Royale relâmpago). Entregue: camada de eventos plugável em
-`packages/server/src/systems/events/{types,director,registry}.ts` (`EventDirector` com máquina
-`idle→warning→active→ending→idle`, `EVENT_REGISTRY` **vazio**); schema novo
-`ArenaState.event: ActiveEvent` + `Player.waitingRespawn` (⚠schema — cliente/bots precisam
-recompilar, mas ninguém lê os campos ainda); refactor cirúrgico do pipeline de morte
-(`ArenaRoom.handleDeath`/`respawnPlayer`/`pickZoneSpawnPoint`) consultando
-`director.respawnPolicyFor(id)` — com registry vazio, sempre `"default"`, comportamento
-byte-a-byte idêntico ao anterior; dials novos em `packages/shared/src/constants.ts` (Director +
-Battle Royale, mesmo a lógica do BR sendo T-066); mensagem `dev_event` atrás de `DEBUG=1`;
-`/debug/rooms` ganhou o bloco `event`. Decisões de design registradas em
-`docs/prompts/PROMPT-0066.md` (interface `EventRoom` estrutural pra evitar import circular,
-`"inside_zone"` implementado no core por já ser genérico via schema, guard
-`!p.waitingRespawn` pra não reprocessar morte held a cada tick, bug de `globalLastEndedAt`
-corrigido antes de existir em produção). Testes novos: `director.test.ts` (8) +
-`deathPipeline.test.ts` (3), nenhum teste existente editado. Gates: `tsc` ×3 limpo, shared
-49/49, server 112/112, bots 35/35, smoke `bots -- 4 15` numa porta isolada sem erro no tick.
+**Sessão 50 (agente worker): PROMPT-0067 — T-066: Battle Royale server-side completo**
+Executada a T-066 (`docs/BACKLOG.md`): `packages/server/src/systems/events/battleRoyale.ts`
+implementando `EventDefinition` completo + registro no `EVENT_REGISTRY` — **a partir desta
+sessão o Event Director dispara eventos DE VERDADE** (automático por chance/intensidade com
+≥4 vivos, ou manual via `room.send("dev_event", "battle_royale")` com `DEBUG=1`). Ciclo:
+warning 5s (zona nasce sobre a janela 9×9 mais densa de players vivos, snap em célula
+alcançável, raio envolve o cluster com folga, clamp 6–20; morte → renasce dentro da zona) →
+active 10s (raio encolhe linear até 0; fora da zona dano verdadeiro `10×(1+0.5t)` que ignora
+safe/escudo/protection; morte → `waitingRespawn`, fora do jogo; ≤1 vivo → early-end) →
+ending 1.5s (sobrevivente full-heal NO LUGAR + bônus XP/coins; segurados renascem TODOS no
+mesmo tick; broadcast `event_result`) → idle (cooldowns 120s próprio + 30s global).
+Suporte genérico que a task exigiu: hook `onEndingStart` no contrato, `EventRoom` maior
+(`map`/`reachable`/`telemetryBase`/`broadcast`/`grantXp`/`releaseHeldRespawns`),
+`ArenaRoom.releaseHeldRespawns`, player segurado sem input/coleta. Telemetria
+`event_warning/start/zone_death/end`. Gates: `tsc` ×3 limpo, shared 49/49, server 128/128
+(16 testes novos), bots 35/35; smoke isolado com BR disparando naturalmente + ciclo forçado
+via `dev_event` observado completo (`/debug/rooms` mostra fase/countdown). Decisões e "como
+testar rodando o projeto" em `docs/prompts/PROMPT-0067.md`.
 
-**Próximo passo:** T-066 (Battle Royale server-side, `packages/server/src/systems/events/
-battleRoyale.ts` + registro no `EVENT_REGISTRY`) e T-067 (cliente: UI genérica de fases,
-`packages/client/src/events.ts`) já podem rodar em paralelo — ambos só dependem do
-schema/contratos da T-065. Ver `specs/SPEC-0016-eventos-e-modos-de-jogo.md` e o bloco T-066/
-T-067 do `docs/BACKLOG.md`.
+**Próximo passo:** T-067 (cliente: UI genérica de fases — pode rodar já; contratos prontos
+desde a T-065, e o broadcast `event_result` que ela consome existe agora). Depois, em
+paralelo (4 frentes disjuntas): T-068 (visual da zona) ∥ T-069 (espera de respawn) ∥ T-070
+(bots cientes do evento) ∥ T-071 (painel Django EventModeConfig). T-072 após T-068+T-069;
+T-073 (QA smoke da spec inteira) por último. Ver `specs/SPEC-0016-eventos-e-modos-de-jogo.md`.
 
-**Pendências vindas de sessões anteriores (não mexidas nesta sessão):** `docs/BACKLOG.md` ainda
-tem `M` no `git status` reportado no início desta sessão (mudança de outro agente/sessão, fora
-do escopo da T-065 — não investiguei nem toquei).
+**Nota pra quem for testar à mão:** sem UI ainda (T-067..T-069), o evento é visível pelo
+estado sincronizado, pelo feed do `/debug/rooms` (DEBUG=1) e pelos logs do servidor
+("morreu e aguarda o fim do evento"). Bots headless ainda não reagem à zona (T-070) — morrem
+fora dela e testam o hold/release de graça.
 
----
-
-**Sessão 48 (agente worker): PROMPT-0065 — Login/registro migram pro lobby**
-Pedido direto do CD, fora do backlog formal: "agora que o jogo tem lobby ao entrar no site,
-quero que o login/registro fiquem no lobby/menu". Antes, `auth.ts` (T-028c/SPEC-0008) mantinha
-um widget flutuante fixo no canto da tela, visível o tempo todo — inclusive durante a partida.
-Mudança: `auth.ts` virou módulo DOM-free (só rede + persistência: `login`, `register`,
-`getAuthToken`, `getAccount`, `clearSession`, `updateAccountDisplayName`,
-`ensureGuestRegistered`); toda a UI de conta (badge, tabs Entrar/Registrar, form) passou a
-morar dentro do card do lobby (`lobby.ts`), colapsada atrás de um botão "entrar" no header —
-abre inline, sem modal. `index.html` perdeu o `#auth-widget` inteiro; `main.ts` perdeu a
-chamada a `initAuth()`. Login/registro bem-sucedido no meio da sessão do lobby atualiza o
-badge, adota o `display_name` como nick se ainda for o guest gerado automaticamente, e
-sincroniza settings remotas (perfil/volume/fullscreen) reusando o mesmo merge servidor→UI do
-carregamento inicial. `tsc --noEmit` (client) limpo, `vite build` OK, shared 49/49 (não
-afetado). Verificado em preview: painel abre/fecha, alterna Entrar/Registrar, erro de rede
-exibido inline sem Django rodando, sem erros de console. **Não testado:** login/registro real
-contra o Django (backend fora do ar no preview) — só o caminho de erro foi exercitado.
+**Pendências vindas de sessões anteriores (não mexidas nesta sessão):**
+`backend/requirements.txt` com `M` no git status desde o início da sessão (mudança de outro
+agente/sessão — não investiguei nem toquei); idem `run.sh`, `docs/GUIA_PERSONAGENS_PROCEDURAIS_V2.md`,
+`instrucoes/GUIA_MODELOS_CLAUDE.md` e os arquivos `*.skill` não rastreados na raiz.

@@ -89,6 +89,38 @@ export type TelemetryErrorEvent = BaseEvent & {
   stack?: string;
 };
 
+// SPEC-0016 (T-066): ciclo de vida dos eventos de sessão (Event Director + Battle Royale).
+// Métricas pra balancear duração/dano da zona com dados reais (spec §Interações).
+export type EventWarningEvent = BaseEvent & {
+  type: "event_warning";
+  eventId: string;
+  zone: Pos & { radius: number };
+  livingCount: number;
+};
+
+export type EventStartEvent = BaseEvent & {
+  type: "event_start";
+  eventId: string;
+  zone: Pos & { radius: number };
+  livingCount: number;
+};
+
+export type EventZoneDeathEvent = BaseEvent & {
+  type: "event_zone_death";
+  eventId: string;
+  playerToken: string;
+  pos: Pos;
+  elapsedS: number; // segundos de "active" no instante da morte — calibra a curva de dps
+};
+
+export type EventEndEvent = BaseEvent & {
+  type: "event_end";
+  eventId: string;
+  reason: string; // "timeout" | "last_survivor"
+  survivorTokens: string[];
+  holdCount: number; // quantos `waitingRespawn` foram liberados juntos no fim
+};
+
 export type TelemetryEvent =
   | MatchStartEvent
   | MatchEndEvent
@@ -98,4 +130,8 @@ export type TelemetryEvent =
   | FlagPossessionEvent
   | QuitEvent
   | TickSlowEvent
-  | TelemetryErrorEvent;
+  | TelemetryErrorEvent
+  | EventWarningEvent
+  | EventStartEvent
+  | EventZoneDeathEvent
+  | EventEndEvent;

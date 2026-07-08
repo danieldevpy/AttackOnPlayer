@@ -2,7 +2,13 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { EventDirector, triggerChance } from "./director";
 import { EventDefinition, EventRoom } from "./types";
 import { ArenaState } from "../../state/ArenaState";
-import { DIRECTOR_EVAL_MS, DIRECTOR_TRIGGER_CHANCE, DIRECTOR_HOT_DEATHS_PER_MIN, EVENT_GLOBAL_COOLDOWN_MS } from "@aop/shared";
+import {
+  DIRECTOR_EVAL_MS,
+  DIRECTOR_TRIGGER_CHANCE,
+  DIRECTOR_HOT_DEATHS_PER_MIN,
+  EVENT_GLOBAL_COOLDOWN_MS,
+  buildMap,
+} from "@aop/shared";
 
 /**
  * T-065 (SPEC-0016): EventDirector testado isolado, com um `EventRoom` fake mínimo — sem
@@ -11,10 +17,19 @@ import { DIRECTOR_EVAL_MS, DIRECTOR_TRIGGER_CHANCE, DIRECTOR_HOT_DEATHS_PER_MIN,
  * máquina de estados sem depender do Battle Royale (T-066).
  */
 function makeRoom(): EventRoom {
+  // stubs dos membros que a T-066 adicionou ao contrato `EventRoom` — o Director em si não
+  // usa nenhum deles (são superfície pros hooks dos eventos concretos).
+  const map = buildMap(20, 20, 42);
   return {
     state: new ArenaState(),
+    map,
+    reachable: new Uint8Array(map.w * map.h),
     emitDebug() {},
     emitTelemetry() {},
+    telemetryBase: () => ({}),
+    broadcast() {},
+    grantXp() {},
+    releaseHeldRespawns: () => 0,
   };
 }
 

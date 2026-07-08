@@ -1,8 +1,11 @@
 import { EventDefinition } from "./types";
+import { BattleRoyaleEvent } from "./battleRoyale";
 
 /**
- * SPEC-0016 (T-065): nasce vazio — a sala se comporta exatamente como hoje (nenhum evento
- * pode disparar, `EventDirector` fica sempre `idle`). A T-066 registra "battle_royale" aqui;
- * um evento novo é sempre uma nova entrada — zero mudança no `EventDirector` ou no `ArenaRoom`.
+ * SPEC-0016: catálogo dos eventos de sessão plugáveis. Um evento novo é sempre uma nova
+ * entrada aqui (arquivo novo + linha nova) — zero mudança no `EventDirector` ou no `ArenaRoom`.
+ * T-066 registrou o primeiro: Battle Royale relâmpago.
  */
-export const EVENT_REGISTRY: Record<string, EventDefinition> = {};
+export const EVENT_REGISTRY: Record<string, EventDefinition> = {
+  [BattleRoyaleEvent.id]: BattleRoyaleEvent,
+};
