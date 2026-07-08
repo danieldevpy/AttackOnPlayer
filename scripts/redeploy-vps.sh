@@ -11,9 +11,10 @@
 # de shell — rode `newgrp docker` (ou abra uma sessão SSH nova) e tente de novo.
 #
 # Uso na VPS (a partir da raiz do repo clonado):
-#   ./script/redeploy-vps.sh [-b] [-c qtd_bots] [-t duracao_s] [IP_PUBLICO]
+#   ./script/redeploy-vps.sh [-l] [-b] [-c qtd_bots] [-t duracao_s] [IP_PUBLICO]
 #
 # Flags (mesmas do deploy-vps-sem-dominio.sh):
+#   -l            usa localhost em vez de IP público (pra testar prod localmente)
 #   -b            sobe bots headless via pm2 (padrão: desativado)
 #   -c qtd_bots   quantidade de bots quando -b está ativo (padrão: 2)
 #   -t duracao_s  duração dos bots em segundos, 0 = para sempre (padrão: 0)
@@ -31,6 +32,7 @@ DJANGO_PORT="${DJANGO_PORT:-8000}"
 BOTS_ON=0
 BOT_COUNT=2
 BOT_DURATION=0
+USE_LOCALHOST=0
 
 log()  { echo -e "\n\033[1;36m==> $*\033[0m"; }
 warn() { echo -e "\033[1;33m[aviso] $*\033[0m"; }
@@ -41,8 +43,9 @@ usage() {
   exit 1
 }
 
-while getopts "bc:t:h" opt; do
+while getopts "lbc:t:h" opt; do
   case "$opt" in
+    l) USE_LOCALHOST=1 ;;
     b) BOTS_ON=1 ;;
     c) BOT_COUNT="$OPTARG" ;;
     t) BOT_DURATION="$OPTARG" ;;
@@ -66,17 +69,22 @@ BACKEND_ENV="$BACKEND_DIR/.env"
 docker info >/dev/null 2>&1 \
   || die "'docker' sem sudo falhou — rode 'newgrp docker' (ou abra uma sessão SSH nova; o grupo docker só pega depois do 1º deploy) e tente de novo."
 
-# ---------- 1. IP público ----------
-PUBLIC_IP="${1:-}"
-if [[ -z "$PUBLIC_IP" ]]; then
-  PUBLIC_IP="$(grep '^DJANGO_ALLOWED_HOSTS=' "$BACKEND_ENV" | cut -d= -f2- | tr ',' '\n' | grep -vE '^(localhost|127\.0\.0\.1)?$' | head -1)"
+# ---------- 1. IP/Host ----------
+if [[ "$USE_LOCALHOST" -eq 1 ]]; then
+  SERVER_HOST="localhost"
+  log "Modo localhost: server em ws://localhost:$BACK_PORT, jogo em http://localhost:$FRONT_PORT"
+else
+  SERVER_HOST="${1:-}"
+  if [[ -z "$SERVER_HOST" ]]; then
+    SERVER_HOST="$(grep '^DJANGO_ALLOWED_HOSTS=' "$BACKEND_ENV" | cut -d= -f2- | tr ',' '\n' | grep -vE '^(localhost|127\.0\.0\.1)?$' | head -1)"
+  fi
+  if [[ -z "$SERVER_HOST" ]]; then
+    log "Detectando IP público..."
+    SERVER_HOST="$(curl -fsS4 ifconfig.me || curl -fsS4 ipinfo.io/ip || true)"
+    [[ -n "$SERVER_HOST" ]] || die "não consegui detectar o IP público — rode com ./script/redeploy-vps.sh SEU_IP"
+  fi
+  log "IP público: $SERVER_HOST (server em ws://$SERVER_HOST:$BACK_PORT, jogo em http://$SERVER_HOST:$FRONT_PORT)"
 fi
-if [[ -z "$PUBLIC_IP" ]]; then
-  log "Detectando IP público..."
-  PUBLIC_IP="$(curl -fsS4 ifconfig.me || curl -fsS4 ipinfo.io/ip || true)"
-  [[ -n "$PUBLIC_IP" ]] || die "não consegui detectar o IP público — rode com ./script/redeploy-vps.sh SEU_IP"
-fi
-log "IP público: $PUBLIC_IP (server em ws://$PUBLIC_IP:$BACK_PORT, jogo em http://$PUBLIC_IP:$FRONT_PORT)"
 
 # ---------- 2. Atualizar código ----------
 if [[ -d .git ]]; then
@@ -95,12 +103,12 @@ log "Instalando dependências do backend (requirements.txt)..."
 
 # ---------- 4. Hosts/CORS (idempotente, sobrevive a troca de IP) ----------
 CURRENT_HOSTS="$(grep '^DJANGO_ALLOWED_HOSTS=' "$BACKEND_ENV" | cut -d= -f2-)"
-if [[ "$CURRENT_HOSTS" != *"$PUBLIC_IP"* ]]; then
-  NEW_HOSTS="${CURRENT_HOSTS:+$CURRENT_HOSTS,}${PUBLIC_IP},localhost,127.0.0.1"
+if [[ "$CURRENT_HOSTS" != *"$SERVER_HOST"* ]]; then
+  NEW_HOSTS="${CURRENT_HOSTS:+$CURRENT_HOSTS,}${SERVER_HOST},localhost,127.0.0.1"
   sed -i "s#^DJANGO_ALLOWED_HOSTS=.*#DJANGO_ALLOWED_HOSTS=${NEW_HOSTS}#" "$BACKEND_ENV"
 fi
 
-CLIENT_ORIGIN="http://${PUBLIC_IP}:${FRONT_PORT}"
+CLIENT_ORIGIN="http://${SERVER_HOST}:${FRONT_PORT}"
 CURRENT_CORS="$(grep '^CORS_ALLOWED_ORIGINS=' "$BACKEND_ENV" | cut -d= -f2-)"
 if [[ "$CURRENT_CORS" != *"$CLIENT_ORIGIN"* ]]; then
   NEW_CORS="${CURRENT_CORS:+$CURRENT_CORS,}${CLIENT_ORIGIN}"
@@ -132,8 +140,8 @@ log "Importando mapas para o registry (import_maps)..."
   || warn "import_maps falhou — confira maps/*.map.json na raiz do repo."
 
 # ---------- 7. Build do client com o IP fixo no bundle ----------
-log "Build do client (VITE_SERVER_URL=ws://$PUBLIC_IP:$BACK_PORT, VITE_DJANGO_URL=http://$PUBLIC_IP:$DJANGO_PORT)..."
-VITE_SERVER_URL="ws://$PUBLIC_IP:$BACK_PORT" VITE_DJANGO_URL="http://$PUBLIC_IP:$DJANGO_PORT" \
+log "Build do client (VITE_SERVER_URL=ws://$SERVER_HOST:$BACK_PORT, VITE_DJANGO_URL=http://$SERVER_HOST:$DJANGO_PORT)..."
+VITE_SERVER_URL="ws://$SERVER_HOST:$BACK_PORT" VITE_DJANGO_URL="http://$SERVER_HOST:$DJANGO_PORT" \
   npm run build -w @aop/client
 
 # ---------- 8. Restart dos processos pm2 ----------
@@ -183,9 +191,9 @@ done
 
 echo
 echo "========================================================"
-echo " Jogo:    http://$PUBLIC_IP:$FRONT_PORT"
-echo " Server:  ws://$PUBLIC_IP:$BACK_PORT  (HTTP: /health, /metrics/summary)"
-echo " Backend: http://$PUBLIC_IP:$DJANGO_PORT  (/healthz, /api/v1/...)"
+echo " Jogo:    http://$SERVER_HOST:$FRONT_PORT"
+echo " Server:  ws://$SERVER_HOST:$BACK_PORT  (HTTP: /health, /metrics/summary)"
+echo " Backend: http://$SERVER_HOST:$DJANGO_PORT  (/healthz, /api/v1/...)"
 if [[ "$BOTS_ON" -eq 1 ]]; then
   echo " Bots:    ${BOT_COUNT} bot(s), duração ${BOT_DURATION}s (0 = para sempre) — pm2 logs aop-bots"
 else
