@@ -92,7 +92,12 @@ let zoneDarkLastRadius = -1; // força a 1ª geração de geometria no primeiro 
 const ZONE_REDRAW_EPS = 0.5; // tiles — regenera o furo só numa mudança de raio perceptível (spec §Notas da IA)
 const ZONE_FADE_MS = 500; // spec: desmonta em idle/ending com fade ≤500ms (entrada usa a mesma duração)
 let zoneFadeStart = 0;
-let zoneFadeDir: 1 | -1 = 1; // 1 = entrando (warning/active), -1 = saindo (idle/ending)
+// -1 (saindo) no estado inicial: representa "já totalmente esmaecido" antes do 1º evento da
+// sessão. Com `1` aqui, o 1º frame calculava fadeFrac=1 (idade grande / ZONE_FADE_MS clampada
+// em 1) sem nenhuma transição ter disparado — o anel/chão escurecido ficavam visíveis desde o
+// carregamento, cobrindo o mapa inteiro (bug real: "iluminação escura" reportado pelo CD era
+// isto, não as luzes da cena).
+let zoneFadeDir: 1 | -1 = -1; // 1 = entrando (warning/active), -1 = saindo (idle/ending)
 let zoneWasVisible = false;
 
 // T-049 (SPEC-0013): registry de sons nomeados — mesmo AudioContext pra todo o jogo,

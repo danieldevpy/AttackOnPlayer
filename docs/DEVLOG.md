@@ -1,5 +1,26 @@
 # Devlog
 
+## 2026-07-08 — Sessão 54 (agente worker): PROMPT-0071 — bugfix chão escurecido (zoneFadeDir) + verificação visual T-068/T-069
+
+- **Gatilho:** CD subiu `dev:server`+`dev:client` por conta própria (`localhost:5173`) e
+  reportou "iluminação diferente, muito escura", pedindo checagem via preview + análise de
+  código.
+- **Achado:** não era iluminação (`AmbientLight`/`DirectionalLight` em `main.ts` sem mudança
+  desde o M0, confirmado via `git log -p -L`). Bug real em `updateZoneVisual` (T-068):
+  `zoneFadeDir` nascia `1` ("entrando") com `zoneFadeStart=0`; como não há transição de fase
+  detectada no 1º frame (idle desde o load), `fadeFrac` calculava `1` sem nenhum evento ter
+  disparado — chão escurecido (55% opacidade) cobrindo o mapa inteiro desde o carregamento.
+- **Corrigido:** `zoneFadeDir` inicial trocado para `-1` ("já esmaecido") — `packages/client/
+  src/main.ts`. Confirmado que T-069 não tem o mesmo padrão de bug (overlay novo começa
+  opacidade 0 via `cssText`, não depende de cálculo de `fadeFrac` a partir de timestamp
+  zerado).
+- **Gates:** `tsc --noEmit` (client) limpo; `vite build` OK.
+- **Verificação:** preview isolado do agente não avançou (mesma limitação headless já
+  registrada nas sessões 52/53 — loop de render não progride nesse ambiente). **CD rodou o
+  evento no próprio navegador (hot-reload já com o fix) e confirmou funcionando
+  corretamente** — T-068 e T-069 fecham a pendência de verificação visual manual aberta desde
+  PROMPT-0068/0069/0070. Detalhes em `docs/prompts/PROMPT-0071.md`.
+
 ## 2026-07-08 — Sessão 53 (agente worker): PROMPT-0070 — T-069: espera de respawn como arquibancada (SPEC-0016)
 
 - **Task:** T-069 (`docs/BACKLOG.md`) — matar a "tela morta" de quem espera o Battle Royane
