@@ -16,20 +16,28 @@ O profiler está sempre ativo em modo dev e coleta métricas de frame time, lat�
 window.profiler.printStats()
 ```
 
-Você verá algo como:
+Você verá algo como (profiler **v2** — mede o intervalo REAL entre frames, não só a CPU):
 
 ```
-[Profiler] Frame Stats
-Frames: 872
-Frame Time (ms): avg=2.34, min=1.89, max=25.43, p95=3.21, p99=4.56
-FPS: 427.35
-
-Label Timings
-render: avg=1.234ms, min=0.891ms, max=2.345ms, total=1076.3ms (n=872)
-syncWorld: avg=0.456ms, min=0.234ms, max=1.234ms, total=398.1ms (n=872)
-updateHud: avg=0.123ms, min=0.045ms, max=0.567ms, total=107.3ms (n=872)
-...
+[Profiler v2] Frame Stats
+Frames: 600
+Intervalo REAL rAF→rAF (ms): avg=16.67 min=16.6 max=48.20 p95=16.9 p99=33.4
+FPS real: 60.0
+CPU dentro do animate (ms): avg=4.32 max=17.90 p99=9.80
+Gap FORA do animate (avg): 12.35ms — GC/paint/rede/recompilação
+Labels (por total)
+render: avg=2.135 min=0.891 max=9.800 total=1281.0ms (n=600)
+syncWorld: avg=0.728 ...
+Frames longos (interval > 20ms) — 4
+#312: interval=48.2ms inside=6.1ms outside=42.1ms → culpado: FORA (GC/paint/recompile) (...)
 ```
+
+> **Leitura correta**: o número que importa é o **Intervalo REAL rAF→rAF** e o **FPS real** —
+> comparados ao orçamento do seu monitor (60Hz=16.6ms, 144Hz=6.9ms). A "CPU dentro do animate"
+> é só a fatia de trabalho; se um frame longo tem `outside >> inside`, o pico está FORA do
+> `animate()` (GC, paint, decode de rede ou recompilação de shader) — veja
+> `window.__renderStats.recompiles()`. A v1 reportava um "FPS" de 200–400 que era ficção
+> (media só a CPU, não o intervalo real). Ver `T-070_PERFORMANCE_ANALYSIS.md` §0.
 
 ### Exportar dados para análise
 

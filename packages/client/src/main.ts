@@ -16,7 +16,7 @@ import {
   mapFileToGameMap,
   LAUNCHERS,
 } from "@aop/shared";
-import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate, createZoneRingMesh, createZoneDarkMesh, buildZoneDarkGeometry } from "./visuals";
+import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGround, updateBuffCooldownRing, updateNameplate, createZoneRingMesh, createZoneDarkMesh, buildZoneDarkGeometry } from "./visuals";
 import { updateCharacterAnimation, triggerCharacterShoot, triggerCharacterHit, triggerCharacterDeath } from "./characters";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
 import { initEvents, updateEvents, onEventResult } from "./events";
@@ -80,6 +80,32 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 const sun = new THREE.DirectionalLight(0xffffff, 0.8);
 sun.position.set(5, 10, 3);
 scene.add(sun);
+
+// T-070: luz ÚNICA e permanente da bandeira (livre no chão OU no portador). Antes havia uma
+// PointLight criada por-jogador (updateFlagGlow) — cada portador acumulava uma luz que NUNCA
+// saía da contagem, então o nº de luzes visíveis crescia (3→4→5→6) ao longo da partida. Em
+// three.js, mudar a contagem de luzes força recompilação de TODOS os shaders no próximo render
+// (bloqueio síncrono de centenas de ms = o pico de "ping"). Com UMA luz fixa a contagem nunca
+// muda: os shaders compilam uma vez e pronto. Só posição/intensidade mudam por frame.
+const flagLight = new THREE.PointLight(0xffd54f, 0, 16, 1.5);
+scene.add(flagLight);
+
+// T-070: sprite "âncora" invisível e permanente. Nameplates (reveal-on-hit) e popups de dano
+// são Sprites criados/removidos sob demanda; quando o último some da cena, three.js LIBERA o
+// programa de shader do sprite e o recompila no próximo que aparecer — um flip-flop de
+// recompilação (11↔12 programas) que trava a main thread em rajadas durante o combate. Esta
+// âncora nunca sai da cena, então o programa compila uma vez e nunca mais é liberado. Precisa
+// de um `map` (textura) porque a PRESENÇA da textura entra na chave de cache do shader — sem
+// ela, ancoraria um programa diferente do usado por nameplates/popups.
+{
+  const warmCanvas = document.createElement("canvas");
+  warmCanvas.width = warmCanvas.height = 1;
+  const anchor = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(warmCanvas), transparent: true, depthTest: false, opacity: 0 })
+  );
+  anchor.scale.setScalar(0.0001); // imperceptível, mas renderizado (mantém o programa vivo)
+  scene.add(anchor);
+}
 
 // T-022 (SPEC-0006): registry de VFX nomeados — 1 pool de partículas para todo o jogo.
 const vfx = createVfxSystem();
@@ -1075,8 +1101,9 @@ function syncWorld() {
     updateShieldVisual(vis, shielded, t); // SPEC-0005: bolha de invuln
     if (wasShielded.get(id) && !shielded) vfx.spawnAt("shield_pop", vis.position.x, vis.position.z); // T-022
     wasShielded.set(id, shielded);
+    // T-021: glow do portador agora é a `flagLight` única (dirigida após o loop) — nada por
+    // jogador aqui. `carryingFlag` segue sendo usado abaixo pro sparkle do flag_aura (T-022).
     const carryingFlag = st.flagEnabled && st.flag?.carrierId === id;
-    updateFlagGlow(vis, carryingFlag, t); // T-021: glow do portador
 
     // T-023: reveal-on-hit — inimigo é só skin até trocar dano (revealedUntil autoritativo).
     if (id !== mySessionId) {
@@ -1101,8 +1128,13 @@ function syncWorld() {
 
     // T-022 (backlog `speed_up_trail`): rastro periódico enquanto o buff está ativo —
     // reusa o mesmo pool de partículas, sem mesh dedicado por jogador.
-    const fx: string[] = p.effects ? Array.from(p.effects) : [];
-    if (fx.includes("speed_up")) {
+    // Checagem de membership sem alocar array por player por frame (era Array.from(p.effects),
+    // ~N alocações/frame de GC à toa). ArraySchema é iterável — forEach basta.
+    let hasSpeedUp = false;
+    p.effects?.forEach?.((e: string) => {
+      if (e === "speed_up") hasSpeedUp = true;
+    });
+    if (hasSpeedUp) {
       const last = lastTrailSpawn.get(id) ?? 0;
       const now = performance.now();
       if (now - last > 120) {
@@ -1151,12 +1183,34 @@ function syncWorld() {
     }
     flagVisual.position.x += (st.flag.x - flagVisual.position.x) * 0.25;
     flagVisual.position.z += (st.flag.z - flagVisual.position.z) * 0.25;
-    // T-041: acesa (livre) / apagada (carregada) / some (cooldown).
+    // T-041: acesa (livre) / apagada (carregada) / some (cooldown). O pano/visibilidade fica
+    // em updateFlagGround; a LUZ é a `flagLight` única, dirigida abaixo.
     const carried = !!st.flag.carrierId;
-    updateFlagGround(flagVisual, st.flag.state ?? "active", carried, t);
-  } else if (flagVisual) {
-    scene.remove(flagVisual);
-    flagVisual = undefined;
+    const state = st.flag.state ?? "active";
+    updateFlagGround(flagVisual, state, carried, t);
+
+    // T-070: dirige a luz única — no portador (carregada), na bandeira (livre) ou apagada
+    // (cooldown). Intensidade 0 mantém a luz na cena (contagem fixa, sem recompilar shader).
+    if (state === "cooldown") {
+      flagLight.intensity = 0;
+    } else if (carried) {
+      const cv = playerVisuals.get(st.flag.carrierId);
+      if (cv) {
+        flagLight.position.set(cv.position.x, 1.4, cv.position.z);
+        flagLight.intensity = 2.4 + Math.sin(t * 4) * 0.6; // pulso do glow do portador (T-021)
+      } else {
+        flagLight.intensity = 0;
+      }
+    } else {
+      flagLight.position.set(flagVisual.position.x, 1.15, flagVisual.position.z);
+      flagLight.intensity = 1.4 + Math.sin(t * 4) * 0.6; // pulso da bandeira livre (T-041)
+    }
+  } else {
+    flagLight.intensity = 0; // sem bandeira nesta sala — luz apagada, mas segue na cena
+    if (flagVisual) {
+      scene.remove(flagVisual);
+      flagVisual = undefined;
+    }
   }
 
   const seenC = new Set<string>();

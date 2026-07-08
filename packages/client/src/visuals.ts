@@ -225,52 +225,25 @@ export function updateShieldVisual(group: THREE.Group, protectedNow: boolean, t:
 }
 
 /**
- * T-021 (SPEC-0006): glow do PORTADOR da bandeira — precisa ser lido do mapa inteiro
- * (leitura tática "quem está com a bandeira"), não só de perto; por isso é uma luz de
- * verdade (THREE.PointLight), não só material emissive/opacidade como os outros aros.
- */
-export function updateFlagGlow(group: THREE.Group, carrying: boolean, t: number) {
-  let glow = group.userData.flagGlow as THREE.PointLight | undefined;
-  if (!glow) {
-    if (!carrying) return; // não cria nada até precisar
-    glow = new THREE.PointLight(0xffd54f, 0, 16, 1.5);
-    glow.position.y = 1.4;
-    group.add(glow);
-    group.userData.flagGlow = glow;
-  }
-  glow.visible = carrying;
-  if (carrying) glow.intensity = 2.4 + Math.sin(t * 4) * 0.6;
-}
-
 /**
  * SPEC-0011 (T-041): estado visual da bandeira NO MAPA (o objeto único, não o portador).
- * - livre e ativa (`state==="active"`, sem portador): ACESA — pano emissivo pulsante + a
- *   PointLight ancorada nela (lê-se de longe que está disponível). É a MESMA orçamento de
- *   1 luz: quando livre a luz é da bandeira; quando carregada, a luz vai pro portador (glow).
- * - carregada: mesh apagado/cinza (quem brilha é o portador), luz da bandeira desligada.
+ * - livre e ativa (`state==="active"`, sem portador): ACESA — pano emissivo pulsante.
+ * - carregada: mesh apagado/cinza (quem brilha é o portador).
  * - cooldown: mesh some (visible=false), fora do jogo.
- * `group.userData.pano` é o material DEDICADO do pano (clonado no main.ts) e
- * `group.userData.groundLight` a PointLight da bandeira livre — ambos mutados por frame,
- * sem alocar nada nem trocar material (só propriedades).
+ * `group.userData.pano` é o material DEDICADO do pano (clonado no main.ts), mutado por frame.
+ *
+ * T-070: a LUZ (portador OU bandeira livre) NÃO fica mais aqui nem em updateFlagGlow — virou a
+ * `flagLight` ÚNICA e permanente de main.ts. Antes havia PointLight por-grupo (uma por portador
+ * que se acumulava), o que crescia a contagem de luzes da cena e disparava recompilação de
+ * shader a cada nova luz (pico de centenas de ms). Aqui só sobra o pano/visibilidade.
  */
 export function updateFlagGround(group: THREE.Group, state: string, carried: boolean, t: number) {
   const inCooldown = state === "cooldown";
   group.visible = !inCooldown;
 
   const pano = group.userData.pano as THREE.MeshLambertMaterial | undefined;
-  let light = group.userData.groundLight as THREE.PointLight | undefined;
-  if (!light) {
-    light = new THREE.PointLight(0xffd54f, 0, 12, 1.5);
-    light.position.y = 1.15;
-    group.add(light);
-    group.userData.groundLight = light;
-  }
-
   const free = !inCooldown && !carried; // livre no chão e disputável
-  light.visible = free;
   if (free) {
-    // pulso por seno — só muda intensidade/emissive, sem alocar
-    light.intensity = 1.4 + Math.sin(t * 4) * 0.6;
     if (pano) {
       pano.color.setHex(0xef5350);
       pano.emissive.setHex(0xff7043);

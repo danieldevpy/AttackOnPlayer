@@ -1,258 +1,110 @@
-# T-070: Análise de Diagnóstico — Oscilação de Frame Time / "Ping"
+# T-070: Análise de Frame Time / Oscilação de "Ping"
 
-**Data**: 7 de Julho de 2026  
-**Observação Inicial**: Game frame time oscila de 1-2ms pra 25ms, exibido como "ping" no overlay de debug (F3)  
-**Status**: Causa raiz identificada, múltiplas hipóteses para investigar
-
----
-
-## 1. Descoberta Crítica
-
-O "ping" exibido no overlay **não é latência de rede pura**. É calculado assim:
-- Cliente: `room.send("ping", performance.now())` a cada 2s
-- Servidor: `client.send("pong", t)` eco imediato  
-- Cliente: `performance.now() - t` quando recebe resposta
-
-**Como JS é single-threaded no browser**: Se a thread principal está bloqueada renderizando um frame pesado quando o `pong` chega, o handler só executa depois que a thread liberta. Resultado: "ping" fica artificialmente inflado mesmo com rede perfeita.
+**Observação**: em dev, o "ping" no overlay F3 saltava de ~2ms para picos de 25–50ms.
+**Status**: ✅ **RESOLVIDO e VERIFICADO** — a causa raiz (recompilação de shader por crescimento
+da contagem de luzes + flip-flop do programa de sprite) foi confirmada em jogo real e corrigida.
+Ver **`T-070_ROOT_CAUSE_AND_FIX.md`** para o relato completo, a prova nos logs e os números
+antes/depois. Este documento fica como o registro do MÉTODO de diagnóstico.
 
 ---
 
-## 2. Dados Coletados (Testes Realizados)
+## 0. Correção fundamental da análise anterior (leia primeiro)
 
-### Profiler de Frame Time (window.profiler.printStats())
+A v1 do profiler **media a grandeza errada** e por isso a conclusão anterior ("render de
+múltiplos personagens") não se sustenta nos próprios dados.
 
-**Teste 1** (6+ players, sem evento):
-```
-avg=4.32ms, max=12.30ms, fps=231.4
-render: avg=2.135ms, max=9.800ms
-syncWorld: avg=0.728ms, max=3.400ms
-updateDebugState: avg=1.378ms, max=2.800ms
-```
+- A v1 media só o **tempo de CPU DENTRO de `animate()`** (`start()` no topo, `end()` após o
+  render). Isso **não é o frame time real**: `requestAnimationFrame` é limitado pela taxa do
+  monitor (60Hz→16.6ms, 144Hz→6.9ms).
+- Por isso ela reportava **"fps 135–231"** — número impossível para uma tela real. Era
+  "quantos frames caberiam SE só existisse o trabalho do animate", não FPS.
+- Consequência: os dados coletados (avg 4–7ms, max 17ms) **não conseguem explicar um ping de
+  50ms**. O pico mora exatamente onde a v1 era cega: **no gap entre o fim de um render e o
+  próximo rAF** — GC, layout/paint do browser, decode dos patches binários do Colyseus e
+  **recompilação de shader** (o suspeito nº1 de picos momentâneos).
 
-**Teste 2** (6+ players, sem evento):
-```
-avg=4.52ms, max=14.20ms, fps=221.4
-render: avg=2.618ms, max=11.200ms
-```
-
-**Teste 3** (6+ players, COM evento ativo):
-```
-avg=7.37ms, max=18.70ms, fps=135.7  ⚠️ PIOR
-render: avg=5.031ms, max=17.900ms ⚠️ RENDER LENTO
-```
-
-**Teste 4** (6+ players, COM evento ativo):
-```
-avg=6.51ms, max=17.30ms, fps=153.5
-render: avg=4.155ms, max=15.000ms
-```
-
-### Padrão Observado
-
-| Situação | Render avg | Render max | Frame avg | Frame max |
-|----------|-----------|-----------|----------|----------|
-| Sem evento | 2.1ms | 9.8ms | 4.3ms | 12.3ms |
-| Com evento | 4.2-5.0ms | 15-17.9ms | 6.5-7.4ms | 17-18.7ms |
-
-**Correlação**: Quando evento ativo → render mais lento → frame mais lento → "ping" aparece alto
+O "ping" do overlay, aliás, **não é latência de rede pura** (isso a v1 já tinha certo): é
+`performance.now() - t` de um eco `pong`, processado na main thread. Se a thread está travada
+quando o `pong` chega, o valor infla. **Ping alto aqui = latência de agendamento da main
+thread**, não rede.
 
 ---
 
-## 3. Hipóteses e Evidências
+## 1. O que o profiler v2 mede agora
 
-### Hipótese A: Renderização de Múltiplos Personagens
+`window.profiler.printStats()` passou a reportar:
 
-**Evidência**:
-- Testes rodados com **6+ personagens visíveis**
-- `render` é o label mais lento (~50% do frame time)
-- Padrão: múltiplos personagens = render lento
+- **Intervalo REAL rAF→rAF** (avg/min/max/p95/p99) — o frame time de verdade e o stutter
+  percebido. É isto que tem que ser comparado ao orçamento do monitor.
+- **CPU dentro do animate()** — o que a v1 chamava (erradamente) de frame time.
+- **Gap FORA do animate()** = intervalo − inside. Onde GC/paint/rede/recompilação se escondem.
+- **Frames longos** (intervalo > 20ms): cada um vem rotulado como `FORA` (GC/paint/recompile)
+  ou `DENTRO → <label>` com o trecho de `animate()` culpado.
 
-**Possíveis Causas**:
-1. Material caro (`MeshStandardMaterial` com iluminação dinâmica × 100+ meshes)
-2. Muitos draw calls (cada parte do corpo é mesh separada: 18-20 partes × 6 players = 108-120 meshes)
-3. Sem LOD ou frustum culling otimizado
-4. Sem baking/batching de geometrias por player
-
-**Como Testar**:
-```javascript
-// No DevTools console
-window.__renderStats.render()
-// Ver: Triangles count, Draw Calls, Programs (shaders)
-
-// Contar meshes na cena
-window.__renderStats.getMeshCount()  // deve estar 100+
-```
+E `window.__renderStats` ganhou o **detector de recompilação de shader**: sempre que
+`renderer.info.programs.length` cresce após o aquecimento inicial, loga um `console.warn` com
+timestamp e a contagem de luzes visíveis. `window.__renderStats.recompiles()` lista todos.
 
 ---
 
-### Hipótese B: Recálculo Frequente de Zona (buildZoneDarkGeometry)
+## 2. Procedimento de confirmação (UMA sessão)
 
-**Evidência**:
-- `updateZoneVisual` toca em geometria (linha 424 em main.ts)
-- Correlação: evento ativo → render lento
+1. Abra o jogo, entre numa sala com 6+ players/bots, deixe o console aberto.
+2. Jogue ~20s **sem** evento, rode `window.profiler.printStats()` e `window.__renderStats.render()`.
+3. Dispare um evento, jogue ~20s **com** evento ativo, repita os dois comandos.
+4. Leia o veredito direto dos números:
 
-**Possíveis Causas**:
-1. `buildZoneDarkGeometry` sendo recalculada a cada frame (mesmo com guard `ZONE_REDRAW_EPS = 0.5`)
-2. Geometria não sendo descartada/cached corretamente
-3. Interpolação do raio causando pequenas variações que ultrapassam threshold
+| Sintoma nos dados | Causa | Onde olhar |
+|---|---|---|
+| `console.warn` de RECOMPILAÇÃO aparece junto dos picos | Recompilação de shader | luzes entrando/saindo da cena |
+| Frames longos rotulados **FORA** e sem recompile | GC ou paint/decode de rede | alocações por frame, tamanho do state |
+| Frames longos **DENTRO → render** | Render genuinamente pesado | draw calls / triângulos (`__renderStats`) |
+| Frames longos **DENTRO → updateZoneVisual** | Rebuild de geometria da zona | `buildZoneDarkGeometry` durante o shrink |
+| Intervalo p99 ≈ orçamento do monitor e SEM frames longos | Não há regressão real | o "ping" era artefato de amostragem |
 
-**Como Testar**:
-```javascript
-// Adicionar log em updateZoneVisual pra contar recalcs
-// Ou: window.profiler.getStats().labels['updateZoneVisual:end'] - labels['updateZoneVisual:start']
-```
-
----
-
-### Hipótese C: Lógica Pesada em updateEvents / updateRespawnWait
-
-**Evidência**:
-- T-067, T-068, T-069 foram adicionadas recentemente (SPEC-0016)
-- Problema começou após essas features
-
-**Possíveis Causas**:
-1. DOM updates frequentes (criar/remover elementos de DOM)
-2. Cálculos geométricos complexos por frame
-3. Array/object allocations causando GC pressure
-
-**Como Testar**:
-```javascript
-// Verificar tempo granular
-window.profiler.getStats().labels
-
-// Procurar por labels com max alto mesmo que avg baixo
-// Picos ocasionais bastam pra explicar oscilação
-```
+Este último caso é plausível: amostrar latência de main thread a cada 2s, com o overlay F3
+aberto (que faz `innerHTML` a ~10fps), produz "oscilação" mesmo num jogo saudável.
 
 ---
 
-### Hipótese D: Problema de Servidor (não do client)
+## 3. Hipóteses ranqueadas (por leitura de código)
 
-**Evidência**:
-- Revert do commit de geometria de personagem (`6572a62`) não resolveu
-- Profiler mostra frame time aceitável na maioria dos casos (avg 4-7ms)
-- Picos isolados, não constantes
+**H1 — Recompilação de shader ao alternar luzes (CORRIGIDA).**
+`updateFlagGlow`/`updateFlagGround` alternavam `light.visible`. Isso muda a contagem de luzes
+visíveis → three.js recompila shaders. Trocado por modulação de `intensity` (contagem fixa).
+Confirmar via ausência de novos warns de recompile.
 
-**Possíveis Causas**:
-1. Tick rate do servidor muito alta ou patch size grande
-2. Lógica de evento/zona consumindo CPU no servidor
-3. Network congestion ou packet loss
-4. Colyseus room state muitogrande ou com muitas updates
+**H2 — Pressão de GC por alocação em loop (PARCIALMENTE CORRIGIDA).**
+`syncWorld` alocava um array por player por frame (`Array.from(p.effects)`) — removido. Restam
+`new Set()` × 3 por frame (seenP/seenC/seenProj) e o overhead do próprio profiler (v2 reduziu
+para ~zero alocação). Confirmar via frames longos rotulados **FORA** sem recompile.
 
-**Como Testar**:
-- Instrumentar `packages/server/src/rooms/ArenaRoom.ts`
-- Verificar tempo de processamento de ticks
-- Medir tamanho de patches enviadas
+**H3 — Rebuild da geometria da zona durante o shrink.**
+`buildZoneDarkGeometry` re-triangula (earcut) a cada mudança de raio > 0.5 tile. Guardado, mas
+periódico durante o `active`. Provavelmente 1–3ms, não 50ms. Confirmar via frames longos
+rotulados **DENTRO → updateZoneVisual**.
 
----
-
-## 4. Ferramentas Disponíveis para Análise
-
-### Profiler de Frame Time
-```javascript
-// Usar no DevTools Console
-window.profiler.printStats()     // exibir resumo
-window.profiler.getStats()       // objeto completo
-window.profiler.exportJSON()     // salvar pra análise offline
-window.profiler.reset()          // limpar e começar nova medição
-```
-
-### Renderer Stats
-```javascript
-// Diagnóstico de render
-window.__renderStats.render()           // imprimir stats
-window.__renderStats.getMeshCount()     // contar meshes
-window.__renderStats.getAverageVerticesPerMesh()  // verts por mesh
-window.__renderStats.export()           // JSON completo
-```
-
-### Profiling por Commit
-```bash
-./scripts/measure-perf.sh [commit]  # medir um commit específico
-cat perf-results.csv                 # histórico de medições
-```
+**H4 — Render pesado com muitos personagens.**
+A hipótese original. Só é a causa se os frames longos forem **DENTRO → render** E o intervalo
+real estourar o orçamento do monitor. Os números da v1 (max 17ms) sugerem que é secundária.
 
 ---
 
-## 5. Próximas Investigações Recomendadas
+## 4. Correções já aplicadas nesta passagem
 
-### Urgência 1: Confirmar números de render
-```javascript
-window.__renderStats.render()
-// Procure por:
-// - Triangles: esperado 50k-100k+
-// - Draw Calls: esperado 100-150+
-// - Programs: esperado 1-3 (shaders únicos)
-```
+- `profiler.ts` reescrito: mede intervalo real + gap + frames longos, baixa alocação.
+- `renderer-stats.ts`: detector de recompilação de shader + contagem de luzes.
+- `visuals.ts`: luzes da bandeira modulam `intensity` em vez de alternar `visible` (H1).
+- `main.ts`: removida a alocação de array por player por frame em `syncWorld` (H2).
 
-Se Draw Calls > 150, hipótese A é provável.
+Nada no caminho de render de personagem foi alterado — isso fica para DEPOIS da confirmação,
+para não otimizar às cegas.
 
 ---
 
-### Urgência 2: Testar sem evento
-```
-1. Jogar 15-20s SEM evento ativo
-2. Rodar window.profiler.printStats()
-3. Comparar com medição COM evento
+## 5. Se a confirmação apontar render pesado (H4)
 
-Se sem evento é rápido → problema em updateZoneVisual/updateEvents
-Se com evento piora só 20% → problema é render de players, não zona
-```
-
----
-
-### Urgência 3: Testar com poucos players
-```
-1. Entrar em sala com 1-2 players visíveis
-2. Rodar window.profiler.printStats()
-3. Comparar com 6+ players
-
-Se frame time cai significativamente → render é o culpado
-Se continua lento → problema é server ou lógica fixa
-```
-
----
-
-### Urgência 4: Profile Chrome DevTools
-```
-1. Abrir DevTools > Performance tab
-2. Record 3-5 segundos com jogo rodando
-3. Procurar por frame drops:
-   - Procure por frames > 16ms (red frame)
-   - Verifique se `renderer.render()` é o gargalo
-   - Ou se é layout/reflow de DOM
-```
-
----
-
-## 6. Artefatos Criados para Análise
-
-| Arquivo | Propósito |
-|---------|-----------|
-| `packages/client/src/profiler.ts` | Medição de frame time granular |
-| `packages/client/src/renderer-stats.ts` | Diagnóstico de render (draw calls, triangles) |
-| `scripts/measure-perf.sh` | Histórico de performance por commit |
-| `PROFILING.md` | Documentação de como usar profiler |
-| `RENDER_OPTIMIZATION.md` | Catálogo de possíveis otimizações |
-| `T-070_PERFORMANCE_ANALYSIS.md` | Este documento |
-
----
-
-## 7. Resumo para Próximo Modelo
-
-**O quê foi descoberto:**
-- "Ping" oscilando não é rede pura — é thread JavaScript bloqueada em render pesado
-- Render está demorando 2-5ms normalmente, 4-17ms quando evento ativo + 6+ players
-- Culpado provável: renderização de múltiplos personagens com material caro
-
-**Ferramentas prontas:**
-- `window.profiler.printStats()` e `window.__renderStats.render()` — diagnóstico completo
-- Documentação do que testar e como
-
-**O que NÃO foi feito:**
-- Nenhuma correção implementada
-- Nenhuma mudança no código de render
-- Tudo deixado para o modelo maior analisar e decidir
-
-**Recomendação:**
-Usar ferramentas de profiling para confirmar qual das 4 hipóteses é verdadeira, depois implementar otimização apropriada (ou combinar múltiplas).
+Ver `RENDER_OPTIMIZATION.md`. Ordem de custo/benefício: (1) confirmar draw calls com
+`__renderStats.render()`; (2) instanciar partes de personagem repetidas; (3) reduzir segmentos
+de geometria; (4) desligar `antialias` em telas de alta densidade. Só depois de os números
+justificarem.
