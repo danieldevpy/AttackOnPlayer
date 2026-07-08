@@ -6,43 +6,32 @@
 **Atualizado em:** 2026-07-08
 **Branch:** `main`. **Marco:** V1.x (SPEC-0016 — Eventos e modos de jogo).
 
-**Sessão 50 (agente worker): PROMPT-0067 — T-066: Battle Royale server-side completo**
-Executada a T-066 (`docs/BACKLOG.md`): `packages/server/src/systems/events/battleRoyale.ts`
-implementando `EventDefinition` completo + registro no `EVENT_REGISTRY` — **a partir desta
-sessão o Event Director dispara eventos DE VERDADE** (automático por chance/intensidade com
-≥4 vivos, ou manual via `room.send("dev_event", "battle_royale")` com `DEBUG=1`). Ciclo:
-warning 5s (zona nasce sobre a janela 9×9 mais densa de players vivos, snap em célula
-alcançável, raio envolve o cluster com folga, clamp 6–20; morte → renasce dentro da zona) →
-active 10s (raio encolhe linear até 0; fora da zona dano verdadeiro `10×(1+0.5t)` que ignora
-safe/escudo/protection; morte → `waitingRespawn`, fora do jogo; ≤1 vivo → early-end) →
-ending 1.5s (sobrevivente full-heal NO LUGAR + bônus XP/coins; segurados renascem TODOS no
-mesmo tick; broadcast `event_result`) → idle (cooldowns 120s próprio + 30s global).
-Suporte genérico que a task exigiu: hook `onEndingStart` no contrato, `EventRoom` maior
-(`map`/`reachable`/`telemetryBase`/`broadcast`/`grantXp`/`releaseHeldRespawns`),
-`ArenaRoom.releaseHeldRespawns`, player segurado sem input/coleta. Telemetria
-`event_warning/start/zone_death/end`. Gates: `tsc` ×3 limpo, shared 49/49, server 128/128
-(16 testes novos), bots 35/35; smoke isolado com BR disparando naturalmente + ciclo forçado
-via `dev_event` observado completo (`/debug/rooms` mostra fase/countdown). Decisões e "como
-testar rodando o projeto" em `docs/prompts/PROMPT-0067.md`.
+**Sessão 51 (agente worker): PROMPT-0068 — T-067: Cliente — UI genérica de fases de evento**
+Executada a T-067 (`docs/BACKLOG.md`), pedido explícito do CD: **sem preview de browser**.
+`packages/client/src/events.ts` (novo): camada de UI 100% event-agnostic, dirigida por
+`state.event` (schema da T-065) — banner de **warning** (nome via `EVENT_LABELS[id]` +
+countdown grande derivado de `phaseEndsAt - Date.now()` a cada frame, nunca timer próprio),
+HUD compacto de **active** (tempo restante + contagem de vivos `hp>0 && !waitingRespawn`),
+destaque de **ending** (broadcast `event_result {survivorNames, reason}` que a T-066 emite —
+tolera ausência, mostra "Evento encerrado"), **idle** com early-return antes de tocar DOM
+(zero custo/zero elemento novo enquanto nenhum evento nunca disparou). `index.html` ganhou 3
+containers + CSS (fade/translate ≤300ms, ajuste `mobile-layout` da T-064). `main.ts`:
+`initEvents`/`updateEvents` no loop, `room.onMessage("event_result", ...)` novo. Gates: `tsc`
+×3 limpo, `vite build` OK, shared 49/49 + server 129/129 + bots 35/35 (nenhum editado — task
+é client-only), smoke `bots -- 4 20` contra o dev server já rodando (0 erros). Decisões em
+`docs/prompts/PROMPT-0068.md`.
 
-**Próximo passo:** T-067 (cliente: UI genérica de fases — pode rodar já; contratos prontos
-desde a T-065, e o broadcast `event_result` que ela consome existe agora). Depois, em
-paralelo (4 frentes disjuntas): T-068 (visual da zona) ∥ T-069 (espera de respawn) ∥ T-070
-(bots cientes do evento) ∥ T-071 (painel Django EventModeConfig). T-072 após T-068+T-069;
-T-073 (QA smoke da spec inteira) por último. Ver `specs/SPEC-0016-eventos-e-modos-de-jogo.md`.
+**Pendência desta sessão:** a verificação visual do critério de aceite (4 fases na ordem,
+countdown batendo ±250ms com o servidor, banner legível em mobile) **não foi feita** — pedido
+explícito de pular o preview. Recomendado rodar antes de prosseguir: servidor `DEBUG=1` +
+`room.send("dev_event", "battle_royale")`, observar banner→HUD→resultado→desmonte.
 
-**Follow-up do CD (mesmo dia):** primeira ativação agora é **determinística** — sala nova
-não dispara nada no 1º minuto (warm-up) e o primeiro evento elegível dispara GARANTIDO aos
-~60s (`DIRECTOR_FIRST_EVENT_AFTER_MS`, dial); depois o ritmo probabilístico normal assume.
-`dev_event` (DEBUG=1) segue imediato; elegibilidade (≥4 vivos) continua valendo — rode
-`npm run bots -- 4 600` pra completar a sala. Verificado por telemetria: 60.2s exatos.
+**Próximo passo:** validar visualmente a T-067 (pendência acima) e então **T-068 ∥ T-069 ∥
+T-070 ∥ T-071** (4 frentes disjuntas, já liberadas): visual da zona / espera de respawn como
+arquibancada / bots cientes do evento / painel Django `EventModeConfig`. T-068 e T-069 tocam
+nos mesmos arquivos de T-067 (`events.ts`, `main.ts`) — coordenar se rodarem em paralelo com
+outra sessão. T-072 (polish som/VFX) depois de T-068+T-069; T-073 (QA da spec inteira) por
+último. Ver `specs/SPEC-0016-eventos-e-modos-de-jogo.md`.
 
-**Nota pra quem for testar à mão:** sem UI ainda (T-067..T-069), o evento é visível pelo
-estado sincronizado, pelo feed do `/debug/rooms` (DEBUG=1) e pelos logs do servidor
-("morreu e aguarda o fim do evento"). Bots headless ainda não reagem à zona (T-070) — morrem
-fora dela e testam o hold/release de graça.
-
-**Pendências vindas de sessões anteriores (não mexidas nesta sessão):**
-`backend/requirements.txt` com `M` no git status desde o início da sessão (mudança de outro
-agente/sessão — não investiguei nem toquei); idem `run.sh`, `docs/GUIA_PERSONAGENS_PROCEDURAIS_V2.md`,
-`instrucoes/GUIA_MODELOS_CLAUDE.md` e os arquivos `*.skill` não rastreados na raiz.
+**Nota:** bots headless ainda não reagem à zona (T-070 pendente) — seguem farmando fora dela
+durante o evento; isso é esperado até a T-070 rodar.

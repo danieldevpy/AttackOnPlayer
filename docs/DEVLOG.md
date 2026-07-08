@@ -1,5 +1,27 @@
 # Devlog
 
+## 2026-07-08 — Sessão 51 (agente worker): PROMPT-0068 — T-067: UI genérica de fases de evento (SPEC-0016)
+
+- **Task:** T-067 (`docs/BACKLOG.md`) — camada de UI cliente pro Event Director (T-065) +
+  Battle Royale (T-066), 100% event-agnostic (dirigida por `state.event`). Pedido explícito do
+  CD nesta sessão: **sem verificação em preview de browser**.
+- **Entregue:** `packages/client/src/events.ts` (novo) — `updateEvents(now)` lê `state.event` a
+  cada frame e renderiza banner de warning (nome via `EVENT_LABELS[id]` + countdown grande
+  derivado de `phaseEndsAt - Date.now()`, nunca timer próprio), HUD compacto de active (tempo
+  restante + contagem de vivos `hp>0 && !waitingRespawn`), destaque de ending (via broadcast
+  `event_result {survivorNames, reason}` que a T-066 emite — tolera ausência) e desmonte total
+  em idle (early-return antes de tocar DOM quando nenhum evento nunca disparou — zero custo por
+  frame, critério de aceite da task). `packages/client/index.html`: 3 containers novos
+  (`#event-banner`, `#event-hud`, `#event-result`) + CSS com fade/translate ≤300ms e ajuste
+  `mobile-layout` (T-064). `packages/client/src/main.ts`: `initEvents`/`updateEvents` no mesmo
+  padrão de `hud.ts`, `room.onMessage("event_result", ...)` novo.
+- **Gates:** `tsc` ×3 limpo; `vite build` OK; shared 49/49, server 129/129, bots 35/35 (nenhum
+  editado — T-067 é client-only); smoke `bots -- 4 20` contra o dev server já rodando, 0 erros.
+  **Preview de browser pulado** (pedido do CD) — a checagem visual das 4 fases e o countdown
+  ±250ms do critério de aceite ficam pendentes; recomendado validar antes/junto da T-068.
+- Detalhes/decisões em `docs/prompts/PROMPT-0068.md`. T-068/T-069 (que dependem de T-067)
+  liberadas.
+
 ## 2026-07-08 — Sessão 50 (agente worker): PROMPT-0067 — T-066: Battle Royale server-side completo (SPEC-0016)
 
 - **Task:** T-066 (`docs/BACKLOG.md`) — primeiro evento concreto sobre o núcleo da T-065.

@@ -234,6 +234,48 @@
         transition: opacity .25s ease, transform .25s ease;
       }
       .toast.show { opacity: 1; transform: translateX(0); }
+      /* Eventos de sessão (SPEC-0016, T-067): UI event-agnostic dirigida por state.event.
+         Transições de entrada/saída ≤300ms (spec); zero elemento novo em idle (events.ts só
+         monta a casca quando o primeiro evento da sessão dispara). */
+      #event-banner {
+        position: fixed; top: 18px; left: 50%; transform: translateX(-50%) translateY(-14px);
+        z-index: 22; text-align: center; pointer-events: none;
+        opacity: 0; transition: opacity .3s ease, transform .3s ease;
+        background: rgba(20,8,8,.82); border: 1px solid #ff525266; border-radius: 10px;
+        padding: 8px 22px; font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      #event-banner.active { opacity: 1; transform: translateX(-50%) translateY(0); }
+      #event-banner .event-banner-name {
+        font-weight: 800; font-size: 20px; letter-spacing: 2px; color: #ff8a80;
+        text-shadow: 0 0 10px rgba(255,82,82,.6);
+      }
+      #event-banner .event-banner-countdown {
+        font-size: 30px; font-weight: 800; color: #fff; font-family: monospace; margin-top: 2px;
+      }
+      body.mobile-layout #event-banner { padding: 5px 14px; }
+      body.mobile-layout #event-banner .event-banner-name { font-size: 14px; letter-spacing: 1px; }
+      body.mobile-layout #event-banner .event-banner-countdown { font-size: 20px; }
+      #event-hud {
+        position: fixed; top: 18px; left: 50%; transform: translateX(-50%) translateY(-10px);
+        z-index: 12; display: flex; gap: 14px; align-items: center; pointer-events: none;
+        opacity: 0; transition: opacity .3s ease, transform .3s ease;
+        background: rgba(10,12,18,.78); border: 1px solid rgba(255,255,255,.1); border-radius: 999px;
+        padding: 5px 16px; font-family: monospace; font-size: 14px; color: #fff;
+      }
+      #event-hud.active { opacity: 1; transform: translateX(-50%) translateY(0); }
+      #event-hud .event-hud-time { color: #ffd54f; font-weight: 700; }
+      #event-result {
+        position: fixed; top: 40%; left: 50%; transform: translateX(-50%) translateY(6px);
+        z-index: 23; pointer-events: none;
+        opacity: 0; transition: opacity .3s ease, transform .3s ease;
+        background: rgba(10,12,18,.85); border: 1px solid #ffd54f66; border-radius: 12px;
+        padding: 14px 28px; text-align: center;
+      }
+      #event-result.active { opacity: 1; transform: translateX(-50%) translateY(0); }
+      #event-result .event-result-text {
+        font-family: "Segoe UI", system-ui, sans-serif; font-weight: 800; font-size: 20px;
+        color: #ffe082; text-shadow: 0 0 8px rgba(0,0,0,.6);
+      }
     </style>
   </head>
   <body>
@@ -250,6 +292,9 @@
     <div id="roster"></div>
     <div id="upgrade-cards"></div>
     <div id="toast-stack"></div>
+    <div id="event-banner"></div>
+    <div id="event-hud"></div>
+    <div id="event-result"></div>
     <div id="debug-overlay">
       <button id="debug-close">✕ F3</button>
       <div id="debug-state"></div>

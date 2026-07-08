@@ -19,6 +19,7 @@ import {
 import { createPlayerVisual, createCollectibleVisual, propParts, updatePowerVisual, updateShieldVisual, updateFlagGlow, updateFlagGround, updateBuffCooldownRing, updateNameplate } from "./visuals";
 import { updateCharacterAnimation, triggerCharacterShoot, triggerCharacterHit, triggerCharacterDeath } from "./characters";
 import { initHud, updateHud, showUpgradeOffer, onUpgradeApplied, closeUpgradeOffer, chooseUpgradeByIndex, onCombatEvent, pushToast } from "./hud";
+import { initEvents, updateEvents, onEventResult } from "./events";
 import { createVfxSystem } from "./vfx";
 import { createAudioSystem } from "./audio";
 import { ProfileManager, ProfileId } from "./input/manager";
@@ -392,6 +393,8 @@ async function connect() {
     room.onMessage("debug_event", (ev: any) => {
       pushDebugEvent(ev);
     });
+    // SPEC-0016 (T-066/T-067): resultado do evento, emitido ao entrar no `ending`.
+    room.onMessage("event_result", (msg: any) => onEventResult(msg));
     // T-016: cards de level-up — servidor manda a oferta e confirma a escolha
     room.onMessage("upgrade_offer", (offer: any) => showUpgradeOffer(offer));
     room.onMessage("upgrade_applied", (msg: any) => onUpgradeApplied(msg));
@@ -1075,6 +1078,9 @@ initHud({
   playSound: (name) => audio.play(name),
 });
 
+// ---------- UI de fases de evento (SPEC-0016, T-067) ----------
+initEvents({ getRoom: () => room });
+
 // ---------- Loop ----------
 let t = 0;
 let debugTick = 0;
@@ -1091,6 +1097,7 @@ function animate() {
   updateDamagePopups(performance.now()); // T-018
   vfx.update(performance.now()); // T-022
   updateHud(performance.now());
+  updateEvents(performance.now()); // SPEC-0016 (T-067)
   // Atualiza painel de debug a ~10fps para não sobrecarregar DOM
   if (debugOpen && ++debugTick % 2 === 0) updateDebugState();
   renderer.render(scene, camera);
