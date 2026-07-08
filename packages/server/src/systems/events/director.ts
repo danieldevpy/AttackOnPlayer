@@ -71,7 +71,7 @@ export class EventDirector {
         this.tickIdle(room, now);
         break;
       case "warning":
-        this.tickWarning(room, now);
+        this.tickWarning(room, dt, now);
         break;
       case "active":
         this.tickActive(room, dt, now);
@@ -132,7 +132,8 @@ export class EventDirector {
     this.startWarning(chosen, room, now);
   }
 
-  private tickWarning(room: EventRoom, now: number) {
+  private tickWarning(room: EventRoom, dt: number, now: number) {
+    this.activeDef!.onWarningTick?.(room, dt, now);
     if (now >= this.phaseEndsAt) this.startActive(room, now);
   }
 

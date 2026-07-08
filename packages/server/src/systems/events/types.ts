@@ -4,6 +4,7 @@
 // registry, zero mudança nestes contratos).
 import { GameMap } from "@aop/shared";
 import { ArenaState, Player } from "../../state/ArenaState";
+import { EffectKind } from "../effects";
 
 /** Fases do ciclo de vida de um evento — sincronizadas no schema (`ArenaState.event.phase`). */
 export type EventPhase = "idle" | "warning" | "active" | "ending";
@@ -51,6 +52,12 @@ export interface EventRoom {
   /** Libera TODOS os `waitingRespawn` no MESMO tick (respawn default + spawn protection);
    * devolve quantos liberou — é o `holdCount` da telemetria de fim de evento. */
   releaseHeldRespawns(now: number): number;
+  /** Aplica/renova um efeito temporário via EffectSystem (T-074: zone_rush do Battle Royale). */
+  applyEffect(playerId: string, kind: EffectKind, now: number): void;
+  /** Revoga um efeito antes do fim natural (T-074: ao entrar na zona). No-op se ausente. */
+  removeEffect(playerId: string, kind: EffectKind): void;
+  /** Consulta se um efeito está ativo agora (T-074: evita reconceder zone_rush já consumido). */
+  hasEffect(playerId: string, kind: EffectKind): boolean;
 }
 
 /**
@@ -70,6 +77,9 @@ export interface EventDefinition {
   checkEligibility(ctx: EligibilityContext): boolean;
 
   onWarningStart?(room: EventRoom, now: number): void;
+  /** Roda a cada tick DURANTE a fase "warning" (T-074: revogar `zone_rush` de quem já entrou na
+   * zona antes do "active" começar) — a maioria dos eventos não precisa disto. */
+  onWarningTick?(room: EventRoom, dt: number, now: number): void;
   onStart?(room: EventRoom, now: number): void;
   onTick?(room: EventRoom, dt: number, now: number): void;
   /** Chamado 1× na transição active→ending (timeout OU earlyEndCondition) — é aqui que o

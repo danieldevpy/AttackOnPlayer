@@ -19,12 +19,22 @@ import {
   KILL_RUSH_MS,
   SHIELD_TEMP_MS,
   SHIELD_TEMP_DAMAGE_MULT,
+  BR_ZONE_RUSH_MULT,
+  BR_ZONE_RUSH_MS,
 } from "@aop/shared";
 
 // SPEC-0010 (T-035): `damage_reduction` = escudo temporário do mapa. Reduz o dano recebido
 // (via player.damageTakenMult no recompute) por SHIELD_TEMP_MS — não bloqueia, ao contrário
 // da invulnerabilidade de nascimento (spawnProtectedUntil, tratada no ProjectileSystem).
-export type EffectKind = "speed_up" | "xp_boost" | "launcher_slow" | "kill_rush" | "damage_reduction";
+// T-074: `zone_rush` é revogado manualmente (remove()) quando o player entra na zona do Battle
+// Royale — a entrada em DURATION é só o teto de segurança caso ele nunca chegue.
+export type EffectKind =
+  | "speed_up"
+  | "xp_boost"
+  | "launcher_slow"
+  | "kill_rush"
+  | "damage_reduction"
+  | "zone_rush";
 
 interface ActiveEffect {
   kind: EffectKind;
@@ -45,6 +55,7 @@ const DURATION: Record<EffectKind, number> = {
   launcher_slow: 0, // não usado — duração vem do LauncherDef via applySlow()
   kill_rush: KILL_RUSH_MS, // T-017: skill impulso — boost curto ao matar
   damage_reduction: SHIELD_TEMP_MS, // SPEC-0010 (T-035): escudo temporário do mapa
+  zone_rush: BR_ZONE_RUSH_MS, // T-074: teto de segurança — normalmente revogado antes disso
 };
 
 function zeroAttr(): AttrPoints {
@@ -70,6 +81,21 @@ export class EffectSystem {
     if (existing) existing.expiresAt = now + DURATION[kind];
     else s.active.push({ kind, expiresAt: now + DURATION[kind] });
     this.recompute(player, s);
+  }
+
+  /** Revoga um efeito antes do fim natural (T-074: `zone_rush` some ao entrar na zona). No-op se ausente. */
+  remove(playerId: string, player: Player, kind: EffectKind) {
+    const s = this.byPlayer.get(playerId);
+    if (!s) return;
+    const filtered = s.active.filter((e) => e.kind !== kind);
+    if (filtered.length === s.active.length) return;
+    s.active = filtered;
+    this.recompute(player, s);
+  }
+
+  /** Consulta se um efeito está ativo agora — usado pra decidir elegibilidade de concessão (T-074). */
+  has(playerId: string, kind: EffectKind): boolean {
+    return this.byPlayer.get(playerId)?.active.some((e) => e.kind === kind) ?? false;
   }
 
   /**
@@ -162,6 +188,7 @@ export class EffectSystem {
     let speed = attrMult("agilidade", s.attr.agilidade);
     if (s.active.some((e) => e.kind === "speed_up")) speed *= SPEED_BOOST_MULT;
     if (s.active.some((e) => e.kind === "kill_rush")) speed *= KILL_RUSH_MULT; // T-017: impulso
+    if (s.active.some((e) => e.kind === "zone_rush")) speed *= BR_ZONE_RUSH_MULT; // T-074: correr pra zona
     speed = Math.min(speed, SPEED_MAX_MULT);
     // T-012: lentidão de lançador se aplica por cima do teto — reduz o efetivo, não o disputa
     const slow = s.active.find((e) => e.kind === "launcher_slow");

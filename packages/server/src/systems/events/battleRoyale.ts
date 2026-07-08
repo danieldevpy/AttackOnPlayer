@@ -120,6 +120,17 @@ function livingPositions(room: EventRoom): Array<{ x: number; z: number }> {
   return positions;
 }
 
+/** T-074: revoga `zone_rush` de quem já entrou na zona atual — chamada tanto durante "warning"
+ * (onWarningTick) quanto durante "active" (onTick), pra desativar assim que o player chega,
+ * não só quando o efeito expira sozinho (BR_ZONE_RUSH_MS é só o teto de segurança). */
+function revokeZoneRushForArrivals(room: EventRoom, centerX: number, centerZ: number, radius: number) {
+  room.state.players.forEach((p, id) => {
+    if (p.hp <= 0) return;
+    if (!room.hasEffect(id, "zone_rush")) return;
+    if (Math.hypot(p.x - centerX, p.z - centerZ) <= radius) room.removeEffect(id, "zone_rush");
+  });
+}
+
 export const BattleRoyaleEvent: EventDefinition = {
   id: BR_ID,
   weight: 1,
@@ -138,7 +149,9 @@ export const BattleRoyaleEvent: EventDefinition = {
 
   // Warning: zona nasce sobre o cluster mais denso, snapada em célula alcançável; morte
   // nesta fase renasce DENTRO da zona (respawnPolicy abaixo) — ninguém começa o active longe.
-  onWarningStart(room, _now) {
+  // T-074: quem está fora do raio no instante do aviso ganha `zone_rush` (boost de velocidade)
+  // pra ter chance real de chegar — é um bônus único por evento, não reconcedido depois.
+  onWarningStart(room, now) {
     const positions = livingPositions(room);
     const raw = pickZoneCenter(positions, room.map);
     const center = nearestReachableCell(room.map, raw.x, raw.z, room.reachable);
@@ -149,12 +162,22 @@ export const BattleRoyaleEvent: EventDefinition = {
     room.state.event.zoneRadius = radius;
     runtimeByRoom.set(room, { radiusStart: radius, activeStartedAt: 0, zoneDeaths: 0 });
 
+    let rushGranted = 0;
+    room.state.players.forEach((p, id) => {
+      if (p.hp <= 0) return;
+      if (Math.hypot(p.x - center.x, p.z - center.z) > radius) {
+        room.applyEffect(id, "zone_rush", now);
+        rushGranted += 1;
+      }
+    });
+
     room.emitDebug("event_warning", {
       id: BR_ID,
       zoneX: center.x,
       zoneZ: center.z,
       radius,
       living: positions.length,
+      rushGranted,
     });
     room.emitTelemetry({
       ...room.telemetryBase(),
@@ -162,7 +185,15 @@ export const BattleRoyaleEvent: EventDefinition = {
       eventId: BR_ID,
       zone: { x: center.x, z: center.z, radius },
       livingCount: positions.length,
+      rushGranted,
     });
+  },
+
+  // Warning: a cada tick, revoga `zone_rush` de quem já entrou na zona (T-074) — sem esperar o
+  // "active" começar, pra não segurar o boost à toa em quem já chegou durante o aviso.
+  onWarningTick(room, _dt, _now) {
+    const ev = room.state.event;
+    revokeZoneRushForArrivals(room, ev.zoneX, ev.zoneZ, ev.zoneRadius);
   },
 
   onStart(room, now) {
@@ -198,6 +229,7 @@ export const BattleRoyaleEvent: EventDefinition = {
     const frac = Math.min(1, Math.max(0, (now - rt.activeStartedAt) / BR_DURATION_MS));
     const ev = room.state.event;
     ev.zoneRadius = rt.radiusStart * (1 - frac);
+    revokeZoneRushForArrivals(room, ev.zoneX, ev.zoneZ, ev.zoneRadius); // T-074
 
     const elapsedS = Math.max(0, (now - rt.activeStartedAt) / 1000);
     const dps = outsideDps(elapsedS);

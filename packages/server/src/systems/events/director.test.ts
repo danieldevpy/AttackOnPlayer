@@ -31,6 +31,9 @@ function makeRoom(): EventRoom {
     broadcast() {},
     grantXp() {},
     releaseHeldRespawns: () => 0,
+    applyEffect() {},
+    removeEffect() {},
+    hasEffect: () => false,
   };
 }
 

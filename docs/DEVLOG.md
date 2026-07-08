@@ -1,5 +1,36 @@
 # Devlog
 
+## 2026-07-08 — Sessão 55: T-074 — BR: raio maior, warning mais longo, boost `zone_rush` pra chegar na zona
+
+- **Gatilho:** CD testou o Battle Royale de verdade e reportou 3 problemas de conversa (não via
+  `Executar T-XXX`): quem começa longe da zona no aviso não tem chance de chegar; o raio da zona
+  parecia pequeno demais e não fixo; e o tempo entre aviso e encolhimento era curto.
+- **Decisões do CD** (via pergunta direta na sessão, sem spec prévia): boost de velocidade
+  **automático** (não botão dedicado); warning **8s** (era 5s); teto de raio ajustado em duas
+  etapas — ~30 tiles na primeira rodada, depois `BR_ZONE_RADIUS_MAX=50` (era 20) depois de
+  testar no navegador.
+- **Entregue:**
+  - `packages/shared/src/constants.ts`: `BR_ZONE_RADIUS_MAX` 20→50, `BR_WARNING_MS` 5000→8000;
+    novas `BR_ZONE_RUSH_MULT=1.8`/`BR_ZONE_RUSH_MS=20_000`.
+  - `packages/server/src/systems/effects.ts`: novo `EffectKind: "zone_rush"` + `remove()`/`has()`
+    no `EffectSystem` (antes só dava pra aplicar/deixar expirar sozinho).
+  - `packages/server/src/systems/events/types.ts`: `EventRoom` ganhou `applyEffect`/
+    `removeEffect`/`hasEffect`; `EventDefinition` ganhou hook opcional `onWarningTick` (rodava só
+    `onTick` durante "active" — agora dá pra reagir a cada tick durante "warning" também).
+  - `packages/server/src/systems/events/director.ts`: `tickWarning` chama `onWarningTick`.
+  - `packages/server/src/systems/events/battleRoyale.ts`: `onWarningStart` concede `zone_rush` a
+    todo player vivo FORA do raio no instante do aviso; `onWarningTick`+`onTick` revogam o efeito
+    assim que a posição entra na zona atual (bônus único por evento — não reconcedido se sair de
+    novo depois; reaplicável só via pickup normal `speed_up` no chão, que é outro efeito).
+  - `packages/server/src/rooms/ArenaRoom.ts`: implementa os 3 métodos novos do `EventRoom`
+    delegando pro `EffectSystem` já existente (mesmo padrão de `grantXp`/`releaseHeldRespawns`
+    da T-066).
+- **Gates:** `tsc --noEmit` (server) limpo — só precisou estender o fixture `makeRoom` de
+  `director.test.ts` com os 3 métodos novos do contrato; shared 49/49, server 129/129, bots
+  35/35, todos verdes sem nenhum teste de comportamento quebrado.
+- **Verificado pelo CD:** testou o Battle Royale de verdade no próprio navegador e confirmou
+  tudo funcionando corretamente. Detalhes completos da task em `docs/BACKLOG.md` (T-074).
+
 ## 2026-07-08 — Sessão 54 (agente worker): PROMPT-0071 — bugfix chão escurecido (zoneFadeDir) + verificação visual T-068/T-069
 
 - **Gatilho:** CD subiu `dev:server`+`dev:client` por conta própria (`localhost:5173`) e

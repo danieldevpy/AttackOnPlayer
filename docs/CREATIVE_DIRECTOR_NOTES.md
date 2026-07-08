@@ -60,3 +60,19 @@ Voz do Daniel. A IA registra aqui, mas o conteúdo é decisão dele.
 **Registrado por:** IA — implementação e interpretação técnica em `docs/prompts/PROMPT-0041.md`.
 
 **Veredito (mesmo dia, via chat):** "estou de acordo com tudo" — aprovado sem ressalvas, inclusive os 2 pontos que ficaram pendentes de teste em browser (bandeira visual, sensação dos cards sorteados). Não foi um teste jogado no browser (ambiente sem isso ainda) — é aprovação pela implementação/explicação descrita. Libera a esteira para prosseguir ao F4.
+
+## 2026-07-08 — Teste manual do Battle Royale relâmpago (T-066): 3 problemas de reação à zona
+
+**Player longe não tem chance:** ao testar o evento de verdade, percebeu que quem está distante quando o evento começa não consegue chegar dentro do círculo a tempo — hoje só existe dano crescente esperando por quem está fora, nada que ajude a voltar.
+
+**Tamanho do círculo parecia pequeno/inconsistente:** perguntou como o raio é calculado (não é fixo — vem da densidade de players + folga, com teto). Achou que deveria ser um pouco maior.
+
+**Tempo entre aviso e início do encolhimento curto demais** para reagir.
+
+**Pedido concreto:** quem estiver longe do círculo no momento em que o evento é "avisado" deve ganhar uma habilidade de velocidade só pra chegar dentro dele; ao entrar no círculo, a habilidade desativa e não pode ser reativada (nesta rodada do evento) — mas continua podendo pegar o `speed_up` normal do chão, que é outra coisa.
+
+**Decisões fechadas via pergunta direta na sessão:** boost **automático** (não um botão que o jogador aciona); novo teto de raio **~30 tiles** (era 20, `BR_ZONE_RADIUS_MIN=6` intocado); warning de aviso **8s** (era 5s).
+
+**Registrado por:** IA — implementação e interpretação técnica em `docs/BACKLOG.md` (T-074) e `docs/DEVLOG.md` (Sessão 55).
+
+**Veredito (mesmo dia, via chat):** testou o Battle Royale de verdade e confirmou "tudo funcionou corretamente" — aprovado. Pediu só mais um ajuste: subir o teto do raio de ~30 para `BR_ZONE_RADIUS_MAX=50`.

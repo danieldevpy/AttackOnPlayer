@@ -37,7 +37,7 @@ events/
 **Máquina de estados global da sala** (uma por `ArenaRoom`, sincronizada via schema):
 
 ```
-idle ──director dispara──▶ warning(5s) ──▶ active(duração do evento) ──▶ ending(~1.5s) ──▶ idle
+idle ──director dispara──▶ warning(8s) ──▶ active(duração do evento) ──▶ ending(~1.5s) ──▶ idle
                                                     │ condição de fim antecipado (ex.: ≤1 vivo)
                                                     ▼
                                                   ending
@@ -47,7 +47,8 @@ idle ──director dispara──▶ warning(5s) ──▶ active(duração do e
 
 - `checkEligibility(ctx)` — pode disparar agora? (`ctx`: nº de players vivos incl. bots,
   clusters de posição, mortes/min, cooldowns, config efetiva).
-- `onWarningStart(room)` / `onStart(room)` / `onTick(room, dt, now)` / `onEnd(room, reason)`.
+- `onWarningStart(room)` / `onWarningTick(room, dt, now)` (T-074) / `onStart(room)` /
+  `onTick(room, dt, now)` / `onEnd(room, reason)`.
 - `respawnPolicy(room, playerId, phase)` → `"default" | "inside_zone" | "hold_until_end"` —
   o pipeline de morte do core consulta o evento ativo; sem evento ativo, sempre `"default"`
   (comportamento atual intocado).
@@ -88,15 +89,20 @@ T-061 — degrada pros defaults com Django fora do ar).
 
 ## Comportamento esperado — Battle Royale relâmpago
 
-Ciclo completo (~17 s no default; **duração `active` é dial**, testar 10/20/30 s):
+Ciclo completo (~19.5 s no default; **duração `active` é dial**, testar 10/20/30 s):
 
 **Elegibilidade:** ≥ `BR_MIN_PLAYERS=4` players (bots contam) · cooldown próprio
 `BR_COOLDOWN_MS=120s` · cooldown global respeitado.
 
-**Warning (5 s, `BR_WARNING_MS`):**
+**Warning (8 s, `BR_WARNING_MS` — T-074: era 5s, esticado pra dar tempo real de reação):**
 - Servidor escolhe o **centro da zona = célula de maior densidade de players** (varredura em
   grade das posições vivas; raio inicial = envolve o cluster com folga, clamp
-  `BR_ZONE_RADIUS_MIN/MAX`; centro snapa em célula walkable via `nearestReachableCell`).
+  `BR_ZONE_RADIUS_MIN/MAX` — 6/50 desde T-074, era 6/20; centro snapa em célula walkable via
+  `nearestReachableCell`).
+- **T-074:** quem está FORA do raio no instante exato do aviso ganha `zone_rush` (boost de
+  velocidade `BR_ZONE_RUSH_MULT=1.8`, automático, sem input) — só pra ter chance real de chegar;
+  desativa sozinho ao cruzar pra dentro da zona (não é reconcedido depois se sair de novo; teto
+  de segurança `BR_ZONE_RUSH_MS=20s` caso nunca chegue). Ver `packages/server/src/systems/effects.ts`.
 - Cliente: banner "⚠ BATTLE ROYALE" + contagem regressiva grande + anel da zona já visível +
   chão de fora escurecendo gradualmente (transição, não corte) + seta pra zona pra quem está longe.
 - Quem morrer no warning **renasce dentro da zona** (`respawnPolicy = "inside_zone"`, ponto

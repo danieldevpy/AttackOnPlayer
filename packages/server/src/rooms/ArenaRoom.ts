@@ -1,7 +1,7 @@
 import { Room, Client } from "colyseus";
 import { ArenaState, Player, Collectible } from "../state/ArenaState";
 import { MetricsRecorder } from "../metrics/SessionMetrics";
-import { EffectSystem } from "../systems/effects";
+import { EffectSystem, EffectKind } from "../systems/effects";
 import { ProjectileSystem } from "../systems/projectiles";
 import { FlagSystem } from "../systems/flag";
 import { EventDirector } from "../systems/events/director";
@@ -1035,6 +1035,26 @@ export class ArenaRoom extends Room<ArenaState> {
       // equilibrado (mesmo preset de antes — quem ignora o menu evolui igual à v1).
       this.queueUpgradeOffer(id, p);
     }
+  }
+
+  /** Público desde a T-074 (SPEC-0016): faz parte do `EventRoom` — Battle Royale usa isto pra
+   * conceder `zone_rush` a quem está fora da zona no aviso. No-op se o player não existe mais. */
+  applyEffect(playerId: string, kind: EffectKind, now: number) {
+    const p = this.state.players.get(playerId);
+    if (!p) return;
+    this.effects.apply(playerId, p, kind, now);
+  }
+
+  /** Público desde a T-074: revoga um efeito antes do fim natural (zone_rush ao entrar na zona). */
+  removeEffect(playerId: string, kind: EffectKind) {
+    const p = this.state.players.get(playerId);
+    if (!p) return;
+    this.effects.remove(playerId, p, kind);
+  }
+
+  /** Público desde a T-074: consulta pra decidir elegibilidade (evita reconceder zone_rush já consumido). */
+  hasEffect(playerId: string, kind: EffectKind): boolean {
+    return this.effects.has(playerId, kind);
   }
 
   /** T-016: um level-up = uma oferta na fila; a primeira abre na hora, o resto espera resolução. */

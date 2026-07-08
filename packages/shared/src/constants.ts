@@ -351,12 +351,14 @@ export const EVENT_GLOBAL_COOLDOWN_MS = 30_000;
 export const BR_MIN_PLAYERS = 4;
 /** Cooldown próprio do Battle Royale (além do EVENT_GLOBAL_COOLDOWN_MS). */
 export const BR_COOLDOWN_MS = 120_000;
-export const BR_WARNING_MS = 5_000;
+/** Tempo entre o anúncio (zona já definida, visível) e a zona começar a encolher de fato —
+ * é a janela que o player tem pra reagir/se deslocar antes do dano de zona valer (T-074). */
+export const BR_WARNING_MS = 8_000;
 /** Duração da fase "active" — dial explícito; spec pede testar 10/20/30s. */
 export const BR_DURATION_MS = 10_000;
 export const BR_ENDING_MS = 1_500;
 export const BR_ZONE_RADIUS_MIN = 6;
-export const BR_ZONE_RADIUS_MAX = 20;
+export const BR_ZONE_RADIUS_MAX = 50;
 /** Dano de zona por segundo fora da área (dano verdadeiro — ignora safe zone/escudo/spawn protection). */
 export const BR_OUTSIDE_DPS_BASE = 10;
 /** Curva de crescimento do dano de zona: dps = BASE × (1 + GROWTH × t), t = segundos de evento. */
@@ -365,3 +367,8 @@ export const BR_SURVIVOR_XP_BONUS = 50;
 export const BR_SURVIVOR_COINS_BONUS = 20;
 /** Por sobrevivente, quando o tempo esgota com mais de 1 vivo (bônus menor que o do sobrevivente único). */
 export const BR_TIMEOUT_XP_BONUS = 15;
+/** T-074: boost de velocidade concedido a quem está fora da zona no instante do aviso (warning) —
+ * só pra dar chance real de chegar; mais forte que o speed_up padrão pois compensa distância real. */
+export const BR_ZONE_RUSH_MULT = 1.8;
+/** Teto de duração do boost — some sozinho se o player nunca entrar na zona (não é permanente). */
+export const BR_ZONE_RUSH_MS = 20_000;
