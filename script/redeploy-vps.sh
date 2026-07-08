@@ -139,7 +139,7 @@ VITE_SERVER_URL="ws://$PUBLIC_IP:$BACK_PORT" npm run build -w @aop/client
 log "Reiniciando backend Django (aop-backend)..."
 pm2 delete aop-backend >/dev/null 2>&1 || true
 DJANGO_SETTINGS_MODULE=config.settings.prod pm2 start "$BACKEND_DIR/.venv/bin/gunicorn" \
-  --name aop-backend --cwd "$BACKEND_DIR" \
+  --name aop-backend --cwd "$BACKEND_DIR" --interpreter none \
   -- config.wsgi:application --bind "0.0.0.0:$DJANGO_PORT" --workers 3
 
 log "Reiniciando game server (aop-server)..."

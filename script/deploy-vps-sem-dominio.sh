@@ -216,7 +216,7 @@ VITE_SERVER_URL="ws://$PUBLIC_IP:$BACK_PORT" npm run build -w @aop/client
 log "Subindo backend Django (aop-backend) na porta $DJANGO_PORT..."
 pm2 delete aop-backend >/dev/null 2>&1 || true
 DJANGO_SETTINGS_MODULE=config.settings.prod pm2 start "$BACKEND_DIR/.venv/bin/gunicorn" \
-  --name aop-backend --cwd "$BACKEND_DIR" \
+  --name aop-backend --cwd "$BACKEND_DIR" --interpreter none \
   -- config.wsgi:application --bind "0.0.0.0:$DJANGO_PORT" --workers 3
 
 log "Subindo game server (aop-server) na porta $BACK_PORT (integrado ao backend)..."
