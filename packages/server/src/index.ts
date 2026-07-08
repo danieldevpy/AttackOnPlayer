@@ -16,6 +16,12 @@ app.get("/debug/rooms", async (_req, res) => {
     map: { w: r.state.mapW, h: r.state.mapH, seed: r.state.mapSeed, mapId: r.state.mapId || undefined },
     budget: (r as any).budget ?? 0,
     projectiles: r.state.projectiles.size,
+    // SPEC-0016 (T-065): fase/countdown do Event Director — "" / "idle" fora de qualquer evento.
+    event: {
+      id: r.state.event.id || undefined,
+      phase: r.state.event.phase,
+      phaseEndsAt: r.state.event.phaseEndsAt || undefined,
+    },
     recentEvents: r.debugEvents ?? []
   }));
   res.json({ rooms: roomsData });

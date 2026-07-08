@@ -27,6 +27,9 @@ export class Player extends Schema {
   @type(["string"]) skills = new ArraySchema<string>(); // T-017: skills de projétil do round (morte apaga)
   @type("number") spawnProtectedUntil = 0; // SPEC-0005: timestamp (ms) até quando é imune ao nascer/renascer
   @type("number") revealedUntil = 0; // T-023: timestamp (ms) até quando nameplate+HP ficam visíveis (reveal-on-hit)
+  // SPEC-0016 (T-065): morte processada (nível zerado etc.) mas respawn SEGURO até o evento
+  // ativo liberar (política "hold_until_end") — sem evento, nunca setado (fica sempre false).
+  @type("boolean") waitingRespawn = false;
 
   // não sincronizado (uso interno do servidor)
   inputX = 0;
@@ -74,6 +77,18 @@ export class Projectile extends Schema {
   hitIds: string[] = []; // T-017: alvos já atingidos (pierce não re-acerta o mesmo alvo)
 }
 
+// SPEC-0016 (T-065): estado sincronizado do evento de sessão ativo (Event Director). "" em
+// `id`/`phase="idle"` = nenhum evento rodando — o cliente não desmonta nada até ver "idle"
+// explícito. `zoneX/zoneZ/zoneRadius` só têm sentido pra eventos espaciais (0 = não usa).
+export class ActiveEvent extends Schema {
+  @type("string") id = ""; // "" = idle (sem evento)
+  @type("string") phase = "idle"; // idle | warning | active | ending
+  @type("number") phaseEndsAt = 0; // timestamp ms — cliente deriva countdown/progresso
+  @type("number") zoneX = 0;
+  @type("number") zoneZ = 0;
+  @type("number") zoneRadius = 0; // raio atual (server interpola; cliente só desenha)
+}
+
 export class ArenaState extends Schema {
   // ADR-007: mapa definido por 3 números; cliente reconstrói com buildMap(w,h,seed)
   @type("number") mapW = 0;
@@ -87,4 +102,5 @@ export class ArenaState extends Schema {
   @type({ map: Projectile }) projectiles = new MapSchema<Projectile>();
   @type("boolean") flagEnabled = true; // T-021: toggle por room (default ON)
   @type(Flag) flag = new Flag();
+  @type(ActiveEvent) event = new ActiveEvent(); // SPEC-0016 (T-065)
 }

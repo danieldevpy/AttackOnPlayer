@@ -315,3 +315,45 @@ export function xpComboLimit(rnd: () => number): number {
 export type FlagState = "active" | "cooldown";
 /** Dropada e não disputada por FLAG_ABANDON_RETURN_MS entra em cooldown por este tempo. */
 export const FLAG_COOLDOWN_MS = 60000; // 60s fora do jogo antes de renascer no centro (acesa)
+
+// ===========================================================================
+// SPEC-0016 (T-065) — Eventos e modos de jogo (Event Director + Battle Royale)
+// Dials do núcleo (EventDirector) + do primeiro evento concreto (Battle Royale, T-066
+// implementa a lógica; as constantes já nascem aqui). Registry nasce vazio na T-065 —
+// nenhuma destas constantes muda o comportamento atual até um evento ser registrado.
+// ===========================================================================
+
+// --- EventDirector: cadência de avaliação + chance de disparo (spec §Director) ---
+/** Intervalo entre avaliações "devo disparar um evento agora?" enquanto a sala está `idle`. */
+export const DIRECTOR_EVAL_MS = 10_000;
+/** Chance base de disparo por avaliação, já com pelo menos 1 evento elegível. */
+export const DIRECTOR_TRIGGER_CHANCE = 0.2;
+/**
+ * Mortes/min a partir das quais a sessão é considerada "quente" — a chance de disparo já
+ * caiu ao piso (0.5×) nesse ponto e não cai mais; sessão "morna" (0 mortes/min) chega a 2×.
+ * Ritmo de tensão/alívio, nunca timer previsível (spec §Director). Número de partida — ajustar
+ * com dados reais de telemetria (`event_warning`/`event_start`), como o resto da SPEC-0016.
+ */
+export const DIRECTOR_HOT_DEATHS_PER_MIN = 6;
+/** Cooldown entre QUAISQUER dois eventos (independente do id) — além do cooldown próprio de cada um. */
+export const EVENT_GLOBAL_COOLDOWN_MS = 30_000;
+
+// --- Battle Royale relâmpago (T-066 implementa a lógica; dials vivem aqui desde a T-065) ---
+/** ≥ este nº de players vivos (bots contam) pro BR poder disparar. */
+export const BR_MIN_PLAYERS = 4;
+/** Cooldown próprio do Battle Royale (além do EVENT_GLOBAL_COOLDOWN_MS). */
+export const BR_COOLDOWN_MS = 120_000;
+export const BR_WARNING_MS = 5_000;
+/** Duração da fase "active" — dial explícito; spec pede testar 10/20/30s. */
+export const BR_DURATION_MS = 10_000;
+export const BR_ENDING_MS = 1_500;
+export const BR_ZONE_RADIUS_MIN = 6;
+export const BR_ZONE_RADIUS_MAX = 20;
+/** Dano de zona por segundo fora da área (dano verdadeiro — ignora safe zone/escudo/spawn protection). */
+export const BR_OUTSIDE_DPS_BASE = 10;
+/** Curva de crescimento do dano de zona: dps = BASE × (1 + GROWTH × t), t = segundos de evento. */
+export const BR_OUTSIDE_DPS_GROWTH = 0.5;
+export const BR_SURVIVOR_XP_BONUS = 50;
+export const BR_SURVIVOR_COINS_BONUS = 20;
+/** Por sobrevivente, quando o tempo esgota com mais de 1 vivo (bônus menor que o do sobrevivente único). */
+export const BR_TIMEOUT_XP_BONUS = 15;

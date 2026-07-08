@@ -1,5 +1,43 @@
 # Devlog
 
+## 2026-07-08 — Sessão 49 (agente worker): PROMPT-0066 — T-065: núcleo do Event Director (SPEC-0016)
+
+- **Task:** T-065 (`docs/BACKLOG.md`), primeira e bloqueante da frente V1.x SPEC-0016 (Event
+  Director + Battle Royale). Objetivo: criar a camada de eventos de sessão SEM nenhum evento
+  registrado — sala se comporta exatamente como hoje.
+- **Entregue:** `packages/server/src/systems/events/{types,director,registry}.ts` (contratos +
+  `EventDirector` com máquina `idle→warning→active→ending→idle`, avaliação periódica
+  `DIRECTOR_EVAL_MS`, chance modulada por intensidade via `triggerChance`, cooldown global,
+  `EVENT_REGISTRY` vazio); schema `ArenaState.event: ActiveEvent` + `Player.waitingRespawn`
+  (⚠schema); refactor cirúrgico do pipeline de morte (`ArenaRoom.handleDeath`/`respawnPlayer`/
+  `pickZoneSpawnPoint`, consultando `director.respawnPolicyFor(id)` — sempre "default" com
+  registry vazio); dials novos em `packages/shared/src/constants.ts` (Director + Battle Royale,
+  mesmo a lógica do BR sendo T-066); mensagem `dev_event` atrás de `DEBUG=1`; `/debug/rooms`
+  ganhou o bloco `event`.
+- **Decisões de design (spec não detalhava):** `EventRoom` é uma interface estrutural — a
+  camada de eventos nunca importa `rooms/ArenaRoom` (isolação plugável); isso exigiu tornar
+  `emitDebug`/`emitTelemetry` públicos em `ArenaRoom` (único ajuste de visibilidade, comprovado
+  necessário via teste com `tsc --strict`: método `private` quebra assignability estrutural).
+  `"inside_zone"` ficou implementado no core (não em T-066), já que só depende dos campos
+  genéricos `zoneX/zoneZ/zoneRadius` do schema. `"hold_until_end"` só marca `waitingRespawn` e
+  para — a liberação em massa é responsabilidade do evento (T-066); adicionei um guard
+  (`!p.waitingRespawn`) no `forEach` de morte pra não reprocessar a cada tick um player held
+  (achado durante a escrita do teste, não estava no bloco original porque lá o respawn era
+  sempre imediato). Corrigi também um bug antes de existir em produção: `globalLastEndedAt`
+  iniciava em `0` em vez de `-Infinity`, o que bloquearia qualquer disparo nos primeiros 30s de
+  vida da sala. Valores numéricos dos dials do Battle Royale (raio da zona, bônus de XP/coins)
+  não estão na spec — defaults razoáveis, comentados como tuning de primeira passada.
+- **Testes novos:** `packages/server/src/systems/events/director.test.ts` (8 testes: máquina de
+  estados, `earlyEndCondition`, cooldown global, `dev_event` inválido/inelegível ignorado,
+  avaliação periódica, `respawnPolicyFor`, `triggerChance`) + `packages/server/src/rooms/
+  deathPipeline.test.ts` (3 testes: "default" idêntico ao bloco antigo, "hold_until_end" e
+  "inside_zone" forçados via monkey-patch — inalcançáveis em produção nesta task, mas provados
+  funcionais).
+- **Gates:** `tsc --noEmit` ×3 limpo; shared 49/49, server 112/112 (101 preexistentes +11
+  novos, nenhum teste editado), bots 35/35; smoke `bots -- 4 15` numa porta isolada (:2599, sem
+  mexer no processo pm2 que já ocupava a :2567) sem erro no tick.
+- Detalhes completos em `docs/prompts/PROMPT-0066.md`.
+
 ## 2026-07-07 — Sessão 48 (agente worker): PROMPT-0065 — Login/registro migram pro lobby
 
 - **Pedido do CD:** fora do backlog formal — "agora que o jogo tem lobby ao entrar no site,

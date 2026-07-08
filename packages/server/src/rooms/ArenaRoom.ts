@@ -4,6 +4,7 @@ import { MetricsRecorder } from "../metrics/SessionMetrics";
 import { EffectSystem } from "../systems/effects";
 import { ProjectileSystem } from "../systems/projectiles";
 import { FlagSystem } from "../systems/flag";
+import { EventDirector } from "../systems/events/director";
 interface PersistentProgress {
   forca: number;
   agilidade: number; // T-015: renomeado de `velocidade` (scaffold ADR-012, dev-only — sem migração de dados: memória volátil)
@@ -114,6 +115,7 @@ export class ArenaRoom extends Room<ArenaState> {
   private effects = new EffectSystem();
   private projectiles = new ProjectileSystem();
   private flagSystem = new FlagSystem();
+  private director = new EventDirector(); // SPEC-0016 (T-065): registry vazio ⇒ sempre idle
   private flagCenter = { x: 0, z: 0 };
   // T-024: presentes só quando a room nasce com `mapId` (mapa curado por arquivo).
   private curatedMapFile?: MapFileV1;
@@ -172,8 +174,10 @@ export class ArenaRoom extends Room<ArenaState> {
   }
 
   /** Grava o evento local (NDJSON, sempre) e, se a plataforma estiver ligada, enfileira para
-   * batch (T-027g) — a fonte local nunca depende do Django estar no ar. */
-  private emitTelemetry(event: TelemetryEvent) {
+   * batch (T-027g) — a fonte local nunca depende do Django estar no ar.
+   * Público (não só `private`) desde a T-065 (SPEC-0016): os hooks de `EventDefinition`
+   * recebem a sala via a interface estrutural `EventRoom`, que exige acesso a este método. */
+  emitTelemetry(event: TelemetryEvent) {
     this.telemetry.write(event);
     if (process.env.PLATFORM_ENABLED === "1") platformClient.queueTelemetry(event);
   }
@@ -304,6 +308,17 @@ export class ArenaRoom extends Room<ArenaState> {
       const p = this.state.players.get(client.sessionId);
       if (!p || !LAUNCHERS[launcherId]) return;
       p.launcher = launcherId;
+    });
+
+    // SPEC-0016 (T-065): gatilho manual de evento pra teste/staff — mesmo padrão do
+    // `dev_launcher` acima (atrás de DEBUG=1). Elegibilidade vale igual ao caminho automático
+    // (ex.: <BR_MIN_PLAYERS vivos ⇒ não dispara); registry vazio nesta task ⇒ sempre no-op.
+    this.onMessage("dev_event", (_client, eventId: string) => {
+      if (process.env.DEBUG !== "1") return;
+      const result = this.director.forceTrigger(String(eventId), this, Date.now());
+      if (!result.ok) {
+        console.log(`[arena] dev_event "${eventId}" não disparou: ${result.reason}`);
+      }
     });
 
     this.setSimulationInterval((dt) => this.update(dt / 1000), 1000 / TICK_RATE);
@@ -467,6 +482,12 @@ export class ArenaRoom extends Room<ArenaState> {
       });
     }
 
+    // SPEC-0016 (T-065): Event Director — avalia/avança a máquina de estados do evento de
+    // sessão ANTES do bloco de morte abaixo, pra qualquer dano de zona de um evento ativo
+    // (onTick) já cair no MESMO tick que a checagem `p.hp <= 0` processa. Registry vazio ⇒
+    // fica sempre "idle", sem custo perceptível e sem tocar em nada do comportamento atual.
+    this.director.tick(this, dt, now);
+
     // efeitos expiram antes do movimento (velocidade correta no tick)
     this.effects.tick(this.state.players, now);
 
@@ -555,59 +576,10 @@ export class ArenaRoom extends Room<ArenaState> {
     });
 
     this.state.players.forEach((p, id) => {
-      if (p.hp <= 0) {
-        this.emitDebug("death", { playerId: id, levelBefore: p.level });
-        this.metrics.addDeath(id);
-
-        // T-021: morte do portador derruba a bandeira no local (antes do respawn mover p.x/p.z).
-        if (this.state.flagEnabled && this.state.flag.carrierId === id) {
-          this.flagSystem.drop(this.state.flag, p.x, p.z, now);
-          this.emitDebug("flag_drop", { playerId: id, reason: "death" });
-          this.emitTelemetry({
-            ...this.telemetryBase(),
-            type: "flag_possession",
-            playerToken: p.playerToken,
-            action: "drop",
-            pos: { x: p.x, z: p.z },
-          });
-        }
-
-        // SPEC-0005: a morte ZERA o nível (volta ao 1) — antes perdia só uma fração
-        // (lossFraction). Risco real ao máximo: morrer apaga toda a progressão do round.
-        p.level = 1;
-        p.xp = 0;
-        this.effects.resetAttrToLevel(id, p, p.level);
-        // T-016/T-017: morte apaga a build — ofertas pendentes e skills morrem junto
-        // (pilar risco real: especializar é apostar). Avisa o cliente pra fechar o menu
-        // de card aberto — sem isso a janela ficava travada na tela após a morte.
-        if (this.pendingUpgrade.delete(id)) {
-          this.clients.find((c) => c.sessionId === id)?.send("upgrade_offer_closed");
-        }
-        p.pendingUpgrades = 0;
-        p.skills = new ArraySchema<string>();
-        // SPEC-0011 (T-039): a morte devolve o lançador padrão — a arma coletada não persiste
-        // (pilar risco real, mesma regra da build). O ciclo de spawn repõe a arma no mapa.
-        p.launcher = DEFAULT_LAUNCHER;
-
-        // Respawn em ponto safe escolhido por distância/risco, não sorte pura.
-        const spawn = this.pickRespawnPoint(id);
-        p.x = spawn.x;
-        p.z = spawn.z;
-        p.hp = p.maxHp;
-        p.inputX = 0;
-        p.inputZ = 0;
-        p.firing = false;
-        p.spawnProtectedUntil = now + SPAWN_PROTECTION_MS; // SPEC-0005: imune ao renascer
-
-        this.emitDebug("respawn", {
-          playerId: id,
-          killerId: killerByVictim.get(id) ?? null,
-          levelAfter: p.level,
-          x: spawn.x,
-          z: spawn.z,
-        });
-        console.log(`[arena] ${p.name} morreu. Respawn no nível ${p.level} em (${spawn.x}, ${spawn.z}).`);
-      }
+      // SPEC-0016 (T-065): `waitingRespawn` já é uma morte processada (política
+      // "hold_until_end") segurando o player em hp=0 — sem o guard, este forEach reprocessaria
+      // a morte (flag/nível/telemetria) a cada tick enquanto ele espera o fim do evento.
+      if (p.hp <= 0 && !p.waitingRespawn) this.handleDeath(id, p, killerByVictim, now);
     });
 
     // SPEC-0005: presença viva — todo player conectado (bots inclusos) ganha XP por segundo
@@ -911,6 +883,113 @@ export class ArenaRoom extends Room<ArenaState> {
     return best;
   }
 
+  /**
+   * SPEC-0016 (T-065): ponto de respawn dentro da zona do evento ativo (`state.event`),
+   * sorteado entre as células alcançáveis a até `zoneRadius` do centro (`zoneX`/`zoneZ`) —
+   * 100% genérico (só lê os campos já sincronizados no schema, nenhum conhecimento de Battle
+   * Royale). Raio 0 ou nenhuma célula alcançável dentro dele ⇒ cai na célula walkable mais
+   * próxima do centro (`nearestReachableCell`, mesmo fallback usado pela bandeira na T-040).
+   */
+  private pickZoneSpawnPoint(): { x: number; z: number } {
+    const { zoneX, zoneZ, zoneRadius } = this.state.event;
+    const candidates: Array<{ x: number; z: number }> = [];
+    for (let z = 0; z < this.map.h; z++) {
+      for (let x = 0; x < this.map.w; x++) {
+        if (!this.reachable[z * this.map.w + x]) continue;
+        const cx = x + 0.5;
+        const cz = z + 0.5;
+        if (Math.hypot(cx - zoneX, cz - zoneZ) <= zoneRadius) candidates.push({ x: cx, z: cz });
+      }
+    }
+    if (candidates.length === 0) return nearestReachableCell(this.map, zoneX, zoneZ, this.reachable);
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  /**
+   * SPEC-0016 (T-065): pipeline de morte extraído do bloco antigo (comportamento "default"
+   * byte-a-byte idêntico) — a morte em si (nível zera, build apaga, bandeira derruba) é
+   * processada UMA VEZ sempre; só o QUE acontece depois (respawn imediato, dentro da zona, ou
+   * segurado até o fim do evento) muda conforme `director.respawnPolicyFor(id)`. Sem evento
+   * ativo (registry vazio nesta task), a política é sempre "default".
+   */
+  private handleDeath(id: string, p: Player, killerByVictim: Map<string, string>, now: number) {
+    this.emitDebug("death", { playerId: id, levelBefore: p.level });
+    this.metrics.addDeath(id);
+    this.director.recordDeath(now);
+
+    // T-021: morte do portador derruba a bandeira no local (antes do respawn mover p.x/p.z).
+    if (this.state.flagEnabled && this.state.flag.carrierId === id) {
+      this.flagSystem.drop(this.state.flag, p.x, p.z, now);
+      this.emitDebug("flag_drop", { playerId: id, reason: "death" });
+      this.emitTelemetry({
+        ...this.telemetryBase(),
+        type: "flag_possession",
+        playerToken: p.playerToken,
+        action: "drop",
+        pos: { x: p.x, z: p.z },
+      });
+    }
+
+    // SPEC-0005: a morte ZERA o nível (volta ao 1) — antes perdia só uma fração
+    // (lossFraction). Risco real ao máximo: morrer apaga toda a progressão do round.
+    p.level = 1;
+    p.xp = 0;
+    this.effects.resetAttrToLevel(id, p, p.level);
+    // T-016/T-017: morte apaga a build — ofertas pendentes e skills morrem junto
+    // (pilar risco real: especializar é apostar). Avisa o cliente pra fechar o menu
+    // de card aberto — sem isso a janela ficava travada na tela após a morte.
+    if (this.pendingUpgrade.delete(id)) {
+      this.clients.find((c) => c.sessionId === id)?.send("upgrade_offer_closed");
+    }
+    p.pendingUpgrades = 0;
+    p.skills = new ArraySchema<string>();
+    // SPEC-0011 (T-039): a morte devolve o lançador padrão — a arma coletada não persiste
+    // (pilar risco real, mesma regra da build). O ciclo de spawn repõe a arma no mapa.
+    p.launcher = DEFAULT_LAUNCHER;
+
+    const policy = this.director.respawnPolicyFor(id);
+    if (policy === "hold_until_end") {
+      // SPEC-0016: morte processada, mas o respawn fica em espera — o evento ativo libera
+      // todos os `waitingRespawn` juntos, no mesmo tick, ao terminar (T-066).
+      p.waitingRespawn = true;
+      this.emitDebug("respawn_held", { playerId: id, killerId: killerByVictim.get(id) ?? null });
+      console.log(`[arena] ${p.name} morreu e aguarda o fim do evento.`);
+      return;
+    }
+
+    const spawn = policy === "inside_zone" ? this.pickZoneSpawnPoint() : this.pickRespawnPoint(id);
+    this.respawnPlayer(id, p, spawn, now, killerByVictim.get(id) ?? null);
+  }
+
+  /** SPEC-0016 (T-065): respawn em si, extraído pra ser reutilizável tanto pelo caminho
+   * "default"/"inside_zone" (chamado direto de `handleDeath`) quanto pela liberação em massa
+   * de `waitingRespawn` ao fim de um evento "hold_until_end" (T-066). */
+  private respawnPlayer(
+    id: string,
+    p: Player,
+    spawn: { x: number; z: number },
+    now: number,
+    killerId: string | null = null
+  ) {
+    p.x = spawn.x;
+    p.z = spawn.z;
+    p.hp = p.maxHp;
+    p.inputX = 0;
+    p.inputZ = 0;
+    p.firing = false;
+    p.spawnProtectedUntil = now + SPAWN_PROTECTION_MS; // SPEC-0005: imune ao renascer
+    p.waitingRespawn = false;
+
+    this.emitDebug("respawn", {
+      playerId: id,
+      killerId,
+      levelAfter: p.level,
+      x: spawn.x,
+      z: spawn.z,
+    });
+    console.log(`[arena] ${p.name} morreu. Respawn no nível ${p.level} em (${spawn.x}, ${spawn.z}).`);
+  }
+
   /** XP → nível → oferta de cards (T-003/T-016). Loop cobre XP suficiente p/ vários níveis de uma vez. */
   private grantXp(id: string, p: Player, amount: number) {
     p.xp += amount * p.xpMult * this.xpMultiplier; // xp_boost (farm_event) dobra o ganho — T-004
@@ -1077,7 +1156,8 @@ export class ArenaRoom extends Room<ArenaState> {
     if (kind === "farm_event") this.broadcast("announce", { kind: "farm_event", x, z });
   }
 
-  private emitDebug(type: string, payload: any) {
+  /** Público desde a T-065 (SPEC-0016) pelo mesmo motivo de `emitTelemetry` acima. */
+  emitDebug(type: string, payload: any) {
     const ev = { time: Date.now(), type, payload };
     this.debugEvents.push(ev);
     if (this.debugEvents.length > 200) this.debugEvents.shift();
